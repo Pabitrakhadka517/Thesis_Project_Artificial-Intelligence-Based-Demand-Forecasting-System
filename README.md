@@ -12,3 +12,11 @@ optimal stock levels, reducing both stockouts and overstock.
 - Sales, purchases, and stock movement tracking
 - AI chat assistant for natural-language inventory questions
 - Analytics and reporting with exportable charts
+
+## Tech Stack
+
+| Layer       | Technology                                              |
+|-------------|----------------------------------------------------------|
+| Frontend    | React 19, Redux Toolkit, Vite, Tailwind CSS, Recharts     |
+| Backend     | Node.js, Express, MongoDB (Mongoose)                      |
+| AI Service  | FastAPI, scikit-learn, XGBoost, Prophet, TensorFlow (LSTM)|
