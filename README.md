@@ -78,3 +78,8 @@ to `.env` in the same folder and fill in real values — never commit `.env` fil
 - Expand automated test coverage across all three services
 - Add CI pipeline for lint/test on pull requests
 - Move large training datasets to Git LFS or external storage
+
+## License
+
+No license has been chosen for this project yet. All rights reserved by the author
+unless a LICENSE file is added.
