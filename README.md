@@ -72,3 +72,9 @@ python main.py
 Each service ships a `.env.example` file documenting the variables it needs
 (database URI, JWT secrets, Cloudinary keys, optional LLM API keys). Copy it
 to `.env` in the same folder and fill in real values — never commit `.env` files.
+
+## Roadmap
+
+- Expand automated test coverage across all three services
+- Add CI pipeline for lint/test on pull requests
+- Move large training datasets to Git LFS or external storage
