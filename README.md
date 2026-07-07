@@ -36,3 +36,14 @@ optimal stock levels, reducing both stockouts and overstock.
 - Node.js >= 18
 - Python >= 3.10
 - MongoDB (local instance or Atlas connection string)
+
+## Getting Started
+
+### Server Setup
+
+```bash
+cd server
+npm install
+cp .env.example .env   # fill in MongoDB URI, JWT secrets, etc.
+npm run dev
+```
