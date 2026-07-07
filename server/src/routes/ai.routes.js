@@ -1,3 +1,5 @@
+// AI prediction routes — proxies/aggregates results from the FastAPI ai-service
+// (forecasting, reorder recommendations) for consumption by the frontend.
 const router = require('express').Router()
 const ctrl   = require('../controllers/ai.controller')
 const { protect }       = require('../middleware/auth')
