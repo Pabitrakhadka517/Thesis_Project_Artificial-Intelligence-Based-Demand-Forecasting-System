@@ -20,3 +20,13 @@ optimal stock levels, reducing both stockouts and overstock.
 | Frontend    | React 19, Redux Toolkit, Vite, Tailwind CSS, Recharts     |
 | Backend     | Node.js, Express, MongoDB (Mongoose)                      |
 | AI Service  | FastAPI, scikit-learn, XGBoost, Prophet, TensorFlow (LSTM)|
+
+## Project Structure
+
+```
+.
+├── frontend/       # React + Vite SPA
+├── server/         # Node.js + Express API
+├── ai-service/      # FastAPI ML/forecasting microservice
+└── trained_models/  # Serialized model artifacts (gitignored)
+```
