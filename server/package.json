@@ -2,6 +2,7 @@
   "name": "stockwise-server",
   "version": "1.0.0",
   "description": "StockWise AI Inventory System — Node.js + Express API",
+  "keywords": ["inventory", "forecasting", "express", "mongodb"],
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
