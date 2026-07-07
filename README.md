@@ -56,3 +56,13 @@ npm install
 cp .env.example .env   # set VITE_API_URL
 npm run dev
 ```
+
+### AI Service Setup
+
+```bash
+cd ai-service
+python -m venv venv && source venv/bin/activate   # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+cp .env.example .env   # set MONGO_URI, LLM API keys (optional)
+python main.py
+```
