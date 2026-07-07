@@ -1,0 +1,10 @@
+{
+  "python.defaultInterpreterPath": "${workspaceFolder}/ai-service/.venv/Scripts/python.exe",
+  "python.analysis.extraPaths": [
+    "${workspaceFolder}/ai-service"
+  ],
+  "python.analysis.autoImportCompletions": true,
+  "[python]": {
+    "editor.defaultFormatter": "ms-python.black-formatter"
+  }
+}
