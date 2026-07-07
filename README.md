@@ -30,3 +30,9 @@ optimal stock levels, reducing both stockouts and overstock.
 ├── ai-service/      # FastAPI ML/forecasting microservice
 └── trained_models/  # Serialized model artifacts (gitignored)
 ```
+
+## Prerequisites
+
+- Node.js >= 18
+- Python >= 3.10
+- MongoDB (local instance or Atlas connection string)
