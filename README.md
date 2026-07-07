@@ -66,3 +66,9 @@ pip install -r requirements.txt
 cp .env.example .env   # set MONGO_URI, LLM API keys (optional)
 python main.py
 ```
+
+## Environment Variables
+
+Each service ships a `.env.example` file documenting the variables it needs
+(database URI, JWT secrets, Cloudinary keys, optional LLM API keys). Copy it
+to `.env` in the same folder and fill in real values — never commit `.env` files.
