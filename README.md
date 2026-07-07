@@ -47,3 +47,12 @@ npm install
 cp .env.example .env   # fill in MongoDB URI, JWT secrets, etc.
 npm run dev
 ```
+
+### Frontend Setup
+
+```bash
+cd frontend
+npm install
+cp .env.example .env   # set VITE_API_URL
+npm run dev
+```
