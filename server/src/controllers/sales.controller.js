@@ -6,6 +6,7 @@ const Alert = require('../models/Alert')
 const AuditLog = require('../models/AuditLog')
 require('../models/User') // register User schema so Sale.populate('recordedBy') resolves
 const { success, created, error, paginated } = require('../utils/response')
+const { isOverstocked } = require('../utils/stockAlerts')
 
 const SALES_SORTABLE_FIELDS = { saleDate: 'saleDate', grandTotal: 'grandTotal', invoiceNumber: 'invoiceNumber' }
 
@@ -264,6 +265,15 @@ async function _createStockAlertIfNeeded(product, currentStock) {
         metadata: { currentStock, reorderLevel: product.reorderLevel },
       })
     }
+  }
+
+  // A sale reduces stock — if that pulled the product back below the overstock
+  // threshold, the earlier overstock alert (created on restock) is now stale.
+  if (!isOverstocked({ currentStock, maxStock: product.maxStock })) {
+    await Alert.updateMany(
+      { product: product._id, type: 'overstock', isAcknowledged: false },
+      { $set: { isAcknowledged: true, acknowledgedAt: new Date() } }
+    )
   }
 }
 

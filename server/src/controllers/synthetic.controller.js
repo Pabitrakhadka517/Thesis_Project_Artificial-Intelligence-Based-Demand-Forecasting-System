@@ -13,17 +13,21 @@ const StockMovement = require('../models/StockMovement')
 
 const SYN = '__synthetic__'
 
-// Output CSV written to the project root (D:\individual\projecct)
+// Output CSV written to the project root (D:\individual\projecct) — must match
+// the filename and column schema ai-service/app/ml/preprocessor.py expects
+// (TRAINING_DATA_PATH default), or DataPreprocessor.get_sku_meta() /
+// build_sku_timeseries() raise KeyError on the missing columns.
 const PROJECT_ROOT = path.join(__dirname, '..', '..', '..')
-const CSV_PATH     = path.join(PROJECT_ROOT, 'synthetic_training_data.csv')
+const CSV_PATH     = path.join(PROJECT_ROOT, 'training_data.csv')
 
 const CSV_HEADERS = [
   'date', 'year', 'month', 'day_of_month', 'day_of_week', 'week_of_year', 'quarter',
   'is_weekend', 'season', 'is_festival', 'festival_name', 'festival_intensity',
   'product_sku', 'product_name', 'category', 'unit', 'is_perishable', 'lead_time_days',
-  'reorder_level', 'buying_price', 'selling_price', 'unit_price_actual', 'margin_pct',
-  'quantity', 'revenue', 'discount_applied', 'payment_method', 'customer_type',
-  'stock_before', 'stock_after', 'invoice_items_count', 'trend_factor',
+  'reorder_level', 'max_stock', 'buying_price', 'selling_price', 'unit_price_actual', 'margin_pct',
+  'quantity', 'revenue', 'discount_pct', 'payment_method', 'customer_type',
+  'stock_before', 'stock_after', 'invoice_items_count', 'annual_trend_factor',
+  'supplier_lead_time', 'price_elasticity_index', 'demand_index',
 ].join(',') + '\n'
 
 function csvQ(v) {
@@ -493,11 +497,16 @@ async function generateSales(products, startDate, endDate, rng, csvStream) {
             dateStr, yr2, m02 + 1, dayOfMonth, dow2, weekOfYear, quarter,
             isWeekend, csvQ(season2), isFest, csvQ(festName), festMul,
             csvQ(pd.sku), csvQ(pd.name), csvQ(pd.catName), csvQ(pd.unit),
-            pd.per ? 1 : 0, pd.lt, pd.rl, pd.bp, pd.sp, it.unitPrice, marginPct,
+            pd.per ? 1 : 0, pd.lt, pd.rl, pd.mx, pd.bp, pd.sp, it.unitPrice, marginPct,
             it.quantity, it.total, discountPct,
             csvQ(payMethod), csvQ(custType),
             sn.before, sn.after,
             items.length, trendFactor,
+            // supplier_lead_time mirrors lead_time_days (preprocessor.py drops it as
+            // a duplicate column). price_elasticity_index / demand_index have no
+            // real study data behind them, so use the same neutral 1.0 default
+            // ai-service/app/ml/mongo_products.py uses for live (non-CSV) products.
+            pd.lt, 1.0, 1.0,
           ].join(',') + '\n')
         }
       }
@@ -628,8 +637,10 @@ exports.clearSyntheticData = async (req, res) => {
     Product.deleteMany({ description: SYN }),
   ])
 
-  // Remove the CSV export file if it exists
-  try { fs.unlinkSync(CSV_PATH) } catch { /* already gone */ }
+  // NOTE: CSV_PATH (training_data.csv) is intentionally left in place — it's
+  // the live ML training dataset ai-service reads by default, not a disposable
+  // export. Deleting DB rows here doesn't retroactively invalidate an already
+  // generated CSV; regenerate via POST /generate to refresh it.
 
   res.json({ deleted: sc + pc + smc + prc })
 }

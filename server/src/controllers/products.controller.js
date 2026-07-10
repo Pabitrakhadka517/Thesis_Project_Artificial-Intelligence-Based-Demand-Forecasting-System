@@ -157,6 +157,10 @@ exports.createProduct = async (req, res) => {
 }
 
 exports.updateProduct = async (req, res) => {
+  const { validationResult } = require('express-validator')
+  const errs = validationResult(req)
+  if (!errs.isEmpty()) return error(res, 'Validation failed', 400, errs.array())
+
   const {
     name, description, category, supplier, buyingPrice, sellingPrice,
     currentStock, minStock, maxStock, reorderLevel, storageLocation, expiryDate,

@@ -7,6 +7,7 @@ const Alert = require('../models/Alert')
 const AuditLog = require('../models/AuditLog')
 require('../models/User') // register User schema so Purchase.populate('recordedBy') resolves
 const { success, created, error, paginated } = require('../utils/response')
+const { isOverstocked, buildOverstockAlert } = require('../utils/stockAlerts')
 
 const SORTABLE_FIELDS = {
   purchaseDate: 'purchaseDate', grandTotal: 'grandTotal', purchaseNumber: 'purchaseNumber',
@@ -180,6 +181,7 @@ exports.receivePurchase = async (req, res) => {
 
     // Atomically increment stock for each received product.
     const movementDocs = []
+    const overstockCandidates = []
     for (const item of receivedPurchase.items) {
       const updated = await Product.findByIdAndUpdate(
         item.product,
@@ -190,6 +192,13 @@ exports.receivePurchase = async (req, res) => {
 
       const stockAfter  = updated.currentStock
       const stockBefore = stockAfter - item.quantity
+
+      // Receiving stock can push a product into overstock — flag it for the
+      // bulk alert-creation pass below (mirrors the low_stock/out_of_stock
+      // pattern in sales.controller.js, just for the opposite direction).
+      if (isOverstocked({ currentStock: stockAfter, maxStock: updated.maxStock })) {
+        overstockCandidates.push({ _id: updated._id, name: updated.name, currentStock: stockAfter, maxStock: updated.maxStock })
+      }
 
       movementDocs.push({
         product:       updated._id,
@@ -227,6 +236,25 @@ exports.receivePurchase = async (req, res) => {
       { product: { $in: receivedProductIds }, type: { $in: ['low_stock', 'out_of_stock'] }, isAcknowledged: false },
       { $set: { isAcknowledged: true, acknowledgedAt: new Date() } }
     ).catch(() => {})
+
+    // Create (or refresh) overstock alerts for products the restock just
+    // pushed over the threshold. Upserted on (product, type, isAcknowledged:
+    // false) — the unique partial index on Alert makes this race-safe against
+    // a concurrent "Scan Inventory" run touching the same product.
+    if (overstockCandidates.length) {
+      const bulkOps = overstockCandidates.map((c) => {
+        const { product, type, ...content } = buildOverstockAlert(c)
+        return {
+          updateOne: {
+            filter: { product, type, isAcknowledged: false },
+            update: { $set: content, $setOnInsert: { product, type } },
+            upsert: true,
+          },
+        }
+      })
+      Alert.bulkWrite(bulkOps, { ordered: false })
+        .catch((e) => console.warn('[Purchases] Overstock alert creation failed:', e.message))
+    }
 
     AuditLog.create({
       user: req.user._id, userEmail: req.user.email,

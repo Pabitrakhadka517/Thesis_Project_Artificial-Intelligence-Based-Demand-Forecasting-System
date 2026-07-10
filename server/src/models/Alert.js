@@ -43,8 +43,16 @@ alertSchema.index({ isRead: 1, priority: 1, createdAt: -1 })
 // Simple unread list (no priority filter) — kept because inbox often omits priority
 alertSchema.index({ isRead: 1, createdAt: -1 })
 
-// "All alerts for this product" panel
-alertSchema.index({ product: 1, type: 1 }, { sparse: true })
+// "All alerts for this product" panel, plus a hard constraint: at most one
+// OPEN (unacknowledged) alert per product+type. Without this, two concurrent
+// paths (e.g. a manual scan and a purchase receipt both flagging the same
+// product as overstocked) can race and create duplicate alerts — this index
+// makes that impossible at the database level instead of relying on
+// check-then-insert application code.
+alertSchema.index(
+  { product: 1, type: 1 },
+  { unique: true, partialFilterExpression: { isAcknowledged: false, product: { $exists: true } } }
+)
 
 // Unacknowledged alerts by type (bulk-acknowledge workflow)
 alertSchema.index({ isAcknowledged: 1, type: 1 })
