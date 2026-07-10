@@ -156,7 +156,7 @@ export default function AlertsPage() {
     mutationFn: () => axiosInstance.post('/alerts/generate'),
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['alerts'] })
-      const count = res.data?.data?.count || 0
+      const count = res.data?.data?.alertsCreated || 0
       toast({ title: `Generated ${count} new alerts`, variant: 'success' })
     },
     onError: (e) => toast({ title: e.response?.data?.message || 'Failed', variant: 'error' }),

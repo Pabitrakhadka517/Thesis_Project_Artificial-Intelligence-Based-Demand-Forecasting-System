@@ -211,6 +211,9 @@ export default function ForecastingPage() {
     staleTime: 30 * 60_000,
   })
   const skus = skuData || []
+  const liveEligible   = skus.filter(s => s.source === 'live' && s.eligible !== false)
+  const liveIneligible = skus.filter(s => s.source === 'live' && s.eligible === false)
+  const demoSkus       = skus.filter(s => s.source !== 'live')
 
   // ── Run forecast mutation ────────────────────────────────────────────────
   const forecastMut = useMutation({
@@ -359,9 +362,29 @@ export default function ForecastingPage() {
                     className="text-[13px] px-3 py-2 rounded-lg outline-none"
                     style={{ background: 'var(--surface-input)', border: '1.5px solid var(--border)', color: 'var(--text-primary)' }}>
                     <option value="">— Select a product —</option>
-                    {skuLoading
-                      ? <option disabled>Loading…</option>
-                      : skus.map(s => <option key={s.product_sku} value={s.product_sku}>{s.product_name} ({s.product_sku})</option>)}
+                    {skuLoading ? (
+                      <option disabled>Loading…</option>
+                    ) : (
+                      <>
+                        {(liveEligible.length > 0 || liveIneligible.length > 0) && (
+                          <optgroup label="Your Inventory (live sales data)">
+                            {liveEligible.map(s => (
+                              <option key={s.product_sku} value={s.product_sku}>
+                                {s.product_name} ({s.product_sku})
+                              </option>
+                            ))}
+                            {liveIneligible.map(s => (
+                              <option key={s.product_sku} value={s.product_sku} disabled>
+                                {s.product_name} — needs {s.days_needed} more day{s.days_needed === 1 ? '' : 's'} of sales data
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
+                        <optgroup label="Demo Dataset (50 sample products)">
+                          {demoSkus.map(s => <option key={s.product_sku} value={s.product_sku}>{s.product_name} ({s.product_sku})</option>)}
+                        </optgroup>
+                      </>
+                    )}
                   </select>
                 </div>
 

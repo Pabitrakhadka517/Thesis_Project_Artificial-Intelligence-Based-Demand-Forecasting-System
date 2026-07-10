@@ -17,6 +17,7 @@ import { ErrorState } from '@/components/common/ErrorState'
 import { ConfirmDialog } from '@/components/common/Modal'
 import { Pagination } from '@/components/common/Pagination'
 import { RolePermissionsPanel } from '@/components/users/RolePermissionsPanel'
+import { passwordSchema } from '@/schemas/password'
 
 const ROLES = [
   { value: 'admin',             label: 'Administrator',     icon: Shield,    color: '#EF4444', bg: 'rgba(239,68,68,.12)' },
@@ -27,7 +28,7 @@ const ROLES = [
 const createSchema = z.object({
   fullName: z.string().min(2, 'Full name required'),
   email:    z.string().email('Valid email required'),
-  password: z.string().min(8, 'Password must be ≥8 chars').regex(/\d/, 'Must contain a number'),
+  password: passwordSchema,
   role:     z.enum(['admin', 'inventory_manager', 'staff']).default('staff'),
   phone:    z.string().optional(),
 })
@@ -123,7 +124,10 @@ function CreateUserModal({ onClose }) {
       toast({ title: 'User created successfully', variant: 'success' })
       onClose()
     },
-    onError: (e) => toast({ title: e.response?.data?.message || 'Failed to create user', variant: 'error' }),
+    onError: (e) => {
+      const firstFieldError = e.response?.data?.errors?.[0]?.msg
+      toast({ title: firstFieldError || e.response?.data?.message || 'Failed to create user', variant: 'error' })
+    },
   })
 
   return (
@@ -142,7 +146,7 @@ function CreateUserModal({ onClose }) {
         </Field>
         <Field label="Password" error={errors.password?.message}>
           <div className="relative">
-            <FormInput type={showPw ? 'text' : 'password'} placeholder="Min 8 chars, 1 number"
+            <FormInput type={showPw ? 'text' : 'password'} placeholder="8+ chars, upper, lower, number, symbol"
               error={!!errors.password} {...register('password')} />
             <button type="button" onClick={() => setShowPw(p => !p)}
               className="absolute right-3 top-1/2 -translate-y-1/2"
