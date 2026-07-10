@@ -253,6 +253,28 @@ async def list_skus():
     return {"success": True, "data": details, "total": len(details)}
 
 
+@router.get("/history/{sku_id}", summary="Recent daily actual demand for one SKU")
+async def sku_history(sku_id: str, days: int = Query(default=60, ge=7, le=365)):
+    """
+    Returns the last N days of actual (historical) daily quantity for a SKU,
+    so the forecast chart can plot actuals alongside the prediction instead of
+    showing the future series with no trend context.
+    """
+    from app.ml.preprocessor import DataPreprocessor
+    prep = DataPreprocessor()
+    try:
+        series = prep.build_sku_timeseries(sku_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+    tail = series.tail(days)
+    data = [
+        {"date": row.date.strftime("%Y-%m-%d"), "qty": round(float(row.qty), 2)}
+        for row in tail.itertuples()
+    ]
+    return {"success": True, "data": data, "total": len(data)}
+
+
 @router.post("/insights", summary="Generate LLM-powered business insights from inventory data")
 async def generate_insights():
     """
