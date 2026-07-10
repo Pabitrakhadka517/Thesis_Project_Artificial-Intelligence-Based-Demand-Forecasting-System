@@ -157,7 +157,10 @@ async def get_model(sku_id: str):
     if data:
         return {"success": True, "data": data[0]}
     # Fallback: check disk metadata (models trained before MongoDB entry was written)
-    meta = load_metadata(sku_id)
+    try:
+        meta = load_metadata(sku_id)
+    except ValueError:
+        meta = None
     if meta:
         return {"success": True, "data": meta}
     raise HTTPException(404, f"No model metadata found for SKU '{sku_id}'. Train the model first.")
@@ -243,13 +246,28 @@ async def reorder_alerts():
 
 # ── utility endpoints ──────────────────────────────────────────────────────────
 
-@router.get("/skus", summary="List all SKUs available in the training dataset")
+@router.get("/skus", summary="List all SKUs available for forecasting")
 async def list_skus():
-    """Returns SKU IDs and product names from the synthetic dataset."""
+    """
+    Returns the 50 demo/synthetic dataset SKUs (always eligible) plus every
+    active real inventory product. Each entry's `source` is "demo" or "live";
+    live entries carry `eligible` (>= 90 days of sales history for
+    ModelTrainer to train on) and, when not eligible, `days_needed`.
+    """
     from app.ml.preprocessor import DataPreprocessor
+    from app.ml import mongo_products
+
     prep = DataPreprocessor()
-    sku_ids = prep.get_sku_list()
-    details = [prep.get_sku_meta(s) for s in sku_ids]
+    details = [prep.get_sku_meta(s) for s in prep.get_sku_list()]
+    for d in details:
+        d.setdefault("source", "demo")
+        d.setdefault("eligible", True)
+
+    try:
+        details.extend(mongo_products.list_live_products())
+    except Exception:
+        pass  # Mongo unreachable — still serve the demo dataset SKUs
+
     return {"success": True, "data": details, "total": len(details)}
 
 

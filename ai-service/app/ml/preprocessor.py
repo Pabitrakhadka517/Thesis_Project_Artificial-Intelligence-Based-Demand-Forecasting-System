@@ -181,7 +181,7 @@ class DataPreprocessor:
     def __init__(self, csv_path: Optional[str] = None):
         self._csv_path = csv_path or os.getenv(
             "TRAINING_DATA_PATH",
-            str(Path(__file__).parents[3] / "synthetic_training_data.csv"),
+            str(Path(__file__).parents[3] / "training_data.csv"),
         )
         self._raw: Optional[pd.DataFrame] = None
 
@@ -218,11 +218,12 @@ class DataPreprocessor:
         return sorted(self.load_raw()["product_sku"].unique().tolist())
 
     def get_sku_meta(self, sku_id: str) -> dict:
-        """Return static product metadata for a SKU."""
+        """Return static product metadata for a SKU (CSV, falling back to live Mongo data)."""
         df = self.load_raw()
         rows = df[df["product_sku"] == sku_id]
         if rows.empty:
-            return {}
+            from app.ml import mongo_products
+            return mongo_products.get_product_meta(sku_id)
         r = rows.iloc[0]
         return {
             "product_sku":            sku_id,
@@ -248,6 +249,10 @@ class DataPreprocessor:
         Returns DataFrame sorted by date with all TABULAR_FEATURE_COLS and
         LSTM_FEATURE_COLS present, dropping initial rows where lag-30 is NaN.
 
+        SKUs not present in the CSV dataset fall back to real MongoDB Sale
+        history via app.ml.mongo_products, so any active inventory product
+        with enough sales history can be trained/forecasted too.
+
         NOTE: qty_norm in the returned DataFrame uses the full-dataset qty_max.
         Before training the LSTM, call refit_qty_norm(train_df) to get the
         correct train-only qty_max, then apply_qty_norm(df, qty_max) on both
@@ -256,13 +261,9 @@ class DataPreprocessor:
         df = self.load_raw()
         sku_df = df[df["product_sku"] == sku_id].copy()
         if sku_df.empty:
-            raise ValueError(f"SKU '{sku_id}' not found in dataset")
+            return self._build_live_timeseries(sku_id)
 
         # ── 1. Aggregate to daily ─────────────────────────────────────────────
-        static_cols = [
-            "is_perishable", "lead_time_days", "buying_price", "selling_price",
-            "margin_pct", "price_elasticity_index", "annual_trend_factor", "demand_index",
-        ]
         daily = (
             sku_df.groupby("date")
             .agg(
@@ -283,20 +284,56 @@ class DataPreprocessor:
             .sort_values("date")
         )
 
-        # ── 2. Fill missing dates ─────────────────────────────────────────────
+        return self._finish_daily_series(daily)
+
+    def _build_live_timeseries(self, sku_id: str) -> pd.DataFrame:
+        """
+        Build the same shape of daily series as the CSV path in
+        build_sku_timeseries(), sourced from real MongoDB Sale documents.
+        """
+        from app.ml import mongo_products
+
+        daily = mongo_products.load_daily_series(sku_id)  # columns: date, qty
+        meta  = mongo_products.get_product_meta(sku_id)
+        for col in [
+            "is_perishable", "lead_time_days", "buying_price", "selling_price",
+            "margin_pct", "price_elasticity_index", "annual_trend_factor", "demand_index",
+        ]:
+            daily[col] = meta[col]
+
+        return self._finish_daily_series(daily)
+
+    def _finish_daily_series(self, daily: pd.DataFrame) -> pd.DataFrame:
+        """
+        Shared tail of the pipeline for both the CSV and live-Mongo sources:
+        fill missing calendar dates, engineer calendar/festival/lag/rolling
+        features, and drop the warm-up rows where qty_lag_30 is NaN.
+
+        `daily` must have one row per date with 'date', 'qty', and the eight
+        static columns already present ('season' / 'is_festival' /
+        'festival_intensity' are optional — _add_calendar_features() and
+        _add_festival_features() derive them from the date when absent).
+        """
+        static_cols = [
+            "is_perishable", "lead_time_days", "buying_price", "selling_price",
+            "margin_pct", "price_elasticity_index", "annual_trend_factor", "demand_index",
+        ]
+
+        # ── Fill missing dates ─────────────────────────────────────────────────
         full_range = pd.date_range(daily["date"].min(), daily["date"].max(), freq="D")
         daily = daily.set_index("date").reindex(full_range)
         daily.index.name = "date"
         daily["qty"] = daily["qty"].fillna(0.0)
         for col in static_cols + ["is_festival", "festival_intensity", "season"]:
-            daily[col] = daily[col].ffill().bfill()
+            if col in daily.columns:
+                daily[col] = daily[col].ffill().bfill()
         daily = daily.reset_index()
 
-        # ── 3. Feature engineering ────────────────────────────────────────────
+        # ── Feature engineering ────────────────────────────────────────────────
         daily = self._add_calendar_features(daily)
         daily = self._add_festival_features(daily)
         daily = self._add_lag_rolling_features(daily)
-        # qty_norm placeholder (full-dataset max; replace with refit_qty_norm for training)
+        # qty_norm placeholder (full-series max; replace with refit_qty_norm for training)
         daily = self._add_qty_norm(daily)
 
         return daily.dropna(subset=["qty_lag_30"]).reset_index(drop=True)

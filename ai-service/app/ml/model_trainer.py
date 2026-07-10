@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import warnings
 from datetime import datetime
 from pathlib import Path
@@ -130,7 +131,14 @@ def _extract_feature_importance(model, feature_cols: list[str], top_n: int = 15)
 
 # ── path helpers ──────────────────────────────────────────────────────────────
 
+# Real and demo SKUs are alphanumeric with dashes/underscores (e.g. "SYN-BV-001").
+# Reject anything else so sku_id can never be used to escape trained_models/.
+_SKU_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+
+
 def _model_dir(sku_id: str) -> Path:
+    if not _SKU_ID_RE.match(sku_id):
+        raise ValueError(f"Invalid sku_id: {sku_id!r}")
     d = _BASE_DIR / sku_id
     d.mkdir(parents=True, exist_ok=True)
     return d
