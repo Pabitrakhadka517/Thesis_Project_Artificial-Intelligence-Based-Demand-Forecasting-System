@@ -3,31 +3,35 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Bell, AlertTriangle, Package, TrendingDown, RefreshCw,
-  CheckCircle, Eye, Trash2, BellOff, Zap,
+  CheckCircle, CheckCheck, Eye, Trash2, BellOff, Zap,
 } from 'lucide-react'
 import axiosInstance from '@/api/axiosInstance'
 import { useToast } from '@/hooks/useToast'
 import { useRole } from '@/hooks/useRole'
+import { ErrorState } from '@/components/common/ErrorState'
+import { ConfirmDialog } from '@/components/common/Modal'
+import { Pagination } from '@/components/common/Pagination'
 
 const TYPE_CONFIG = {
-  low_stock:     { label: 'Low Stock',     color: '#F59E0B', bg: 'rgba(245,158,11,.1)', Icon: Package },
-  out_of_stock:  { label: 'Out of Stock',  color: '#EF4444', bg: 'rgba(239,68,68,.1)',  Icon: TrendingDown },
-  overstock:     { label: 'Overstock',     color: '#6366F1', bg: 'rgba(99,102,241,.1)', Icon: TrendingDown },
-  reorder_point: { label: 'Reorder Point', color: '#3B82F6', bg: 'rgba(59,130,246,.1)', Icon: RefreshCw },
-  expiry:        { label: 'Expiry',        color: '#EC4899', bg: 'rgba(236,72,153,.1)', Icon: AlertTriangle },
-  system:        { label: 'System',        color: '#64748B', bg: 'rgba(100,116,139,.1)', Icon: Bell },
+  low_stock:       { label: 'Low Stock',       color: '#F59E0B', bg: 'rgba(245,158,11,.1)', Icon: Package },
+  out_of_stock:    { label: 'Out of Stock',    color: '#EF4444', bg: 'rgba(239,68,68,.1)',  Icon: TrendingDown },
+  overstock:       { label: 'Overstock',       color: '#6366F1', bg: 'rgba(99,102,241,.1)', Icon: TrendingDown },
+  reorder:         { label: 'Reorder Point',   color: '#3B82F6', bg: 'rgba(59,130,246,.1)', Icon: RefreshCw },
+  expiry:          { label: 'Expiry',          color: '#EC4899', bg: 'rgba(236,72,153,.1)', Icon: AlertTriangle },
+  forecast_change: { label: 'Forecast Change', color: '#8B5CF6', bg: 'rgba(139,92,246,.1)', Icon: TrendingDown },
+  supplier_delay:  { label: 'Supplier Delay',  color: '#64748B', bg: 'rgba(100,116,139,.1)', Icon: Bell },
 }
 
 const SEVERITY_CONFIG = {
-  critical: { label: 'Critical', color: '#EF4444' },
-  high:     { label: 'High',     color: '#F59E0B' },
-  medium:   { label: 'Medium',   color: '#6366F1' },
-  low:      { label: 'Low',      color: '#10B981' },
+  critical: { label: 'Critical', color: '#EF4444', bg: 'rgba(239,68,68,.12)' },
+  high:     { label: 'High',     color: '#F59E0B', bg: 'rgba(245,158,11,.12)' },
+  medium:   { label: 'Medium',   color: '#6366F1', bg: 'rgba(99,102,241,.12)' },
+  low:      { label: 'Low',      color: '#10B981', bg: 'rgba(16,185,129,.12)' },
 }
 
-function AlertCard({ alert, onAcknowledge, onRead, onDelete }) {
-  const typeCfg  = TYPE_CONFIG[alert.type]     || TYPE_CONFIG.system
-  const sevCfg   = SEVERITY_CONFIG[alert.severity] || SEVERITY_CONFIG.medium
+function AlertCard({ alert, onAcknowledge, onResolve, onRead, onDelete }) {
+  const typeCfg  = TYPE_CONFIG[alert.type]         || TYPE_CONFIG.supplier_delay
+  const sevCfg   = SEVERITY_CONFIG[alert.priority] || SEVERITY_CONFIG.medium
   const { Icon } = typeCfg
 
   return (
@@ -40,6 +44,7 @@ function AlertCard({ alert, onAcknowledge, onRead, onDelete }) {
       style={{
         background: 'var(--surface-card)',
         border: `1px solid ${alert.isRead ? 'var(--border)' : typeCfg.color + '40'}`,
+        borderLeft: `3px solid ${sevCfg.color}`,
         opacity: alert.status === 'resolved' ? 0.6 : 1,
       }}>
       <div className="flex items-start gap-3">
@@ -51,12 +56,11 @@ function AlertCard({ alert, onAcknowledge, onRead, onDelete }) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-1">
             <span className="text-[11px] font-bold px-2 py-0.5 rounded-full"
-              style={{ background: typeCfg.bg, color: typeCfg.color }}>
-              {typeCfg.label}
-            </span>
-            <span className="text-[10px] font-semibold"
-              style={{ color: sevCfg.color }}>
+              style={{ background: sevCfg.bg, color: sevCfg.color }}>
               {sevCfg.label}
+            </span>
+            <span className="text-[10px] font-semibold" style={{ color: 'var(--text-muted)' }}>
+              {typeCfg.label}
             </span>
             {!alert.isRead && (
               <span className="h-2 w-2 rounded-full shrink-0" style={{ background: '#3B82F6' }} />
@@ -64,6 +68,11 @@ function AlertCard({ alert, onAcknowledge, onRead, onDelete }) {
             {alert.status === 'acknowledged' && (
               <span className="text-[10px] font-semibold" style={{ color: '#10B981' }}>
                 Acknowledged
+              </span>
+            )}
+            {alert.status === 'resolved' && (
+              <span className="text-[10px] font-semibold" style={{ color: 'var(--text-muted)' }}>
+                Resolved
               </span>
             )}
           </div>
@@ -99,7 +108,14 @@ function AlertCard({ alert, onAcknowledge, onRead, onDelete }) {
               <CheckCircle className="h-3.5 w-3.5" />
             </button>
           )}
-          <button onClick={() => onDelete(alert._id)} title="Delete"
+          {alert.status === 'acknowledged' && (
+            <button onClick={() => onResolve(alert._id)} title="Resolve"
+              className="h-7 w-7 rounded-md flex items-center justify-center"
+              style={{ color: '#6366F1', background: 'rgba(99,102,241,.1)' }}>
+              <CheckCheck className="h-3.5 w-3.5" />
+            </button>
+          )}
+          <button onClick={() => onDelete(alert)} title="Delete"
             className="h-7 w-7 rounded-md flex items-center justify-center"
             style={{ color: '#EF4444' }}
             onMouseEnter={e => e.currentTarget.style.background = 'rgba(239,68,68,.1)'}
@@ -120,12 +136,13 @@ export default function AlertsPage() {
   const [typeFilter, setType]     = useState('')
   const [statusFilter, setStatus] = useState('')
   const [page, setPage]           = useState(1)
-  const LIMIT = 20
+  const [pageSize, setPageSize]   = useState(20)
+  const [deleteTarget, setDeleteTarget] = useState(null)
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['alerts', page, typeFilter, statusFilter],
+  const { data, isLoading, isError, error, refetch } = useQuery({
+    queryKey: ['alerts', page, pageSize, typeFilter, statusFilter],
     queryFn: () => axiosInstance
-      .get(`/alerts?page=${page}&limit=${LIMIT}&type=${typeFilter}&status=${statusFilter}`)
+      .get(`/alerts?page=${page}&limit=${pageSize}&type=${typeFilter}&status=${statusFilter}`)
       .then(r => r.data),
     staleTime: 15_000,
     refetchInterval: 60_000,
@@ -133,7 +150,6 @@ export default function AlertsPage() {
 
   const alerts     = data?.data || []
   const total      = data?.pagination?.total || 0
-  const totalPages = data?.pagination?.totalPages || 1
   const unread     = alerts.filter(a => !a.isRead).length
 
   const generateMutation = useMutation({
@@ -168,9 +184,18 @@ export default function AlertsPage() {
     },
   })
 
+  const resolveMutation = useMutation({
+    mutationFn: (id) => axiosInstance.patch(`/alerts/${id}/resolve`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['alerts'] })
+      toast({ title: 'Alert resolved', variant: 'success' })
+    },
+    onError: (e) => toast({ title: e.response?.data?.message || 'Failed to resolve', variant: 'error' }),
+  })
+
   const deleteMutation = useMutation({
     mutationFn: (id) => axiosInstance.delete(`/alerts/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['alerts'] }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['alerts'] }); setDeleteTarget(null) },
     onError: () => toast({ title: 'Failed to delete', variant: 'error' }),
   })
 
@@ -232,6 +257,8 @@ export default function AlertsPage() {
             <div key={i} className="h-24 rounded-xl animate-pulse" style={{ background: 'var(--surface-card)' }} />
           ))}
         </div>
+      ) : isError ? (
+        <ErrorState error={error} onRetry={refetch} />
       ) : alerts.length === 0 ? (
         <div className="text-center py-16">
           <Bell className="h-12 w-12 mx-auto mb-3 opacity-20" style={{ color: 'var(--text-muted)' }} />
@@ -253,7 +280,8 @@ export default function AlertsPage() {
                 alert={alert}
                 onRead={markReadMutation.mutate}
                 onAcknowledge={acknowledgeMutation.mutate}
-                onDelete={deleteMutation.mutate}
+                onResolve={resolveMutation.mutate}
+                onDelete={setDeleteTarget}
               />
             ))}
           </div>
@@ -261,23 +289,24 @@ export default function AlertsPage() {
       )}
 
       {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between">
-          <p className="text-[12px]" style={{ color: 'var(--text-muted)' }}>Page {page} of {totalPages}</p>
-          <div className="flex gap-1.5">
-            <button disabled={page <= 1} onClick={() => setPage(p => p - 1)}
-              className="px-3 py-1.5 rounded-lg text-[12px] font-medium disabled:opacity-40"
-              style={{ background: 'var(--surface-card)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
-              Prev
-            </button>
-            <button disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}
-              className="px-3 py-1.5 rounded-lg text-[12px] font-medium disabled:opacity-40"
-              style={{ background: 'var(--surface-card)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
-              Next
-            </button>
-          </div>
-        </div>
+      {total > 0 && (
+        <Pagination
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          onPageChange={setPage}
+          onPageSizeChange={(s) => { setPageSize(s); setPage(1) }}
+        />
       )}
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => deleteMutation.mutate(deleteTarget._id)}
+        title="Delete alert?"
+        description={`This permanently deletes "${deleteTarget?.title}". This action cannot be undone.`}
+        loading={deleteMutation.isPending}
+      />
     </div>
   )
 }

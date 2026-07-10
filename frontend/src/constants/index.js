@@ -66,5 +66,14 @@ export const CHART_COLORS = {
 
 export const PAGINATION_PAGE_SIZES = [10, 20, 50, 100]
 
+// Shared Framer Motion timings — reuse instead of picking a one-off duration
+// per component so overlays/transitions read as one consistent system.
+export const MOTION = {
+  fast: 0.12,
+  base: 0.2,
+  slow: 0.32,
+  ease: [0.4, 0, 0.2, 1],
+}
+
 export const QUERY_STALE_TIME = 5 * 60 * 1000 // 5 min
 export const QUERY_CACHE_TIME = 10 * 60 * 1000 // 10 min

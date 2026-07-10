@@ -9,6 +9,8 @@ import { useSelector } from 'react-redux'
 import { useAuth } from '@/hooks/useAuth'
 import { selectErrorStatus } from '@/store/slices/authSlice'
 import { APP_NAME } from '@/constants'
+import { Input } from '@/components/common/Input'
+import { Button } from '@/components/common/Button'
 
 const schema = z.object({
   email:    z.string().email('Enter a valid email address'),
@@ -128,66 +130,30 @@ export default function LoginPage() {
           </p>
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-            {/* Email */}
-            <div>
-              <label className="block text-[11px] font-semibold uppercase tracking-widest mb-1.5"
-                style={{ color: 'var(--text-muted)' }}>
-                Email Address
-              </label>
-              <div className="relative">
-                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4" style={{ color: 'var(--text-muted)' }} />
-                <input
-                  type="email"
-                  placeholder="your@email.com"
-                  className="w-full text-[14px] outline-none"
-                  style={{
-                    background:   'var(--surface-card)',
-                    border:       `1.5px solid ${errors.email ? '#EF4444' : 'var(--border)'}`,
-                    borderRadius: '10px',
-                    padding:      '12px 12px 12px 40px',
-                    color:        'var(--text-primary)',
-                    transition:   'border-color .15s',
-                  }}
-                  onFocus={e => { if (!errors.email) e.target.style.borderColor = '#2563EB' }}
-                  onBlur={e  => { if (!errors.email) e.target.style.borderColor = 'var(--border)' }}
-                  {...register('email')}
-                />
-              </div>
-              {errors.email && <p className="text-[11px] mt-1" style={{ color: '#EF4444' }}>{errors.email.message}</p>}
-            </div>
+            <Input
+              label="Email Address"
+              type="email"
+              icon={Mail}
+              placeholder="your@email.com"
+              error={errors.email?.message}
+              {...register('email')}
+            />
 
-            {/* Password */}
-            <div>
-              <label className="block text-[11px] font-semibold uppercase tracking-widest mb-1.5"
-                style={{ color: 'var(--text-muted)' }}>
-                Password
-              </label>
-              <div className="relative">
-                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4" style={{ color: 'var(--text-muted)' }} />
-                <input
-                  type={showPw ? 'text' : 'password'}
-                  placeholder="••••••••"
-                  className="w-full text-[14px] outline-none"
-                  style={{
-                    background:   'var(--surface-card)',
-                    border:       `1.5px solid ${errors.password ? '#EF4444' : 'var(--border)'}`,
-                    borderRadius: '10px',
-                    padding:      '12px 44px 12px 40px',
-                    color:        'var(--text-primary)',
-                    transition:   'border-color .15s',
-                  }}
-                  onFocus={e => { if (!errors.password) e.target.style.borderColor = '#2563EB' }}
-                  onBlur={e  => { if (!errors.password) e.target.style.borderColor = 'var(--border)' }}
-                  {...register('password')}
-                />
+            <Input
+              label="Password"
+              type={showPw ? 'text' : 'password'}
+              icon={Lock}
+              placeholder="••••••••"
+              error={errors.password?.message}
+              rightElement={
                 <button type="button" onClick={() => setShowPw(p => !p)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2"
+                  aria-label={showPw ? 'Hide password' : 'Show password'}
                   style={{ color: 'var(--text-muted)' }}>
-                  {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  {showPw ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                 </button>
-              </div>
-              {errors.password && <p className="text-[11px] mt-1" style={{ color: '#EF4444' }}>{errors.password.message}</p>}
-            </div>
+              }
+              {...register('password')}
+            />
 
             {/* Forgot password */}
             <div className="flex justify-end">
@@ -201,7 +167,9 @@ export default function LoginPage() {
               <motion.div
                 initial={{ opacity: 0, y: -4 }}
                 animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.2 }}
                 className="rounded-lg p-3.5 flex items-start gap-2.5"
+                role="alert"
                 style={{
                   background: isLocked ? '#FFFBEB' : '#FEF2F2',
                   border:     isLocked ? '1px solid #FDE68A' : '1px solid #FECACA',
@@ -214,26 +182,9 @@ export default function LoginPage() {
             )}
 
             {/* Submit */}
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full rounded-xl py-3.5 text-[14px] font-bold text-white transition-all"
-              style={{
-                background: loading ? 'rgba(3,4,94,.4)' : '#03045e',
-                boxShadow:  loading ? 'none' : '0 4px 20px rgba(3,4,94,.35)',
-                cursor:     loading ? 'not-allowed' : 'pointer',
-                opacity:    loading ? .7 : 1,
-              }}
-              onMouseEnter={e => { if (!loading) e.currentTarget.style.boxShadow = '0 6px 24px rgba(3,4,94,.5)' }}
-              onMouseLeave={e => { if (!loading) e.currentTarget.style.boxShadow = '0 4px 20px rgba(3,4,94,.35)' }}
-            >
-              {loading ? (
-                <span className="flex items-center justify-center gap-2">
-                  <span className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-                  Signing in…
-                </span>
-              ) : 'Sign in to Dashboard'}
-            </button>
+            <Button type="submit" loading={loading} size="lg" className="w-full">
+              {loading ? 'Signing in…' : 'Sign in to Dashboard'}
+            </Button>
           </form>
 
           <p className="text-center text-[13px] mt-6" style={{ color: 'var(--text-muted)' }}>

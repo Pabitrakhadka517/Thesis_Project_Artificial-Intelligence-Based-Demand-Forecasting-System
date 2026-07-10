@@ -7,14 +7,15 @@ import { motion } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import { APP_NAME } from '@/constants'
+import { passwordSchema } from '@/schemas/password'
+import { Input } from '@/components/common/Input'
+import { Button } from '@/components/common/Button'
+import { PasswordStrengthMeter } from '@/components/common/PasswordStrengthMeter'
 
 const schema = z.object({
   fullName:        z.string().min(2, 'Name must be at least 2 characters'),
   email:           z.string().email('Enter a valid email address'),
-  password:        z.string()
-    .min(8, 'Password must be at least 8 characters')
-    .regex(/[a-zA-Z]/, 'Password must contain at least one letter')
-    .regex(/\d/, 'Password must contain at least one number'),
+  password:        passwordSchema,
   confirmPassword: z.string().min(1, 'Please confirm your password'),
 }).refine(d => d.password === d.confirmPassword, {
   message: "Passwords don't match",
@@ -33,20 +34,13 @@ export default function RegisterPage() {
   const [showPw, setShowPw]   = useState(false)
   const [showCpw, setShowCpw] = useState(false)
 
-  const { register, handleSubmit, formState: { errors } } = useForm({ resolver: zodResolver(schema) })
+  const { register, handleSubmit, watch, formState: { errors } } = useForm({ resolver: zodResolver(schema) })
+  const passwordValue = watch('password', '')
 
   const onSubmit = async ({ fullName, email, password }) => {
     clearError()
     await doRegister({ fullName, email, password })
   }
-
-  const inputStyle = hasError => ({
-    background:   '#FFFFFF',
-    border:       `1.5px solid ${hasError ? '#EF4444' : '#E5E7EB'}`,
-    borderRadius: '10px',
-    color:        '#111827',
-    transition:   'border-color .15s',
-  })
 
   return (
     <div className="min-h-screen flex">
@@ -119,7 +113,7 @@ export default function RegisterPage() {
       </div>
 
       {/* ── Right Register Panel ── */}
-      <div className="flex-1 flex items-center justify-center p-6 lg:p-12" style={{ background: '#FFFFFF' }}>
+      <div className="flex-1 flex items-center justify-center p-6 lg:p-12" style={{ background: 'var(--surface-page)' }}>
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -132,114 +126,74 @@ export default function RegisterPage() {
               style={{ background: '#03045e' }}>
               <Zap className="h-4 w-4 text-white" strokeWidth={2.5} />
             </div>
-            <span className="text-[17px] font-bold" style={{ color: '#111827' }}>{APP_NAME}</span>
+            <span className="text-[17px] font-bold" style={{ color: 'var(--text-primary)' }}>{APP_NAME}</span>
           </div>
 
-          <h2 className="text-[28px] font-bold mb-1" style={{ color: '#111827' }}>Create account</h2>
-          <p className="text-[14px] mb-8" style={{ color: '#6B7280' }}>
+          <h2 className="text-[28px] font-bold mb-1" style={{ color: 'var(--text-primary)' }}>Create account</h2>
+          <p className="text-[14px] mb-8" style={{ color: 'var(--text-muted)' }}>
             Get started with your enterprise dashboard
           </p>
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-            {/* Full Name */}
+            <Input
+              label="Full Name"
+              icon={UserIcon}
+              placeholder="Alex Johnson"
+              error={errors.fullName?.message}
+              {...register('fullName')}
+            />
+
+            <Input
+              label="Email Address"
+              type="email"
+              icon={Mail}
+              placeholder="you@company.com"
+              error={errors.email?.message}
+              {...register('email')}
+            />
+
             <div>
-              <label className="block text-[11px] font-semibold uppercase tracking-widest mb-1.5"
-                style={{ color: '#6B7280' }}>
-                Full Name
-              </label>
-              <div className="relative">
-                <UserIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4" style={{ color: '#9CA3AF' }} />
-                <input
-                  type="text"
-                  placeholder="Alex Johnson"
-                  className="w-full text-[14px] outline-none"
-                  style={{ ...inputStyle(errors.fullName), padding: '12px 12px 12px 40px' }}
-                  onFocus={e => { if (!errors.fullName) e.target.style.borderColor = '#2563EB' }}
-                  onBlur={e  => { if (!errors.fullName) e.target.style.borderColor = '#E5E7EB' }}
-                  {...register('fullName')}
-                />
-              </div>
-              {errors.fullName && <p className="text-[11px] mt-1" style={{ color: '#EF4444' }}>{errors.fullName.message}</p>}
+              <Input
+                label="Password"
+                type={showPw ? 'text' : 'password'}
+                icon={Lock}
+                placeholder="••••••••"
+                error={errors.password?.message}
+                rightElement={
+                  <button type="button" onClick={() => setShowPw(p => !p)}
+                    aria-label={showPw ? 'Hide password' : 'Show password'}
+                    style={{ color: 'var(--text-muted)' }}>
+                    {showPw ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                  </button>
+                }
+                {...register('password')}
+              />
+              <PasswordStrengthMeter value={passwordValue} />
             </div>
 
-            {/* Email */}
-            <div>
-              <label className="block text-[11px] font-semibold uppercase tracking-widest mb-1.5"
-                style={{ color: '#6B7280' }}>
-                Email Address
-              </label>
-              <div className="relative">
-                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4" style={{ color: '#9CA3AF' }} />
-                <input
-                  type="email"
-                  placeholder="you@company.com"
-                  className="w-full text-[14px] outline-none"
-                  style={{ ...inputStyle(errors.email), padding: '12px 12px 12px 40px' }}
-                  onFocus={e => { if (!errors.email) e.target.style.borderColor = '#2563EB' }}
-                  onBlur={e  => { if (!errors.email) e.target.style.borderColor = '#E5E7EB' }}
-                  {...register('email')}
-                />
-              </div>
-              {errors.email && <p className="text-[11px] mt-1" style={{ color: '#EF4444' }}>{errors.email.message}</p>}
-            </div>
-
-            {/* Password */}
-            <div>
-              <label className="block text-[11px] font-semibold uppercase tracking-widest mb-1.5"
-                style={{ color: '#6B7280' }}>
-                Password
-              </label>
-              <div className="relative">
-                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4" style={{ color: '#9CA3AF' }} />
-                <input
-                  type={showPw ? 'text' : 'password'}
-                  placeholder="••••••••"
-                  className="w-full text-[14px] outline-none"
-                  style={{ ...inputStyle(errors.password), padding: '12px 44px 12px 40px' }}
-                  onFocus={e => { if (!errors.password) e.target.style.borderColor = '#2563EB' }}
-                  onBlur={e  => { if (!errors.password) e.target.style.borderColor = '#E5E7EB' }}
-                  {...register('password')}
-                />
-                <button type="button" onClick={() => setShowPw(p => !p)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2"
-                  style={{ color: '#9CA3AF' }}>
-                  {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
-              {errors.password && <p className="text-[11px] mt-1" style={{ color: '#EF4444' }}>{errors.password.message}</p>}
-            </div>
-
-            {/* Confirm Password */}
-            <div>
-              <label className="block text-[11px] font-semibold uppercase tracking-widest mb-1.5"
-                style={{ color: '#6B7280' }}>
-                Confirm Password
-              </label>
-              <div className="relative">
-                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4" style={{ color: '#9CA3AF' }} />
-                <input
-                  type={showCpw ? 'text' : 'password'}
-                  placeholder="••••••••"
-                  className="w-full text-[14px] outline-none"
-                  style={{ ...inputStyle(errors.confirmPassword), padding: '12px 44px 12px 40px' }}
-                  onFocus={e => { if (!errors.confirmPassword) e.target.style.borderColor = '#2563EB' }}
-                  onBlur={e  => { if (!errors.confirmPassword) e.target.style.borderColor = '#E5E7EB' }}
-                  {...register('confirmPassword')}
-                />
+            <Input
+              label="Confirm Password"
+              type={showCpw ? 'text' : 'password'}
+              icon={Lock}
+              placeholder="••••••••"
+              error={errors.confirmPassword?.message}
+              rightElement={
                 <button type="button" onClick={() => setShowCpw(p => !p)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2"
-                  style={{ color: '#9CA3AF' }}>
-                  {showCpw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  aria-label={showCpw ? 'Hide password' : 'Show password'}
+                  style={{ color: 'var(--text-muted)' }}>
+                  {showCpw ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                 </button>
-              </div>
-              {errors.confirmPassword && <p className="text-[11px] mt-1" style={{ color: '#EF4444' }}>{errors.confirmPassword.message}</p>}
-            </div>
+              }
+              {...register('confirmPassword')}
+            />
 
             {/* Error banner */}
             {error && (
               <motion.div
                 initial={{ opacity: 0, y: -4 }}
                 animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.2 }}
+                role="alert"
                 className="rounded-lg p-3.5 text-[13px]"
                 style={{ background: '#FEF2F2', border: '1px solid #FECACA', color: '#991B1B' }}
               >
@@ -248,36 +202,19 @@ export default function RegisterPage() {
             )}
 
             {/* Submit */}
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full rounded-xl py-3.5 text-[14px] font-bold text-white transition-all"
-              style={{
-                background: loading ? 'rgba(3,4,94,.4)' : '#03045e',
-                boxShadow:  loading ? 'none' : '0 4px 20px rgba(3,4,94,.35)',
-                cursor:     loading ? 'not-allowed' : 'pointer',
-                opacity:    loading ? .7 : 1,
-              }}
-              onMouseEnter={e => { if (!loading) e.currentTarget.style.boxShadow = '0 6px 24px rgba(3,4,94,.5)' }}
-              onMouseLeave={e => { if (!loading) e.currentTarget.style.boxShadow = '0 4px 20px rgba(3,4,94,.35)' }}
-            >
-              {loading ? (
-                <span className="flex items-center justify-center gap-2">
-                  <span className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-                  Creating account…
-                </span>
-              ) : 'Create Account'}
-            </button>
+            <Button type="submit" loading={loading} size="lg" className="w-full">
+              {loading ? 'Creating account…' : 'Create Account'}
+            </Button>
           </form>
 
-          <p className="text-center text-[13px] mt-6" style={{ color: '#6B7280' }}>
+          <p className="text-center text-[13px] mt-6" style={{ color: 'var(--text-muted)' }}>
             Already have an account?{' '}
             <Link to="/login" className="font-semibold" style={{ color: '#2563EB' }}>
               Sign in
             </Link>
           </p>
 
-          <p className="text-center text-[12px] mt-4" style={{ color: '#D1D5DB' }}>
+          <p className="text-center text-[12px] mt-4" style={{ color: 'var(--text-muted)', opacity: 0.6 }}>
             Secured · Enterprise · Kathmandu Valley Wholesale
           </p>
         </motion.div>

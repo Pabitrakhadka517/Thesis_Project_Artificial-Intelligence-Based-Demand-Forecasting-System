@@ -12,6 +12,7 @@ import { Modal, ConfirmDialog } from '@/components/common/Modal'
 import { SkeletonTable } from '@/components/common/Skeleton'
 import { EmptyState } from '@/components/common/EmptyState'
 import { ErrorState } from '@/components/common/ErrorState'
+import { Pagination } from '@/components/common/Pagination'
 import { useToast } from '@/hooks/useToast'
 import axiosInstance from '@/api/axiosInstance'
 
@@ -29,6 +30,8 @@ export default function CategoriesPage() {
   const [modalOpen,  setModalOpen]  = useState(false)
   const [editItem,   setEditItem]   = useState(null)
   const [deleteItem, setDeleteItem] = useState(null)
+  const [page,       setPage]       = useState(1)
+  const [pageSize,   setPageSize]   = useState(20)
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['categories-page'],
@@ -88,9 +91,11 @@ export default function CategoriesPage() {
   }
 
   const allCategories = data?.data?.categories ?? []
-  const categories = search
+  const filteredCategories = search
     ? allCategories.filter(c => c.name.toLowerCase().includes(search.toLowerCase()))
     : allCategories
+  const total = filteredCategories.length
+  const categories = filteredCategories.slice((page - 1) * pageSize, page * pageSize)
 
   if (error) return <ErrorState error={error} onRetry={refetch} />
 
@@ -123,7 +128,7 @@ export default function CategoriesPage() {
         <CardContent className="py-3">
           <div className="relative max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5" style={{ color: 'var(--text-muted)' }} />
-            <input value={search} onChange={e => setSearch(e.target.value)}
+            <input value={search} onChange={e => { setSearch(e.target.value); setPage(1) }}
               placeholder="Search categories…"
               className="w-full text-[13px] pl-9 pr-3 py-2 rounded-lg outline-none"
               style={{ background: 'var(--surface-input)', border: '1.5px solid var(--border)', color: 'var(--text-primary)' }} />
@@ -209,6 +214,17 @@ export default function CategoriesPage() {
           </div>
         )}
       </Card>
+
+      {/* Pagination */}
+      {total > 0 && (
+        <Pagination
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          onPageChange={setPage}
+          onPageSizeChange={(s) => { setPageSize(s); setPage(1) }}
+        />
+      )}
 
       {/* Create / Edit modal */}
       <Modal open={modalOpen} onClose={closeModal} title={editItem ? `Edit: ${editItem.name}` : 'New Category'}>

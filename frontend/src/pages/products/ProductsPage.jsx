@@ -11,10 +11,15 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import axiosInstance from '@/api/axiosInstance'
 import { productsService } from '@/services/productsService'
-import { getProductImage, imgFallback, BACKEND_URL } from '@/utils'
+import { getProductImage, imgFallback, BACKEND_URL, formatRs, STOCK_STATUS } from '@/utils'
 import { useToast } from '@/hooks/useToast'
 import { useRole } from '@/hooks/useRole'
 import { ImageUpload } from '@/components/common/ImageUpload'
+import { ErrorState } from '@/components/common/ErrorState'
+import { ConfirmDialog } from '@/components/common/Modal'
+import { Pagination } from '@/components/common/Pagination'
+import { useSortable } from '@/hooks/useSortable'
+import { SortableTH } from '@/components/common/SortableTH'
 
 const schema = z.object({
   name:          z.string().min(2, 'Product name required'),
@@ -34,12 +39,10 @@ const schema = z.object({
 
 const UNITS = ['piece','kg','gram','liter','ml','box','pack','dozen','meter','set']
 
-const STATUS_CONFIG = {
-  out_of_stock: { label: 'Out of Stock', color: '#EF4444', bg: 'rgba(239,68,68,.1)',  Icon: XCircle },
-  critical:     { label: 'Critical',     color: '#F59E0B', bg: 'rgba(245,158,11,.1)', Icon: AlertTriangle },
-  healthy:      { label: 'Healthy',      color: '#10B981', bg: 'rgba(16,185,129,.1)', Icon: CheckCircle },
-  overstock:    { label: 'Overstock',    color: '#6366F1', bg: 'rgba(99,102,241,.1)', Icon: TrendingDown },
-}
+const STATUS_ICON = { out_of_stock: XCircle, critical: AlertTriangle, healthy: CheckCircle, overstock: TrendingDown }
+const STATUS_CONFIG = Object.fromEntries(
+  Object.entries(STOCK_STATUS).map(([k, v]) => [k, { ...v, Icon: STATUS_ICON[k] || CheckCircle }])
+)
 
 function StockBadge({ status }) {
   const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.healthy
@@ -228,16 +231,23 @@ export default function ProductsPage() {
   const [page, setPage]           = useState(1)
   const [creating, setCreate]     = useState(false)
   const [editing, setEdit]        = useState(null)
+  const [deleteTarget, setDeleteTarget] = useState(null)
   const [createApiError, setCreateApiError] = useState('')
   const pendingImageRef           = useRef(null)
   const removeImageRef            = useRef(false)
-  const LIMIT = 12
+  const [pageSize, setPageSize]   = useState(20)
+  const sort = useSortable('createdAt', 'desc')
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['products', page, search, stockFilter, catFilter],
-    queryFn: () => productsService.getAll({ page, limit: LIMIT, search, stockStatus: stockFilter, category: catFilter }).then(r => r.data),
+  const { data, isLoading, isError, error, refetch } = useQuery({
+    queryKey: ['products', page, pageSize, search, stockFilter, catFilter, sort.sortBy, sort.sortDir],
+    queryFn: () => productsService.getAll({
+      page, limit: pageSize, search, stockStatus: stockFilter, category: catFilter,
+      sortBy: sort.sortBy, sortDir: sort.sortDir,
+    }).then(r => r.data),
     staleTime: 30_000,
   })
+
+  const onSort = (key) => { sort.toggle(key); setPage(1) }
 
   const { data: supplierData } = useQuery({
     queryKey: ['suppliers-list'],
@@ -253,7 +263,6 @@ export default function ProductsPage() {
 
   const products   = data?.data || []
   const total      = data?.pagination?.total || 0
-  const totalPages = data?.pagination?.totalPages || 1
   const suppliers  = supplierData?.data || []
   const categories = catData?.data?.categories || []
 
@@ -309,11 +318,12 @@ export default function ProductsPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['products'] })
       toast({ title: 'Product deleted', variant: 'success' })
+      setDeleteTarget(null)
     },
     onError: (e) => toast({ title: e.response?.data?.message || 'Failed to delete', variant: 'error' }),
   })
 
-  const formatPrice = (n) => `Rs. ${Number(n || 0).toLocaleString()}`
+  const formatPrice = (n) => formatRs(n, { abbreviate: false })
 
   return (
     <div className="space-y-6 pb-8">
@@ -368,21 +378,27 @@ export default function ProductsPage() {
             <div key={i} className="h-12 rounded-xl animate-pulse" style={{ background: 'var(--surface-card)' }} />
           ))}
         </div>
+      ) : isError ? (
+        <ErrorState error={error} onRetry={refetch} />
       ) : products.length === 0 ? (
         <div className="text-center py-16">
           <Package className="h-12 w-12 mx-auto mb-3 opacity-20" style={{ color: 'var(--text-muted)' }} />
           <p className="text-[14px]" style={{ color: 'var(--text-muted)' }}>No products found</p>
         </div>
       ) : (
-        <div className="rounded-xl overflow-hidden"
+        <div className="rounded-xl overflow-x-auto"
           style={{ background: 'var(--surface-card)', border: '1px solid var(--border)' }}>
           <table className="w-full text-[13px]">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)', background: 'var(--surface-muted)' }}>
-                {['Product', 'SKU', 'Category', 'Stock', 'Status', 'Buying', 'Selling', 'Actions'].map(h => (
-                  <th key={h} className="text-left px-4 py-3 font-semibold text-[11px] uppercase tracking-wider"
-                    style={{ color: 'var(--text-muted)' }}>{h}</th>
-                ))}
+                <SortableTH label="Product" sortKey="name" sortBy={sort.sortBy} sortDir={sort.sortDir} onSort={onSort} />
+                <th className="text-left px-4 py-3 font-semibold text-[11px] uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>SKU</th>
+                <th className="text-left px-4 py-3 font-semibold text-[11px] uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Category</th>
+                <SortableTH label="Stock" sortKey="currentStock" sortBy={sort.sortBy} sortDir={sort.sortDir} onSort={onSort} />
+                <th className="text-left px-4 py-3 font-semibold text-[11px] uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Status</th>
+                <SortableTH label="Buying" sortKey="buyingPrice" sortBy={sort.sortBy} sortDir={sort.sortDir} onSort={onSort} />
+                <SortableTH label="Selling" sortKey="sellingPrice" sortBy={sort.sortBy} sortDir={sort.sortDir} onSort={onSort} />
+                <th className="text-left px-4 py-3 font-semibold text-[11px] uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -456,7 +472,7 @@ export default function ProductsPage() {
                       )}
                       {isAdmin && (
                         <button
-                          onClick={() => window.confirm(`Delete "${p.name}"?`) && deleteMutation.mutate(p._id)}
+                          onClick={() => setDeleteTarget(p)}
                           className="h-7 w-7 rounded-md flex items-center justify-center"
                           style={{ color: '#EF4444' }}
                           onMouseEnter={e => e.currentTarget.style.background = 'rgba(239,68,68,.1)'}
@@ -474,23 +490,24 @@ export default function ProductsPage() {
       )}
 
       {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between">
-          <p className="text-[12px]" style={{ color: 'var(--text-muted)' }}>Page {page} of {totalPages} · {total} products</p>
-          <div className="flex gap-1.5">
-            <button disabled={page <= 1} onClick={() => setPage(p => p - 1)}
-              className="px-3 py-1.5 rounded-lg text-[12px] font-medium disabled:opacity-40"
-              style={{ background: 'var(--surface-card)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
-              Prev
-            </button>
-            <button disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}
-              className="px-3 py-1.5 rounded-lg text-[12px] font-medium disabled:opacity-40"
-              style={{ background: 'var(--surface-card)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
-              Next
-            </button>
-          </div>
-        </div>
+      {total > 0 && (
+        <Pagination
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          onPageChange={setPage}
+          onPageSizeChange={(s) => { setPageSize(s); setPage(1) }}
+        />
       )}
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => deleteMutation.mutate(deleteTarget._id)}
+        title="Delete product?"
+        description={`This permanently deletes "${deleteTarget?.name}". This action cannot be undone.`}
+        loading={deleteMutation.isPending}
+      />
 
       {/* Modals */}
       <AnimatePresence>

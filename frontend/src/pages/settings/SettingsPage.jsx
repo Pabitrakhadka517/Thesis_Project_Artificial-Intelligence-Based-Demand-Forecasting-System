@@ -3,11 +3,13 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Building2, Bell, Cpu, Shield, Save, Eye, EyeOff } from 'lucide-react'
+import { Building2, Bell, Cpu, Shield, Save } from 'lucide-react'
 import axiosInstance from '@/api/axiosInstance'
 import { useToast } from '@/hooks/useToast'
 import { useRole } from '@/hooks/useRole'
 import { ImageUpload } from '@/components/common/ImageUpload'
+import { ChangePasswordForm } from '@/components/common/ChangePasswordForm'
+import { UnsavedBanner } from '@/components/common/UnsavedBanner'
 
 const TABS = [
   { key: 'company',       label: 'Company',      Icon: Building2, adminOnly: true  },
@@ -25,14 +27,6 @@ const companySchema = z.object({
   taxNumber:       z.string().optional(),
   currency:        z.string().default('NPR'),
   fiscalYearStart: z.string().default('Shrawan'),
-})
-
-const passwordSchema = z.object({
-  currentPassword: z.string().min(1, 'Required'),
-  newPassword:     z.string().min(8, 'At least 8 characters'),
-  confirmPassword: z.string(),
-}).refine(d => d.newPassword === d.confirmPassword, {
-  message: "Passwords don't match", path: ['confirmPassword'],
 })
 
 // ── Shared UI components ──────────────────────────────────────────────────────
@@ -133,7 +127,7 @@ function CompanyTab() {
   const [pendingLogo, setPendingLogo] = useState(null)
   const [logoError, setLogoError]     = useState(null)
 
-  const { register, handleSubmit, reset, formState: { errors } } = useForm({
+  const { register, handleSubmit, reset, formState: { errors, isDirty } } = useForm({
     resolver: zodResolver(companySchema),
     defaultValues: {
       companyName: 'Himalayan Wholesale Suppliers', currency: 'NPR', fiscalYearStart: 'Shrawan',
@@ -282,6 +276,7 @@ function CompanyTab() {
               {...register('address')} />
           </Field>
           <SaveBtn isPending={saveMutation.isPending} />
+          {isDirty && <UnsavedBanner />}
         </form>
       </SectionCard>
     </div>
@@ -302,18 +297,24 @@ function NotificationsTab() {
     emailNotifications: false,
   }
 
-  const [prefs, setPrefs] = useState(DEFAULT_PREFS)
+  const [prefs, setPrefs]     = useState(DEFAULT_PREFS)
+  const [savedPrefs, setSaved] = useState(DEFAULT_PREFS)
+  const isDirty = JSON.stringify(prefs) !== JSON.stringify(savedPrefs)
 
   // Sync when settings load
   useEffect(() => {
     const saved = settings.notifications
-    if (saved) setPrefs(p => ({ ...p, ...saved }))
+    if (saved) {
+      setPrefs(p => ({ ...p, ...saved }))
+      setSaved(p => ({ ...p, ...saved }))
+    }
   }, [settings])
 
   const mutation = useMutation({
     mutationFn: (d) => axiosInstance.patch('/settings', { notifications: d }),
-    onSuccess: () => {
+    onSuccess: (_res, vars) => {
       qc.invalidateQueries({ queryKey: ['settings'] })
+      setSaved(vars)
       toast({ title: 'Notification preferences saved', variant: 'success' })
     },
     onError: () => toast({ title: 'Failed to save', variant: 'error' }),
@@ -341,6 +342,7 @@ function NotificationsTab() {
       </div>
       <form onSubmit={e => { e.preventDefault(); mutation.mutate(prefs) }}>
         <SaveBtn isPending={mutation.isPending} label="Save Preferences" />
+        {isDirty && <UnsavedBanner />}
       </form>
     </SectionCard>
   )
@@ -359,25 +361,33 @@ function AITab() {
     enableAutoForecast: true,
   }
 
-  const [cfg, setCfg] = useState(DEFAULT_CFG)
+  const [cfg, setCfg]         = useState(DEFAULT_CFG)
+  const [savedCfg, setSaved]  = useState(DEFAULT_CFG)
+  const isDirty = JSON.stringify(cfg) !== JSON.stringify(savedCfg)
 
   useEffect(() => {
     const saved = settings.aiConfig
-    if (saved) setCfg(p => ({ ...p, ...saved }))
+    if (saved) {
+      setCfg(p => ({ ...p, ...saved }))
+      setSaved(p => ({ ...p, ...saved }))
+    }
   }, [settings])
 
   const mutation = useMutation({
     mutationFn: (d) => axiosInstance.patch('/settings', { aiConfig: d }),
-    onSuccess: () => {
+    onSuccess: (_res, vars) => {
       qc.invalidateQueries({ queryKey: ['settings'] })
+      setSaved(vars)
       toast({ title: 'AI configuration saved', variant: 'success' })
     },
     onError: () => toast({ title: 'Failed to save', variant: 'error' }),
   })
 
+  // Only models the ML service actually trains — Random Forest, LSTM, and
+  // Prophet. (XGBoost was previously offered here with no corresponding
+  // trained model anywhere in the analytics/forecast pipeline.)
   const MODEL_OPTIONS = [
     { value: 'random_forest', label: 'Random Forest (Fast, Accurate)' },
-    { value: 'xgboost',       label: 'XGBoost (High Performance)' },
     { value: 'lstm',          label: 'LSTM Neural Network (Deep Learning)' },
     { value: 'prophet',       label: 'Facebook Prophet (Seasonal)' },
   ]
@@ -409,6 +419,7 @@ function AITab() {
       </div>
       <form onSubmit={e => { e.preventDefault(); mutation.mutate(cfg) }}>
         <SaveBtn isPending={mutation.isPending} label="Save AI Config" />
+        {isDirty && <UnsavedBanner />}
       </form>
     </SectionCard>
   )
@@ -417,43 +428,24 @@ function AITab() {
 // ── Security Tab ──────────────────────────────────────────────────────────────
 function SecurityTab() {
   const { toast } = useToast()
-  const [show, setShow] = useState({ current: false, new: false, confirm: false })
-
-  const { register, handleSubmit, reset, formState: { errors } } = useForm({
-    resolver: zodResolver(passwordSchema),
-  })
 
   const mutation = useMutation({
     mutationFn: (d) => axiosInstance.post('/auth/change-password', d),
-    onSuccess: () => {
-      toast({ title: 'Password changed successfully', variant: 'success' })
-      reset()
-    },
     onError: (e) => toast({ title: e.response?.data?.message || 'Incorrect current password', variant: 'error' }),
   })
 
-  const PwField = ({ name, label, placeholder, showKey }) => (
-    <Field label={label} error={errors[name]?.message}>
-      <div className="relative">
-        <FInput type={show[showKey] ? 'text' : 'password'} placeholder={placeholder}
-          error={!!errors[name]} {...register(name)} />
-        <button type="button" onClick={() => setShow(p => ({ ...p, [showKey]: !p[showKey] }))}
-          className="absolute right-3 top-1/2 -translate-y-1/2"
-          style={{ color: 'var(--text-muted)' }}>
-          {show[showKey] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-        </button>
-      </div>
-    </Field>
-  )
+  const handleSubmit = (values, { reset }) => {
+    mutation.mutate(values, {
+      onSuccess: () => {
+        reset()
+        toast({ title: 'Password changed successfully', variant: 'success' })
+      },
+    })
+  }
 
   return (
     <SectionCard title="Change Password" description="Update your account password. You will remain logged in.">
-      <form onSubmit={handleSubmit(mutation.mutate)} className="space-y-4">
-        <PwField name="currentPassword" label="Current Password" placeholder="••••••••" showKey="current" />
-        <PwField name="newPassword"     label="New Password"     placeholder="At least 8 characters + 1 number" showKey="new" />
-        <PwField name="confirmPassword" label="Confirm New Password" placeholder="Repeat new password" showKey="confirm" />
-        <SaveBtn isPending={mutation.isPending} label="Change Password" />
-      </form>
+      <ChangePasswordForm onSubmit={handleSubmit} loading={mutation.isPending} submitLabel="Change Password" />
     </SectionCard>
   )
 }

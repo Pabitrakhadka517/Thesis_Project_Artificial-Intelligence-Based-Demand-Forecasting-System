@@ -1,4 +1,4 @@
-﻿import { useState } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useDispatch } from 'react-redux'
 import { useQueryClient } from '@tanstack/react-query'
@@ -12,6 +12,12 @@ import {
 } from 'lucide-react'
 import { authService } from '@/services/authService'
 import { loginSuccess } from '@/store/slices/authSlice'
+import { APP_NAME } from '@/constants'
+import { passwordSchema } from '@/schemas/password'
+import { Input } from '@/components/common/Input'
+import { Select } from '@/components/common/Select'
+import { Button } from '@/components/common/Button'
+import { PasswordStrengthMeter } from '@/components/common/PasswordStrengthMeter'
 
 // ── Schemas ───────────────────────────────────────────────────────────────────
 
@@ -23,8 +29,7 @@ const step1Schema = z.object({
 const step2Schema = z.object({
   fullName:        z.string().min(2, 'Full name must be at least 2 characters'),
   email:           z.string().email('Enter a valid email address'),
-  password:        z.string().min(8, 'Password must be at least 8 characters')
-                    .regex(/\d/, 'Password must contain at least one number'),
+  password:        passwordSchema,
   confirmPassword: z.string(),
 }).refine(d => d.password === d.confirmPassword, {
   message: 'Passwords do not match',
@@ -41,7 +46,7 @@ const INDUSTRIES = [
   'Agriculture',
   'Construction & Building Materials',
   'Other',
-]
+].map(i => ({ value: i, label: i }))
 
 const FEATURES = [
   { icon: Package,   label: 'Inventory Management', desc: 'Real-time stock tracking across categories' },
@@ -52,43 +57,6 @@ const FEATURES = [
 
 const STEPS = ['Company', 'Administrator']
 
-// ── Field component ───────────────────────────────────────────────────────────
-
-function Field({ label, error, children }) {
-  return (
-    <div className="space-y-1.5">
-      <label className="text-[12px] font-semibold uppercase tracking-widest"
-        style={{ color: '#6B7280' }}>{label}</label>
-      {children}
-      {error && <p className="text-[12px]" style={{ color: '#EF4444' }}>{error}</p>}
-    </div>
-  )
-}
-
-function Input({ icon: Icon, rightSlot, className = '', ...props }) {
-  return (
-    <div className="relative">
-      {Icon && (
-        <Icon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 pointer-events-none"
-          style={{ color: '#9CA3AF' }} />
-      )}
-      <input
-        className={`w-full h-11 rounded-xl text-[14px] transition-all outline-none
-          ${Icon ? 'pl-10' : 'pl-4'} ${rightSlot ? 'pr-10' : 'pr-4'} ${className}`}
-        style={{
-          background: '#FFFFFF',
-          border:     '1.5px solid #E5E7EB',
-          color:      '#111827',
-        }}
-        onFocus={e  => { e.currentTarget.style.borderColor = '#2563EB' }}
-        onBlur={e   => { e.currentTarget.style.borderColor = '#E5E7EB' }}
-        {...props}
-      />
-      {rightSlot}
-    </div>
-  )
-}
-
 // ── Step 1 — Company Details ──────────────────────────────────────────────────
 
 function CompanyStep({ onNext }) {
@@ -98,39 +66,25 @@ function CompanyStep({ onNext }) {
 
   return (
     <form onSubmit={handleSubmit(onNext)} className="space-y-5">
-      <Field label="Company Name" error={errors.companyName?.message}>
-        <Input
-          icon={Building2}
-          placeholder="e.g. Himalayan Wholesale Suppliers"
-          {...register('companyName')}
-        />
-      </Field>
+      <Input
+        label="Company Name"
+        icon={Building2}
+        placeholder="e.g. Himalayan Wholesale Suppliers"
+        error={errors.companyName?.message}
+        {...register('companyName')}
+      />
 
-      <Field label="Industry (optional)" error={errors.industry?.message}>
-        <select
-          {...register('industry')}
-          className="w-full h-11 rounded-xl px-4 text-[14px] outline-none appearance-none transition-all"
-          style={{
-            background: '#FFFFFF',
-            border:     '1.5px solid #E5E7EB',
-            color:      '#111827',
-          }}
-          onFocus={e  => { e.currentTarget.style.borderColor = '#2563EB' }}
-          onBlur={e   => { e.currentTarget.style.borderColor = '#E5E7EB' }}
-        >
-          <option value="">Select industry</option>
-          {INDUSTRIES.map(i => <option key={i} value={i}>{i}</option>)}
-        </select>
-      </Field>
+      <Select
+        label="Industry (optional)"
+        placeholder="Select industry"
+        options={INDUSTRIES}
+        error={errors.industry?.message}
+        {...register('industry')}
+      />
 
-      <button type="submit"
-        className="w-full h-11 rounded-xl text-[14px] font-bold flex items-center justify-center gap-2 transition-all mt-2 text-white"
-        style={{ background: '#03045e', boxShadow: '0 4px 16px rgba(3,4,94,.35)' }}
-        onMouseEnter={e => e.currentTarget.style.boxShadow = '0 6px 22px rgba(3,4,94,.5)'}
-        onMouseLeave={e => e.currentTarget.style.boxShadow = '0 4px 16px rgba(3,4,94,.35)'}>
+      <Button type="submit" size="lg" className="w-full mt-2" icon={ChevronRight}>
         Continue
-        <ChevronRight className="h-4 w-4" />
-      </button>
+      </Button>
     </form>
   )
 }
@@ -138,17 +92,18 @@ function CompanyStep({ onNext }) {
 // ── Step 2 — Admin Account ────────────────────────────────────────────────────
 
 function AdminStep({ companyData, onBack }) {
-  const navigate              = useNavigate()
-  const dispatch              = useDispatch()
-  const qc                    = useQueryClient()
-  const [showPw, setShowPw]   = useState(false)
+  const navigate                = useNavigate()
+  const dispatch                = useDispatch()
+  const qc                      = useQueryClient()
+  const [showPw, setShowPw]     = useState(false)
   const [showConf, setShowConf] = useState(false)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading]   = useState(false)
   const [apiError, setApiError] = useState('')
 
-  const { register, handleSubmit, formState: { errors } } = useForm({
+  const { register, handleSubmit, watch, formState: { errors } } = useForm({
     resolver: zodResolver(step2Schema),
   })
+  const passwordValue = watch('password', '')
 
   const onSubmit = async (values) => {
     setLoading(true)
@@ -174,70 +129,58 @@ function AdminStep({ companyData, onBack }) {
 
   const eyeBtn = (show, set) => (
     <button type="button" tabIndex={-1}
+      aria-label={show ? 'Hide password' : 'Show password'}
       onClick={() => set(v => !v)}
-      className="absolute right-3 top-1/2 -translate-y-1/2"
-      style={{ color: '#9CA3AF' }}>
-      {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+      style={{ color: 'var(--text-muted)' }}>
+      {show ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
     </button>
   )
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-      <Field label="Full Name" error={errors.fullName?.message}>
-        <Input icon={User} placeholder="Your full name" {...register('fullName')} />
-      </Field>
+      <Input label="Full Name" icon={User} placeholder="Your full name"
+        error={errors.fullName?.message} {...register('fullName')} />
 
-      <Field label="Email Address" error={errors.email?.message}>
-        <Input icon={Mail} type="email" placeholder="admin@company.com" {...register('email')} />
-      </Field>
+      <Input label="Email Address" icon={Mail} type="email" placeholder="admin@company.com"
+        error={errors.email?.message} {...register('email')} />
 
-      <Field label="Password" error={errors.password?.message}>
+      <div>
         <Input
+          label="Password"
           icon={Lock}
           type={showPw ? 'text' : 'password'}
-          placeholder="Min 8 chars, at least 1 number"
-          rightSlot={eyeBtn(showPw, setShowPw)}
+          placeholder="Min 8 chars, upper/lowercase, number & symbol"
+          error={errors.password?.message}
+          rightElement={eyeBtn(showPw, setShowPw)}
           {...register('password')}
         />
-      </Field>
+        <PasswordStrengthMeter value={passwordValue} />
+      </div>
 
-      <Field label="Confirm Password" error={errors.confirmPassword?.message}>
-        <Input
-          icon={Lock}
-          type={showConf ? 'text' : 'password'}
-          placeholder="Repeat your password"
-          rightSlot={eyeBtn(showConf, setShowConf)}
-          {...register('confirmPassword')}
-        />
-      </Field>
+      <Input
+        label="Confirm Password"
+        icon={Lock}
+        type={showConf ? 'text' : 'password'}
+        placeholder="Repeat your password"
+        error={errors.confirmPassword?.message}
+        rightElement={eyeBtn(showConf, setShowConf)}
+        {...register('confirmPassword')}
+      />
 
       {apiError && (
-        <p className="text-[13px] text-center px-3 py-2 rounded-lg"
+        <p role="alert" className="text-[13px] text-center px-3 py-2 rounded-lg"
           style={{ background: '#FEF2F2', border: '1px solid #FECACA', color: '#991B1B' }}>
           {apiError}
         </p>
       )}
 
       <div className="flex gap-3 mt-2">
-        <button type="button" onClick={onBack}
-          className="flex-1 h-11 rounded-xl text-[14px] font-semibold transition-all"
-          style={{ background: '#F3F4F6', color: '#6B7280', border: '1px solid #E5E7EB' }}
-          onMouseEnter={e => { e.currentTarget.style.background = '#E9EEF4'; e.currentTarget.style.color = '#374151' }}
-          onMouseLeave={e => { e.currentTarget.style.background = '#F3F4F6'; e.currentTarget.style.color = '#6B7280' }}>
+        <Button type="button" variant="secondary" size="lg" className="flex-1" onClick={onBack}>
           Back
-        </button>
-        <button type="submit" disabled={loading}
-          className="flex-2 h-11 rounded-xl text-[14px] font-bold flex items-center justify-center gap-2 transition-all disabled:opacity-60 text-white"
-          style={{ background: '#03045e', boxShadow: '0 4px 16px rgba(3,4,94,.35)' }}>
-          {loading ? (
-            <span className="h-4 w-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
-          ) : (
-            <>
-              <CheckCircle2 className="h-4 w-4" />
-              Complete Setup
-            </>
-          )}
-        </button>
+        </Button>
+        <Button type="submit" size="lg" className="flex-2" loading={loading} icon={CheckCircle2}>
+          Complete Setup
+        </Button>
       </div>
     </form>
   )
@@ -281,7 +224,7 @@ export default function SetupWizardPage() {
             <Package className="h-5 w-5 text-white" />
           </div>
           <div>
-            <p className="text-white font-bold text-[18px] tracking-tight">StockWise</p>
+            <p className="text-white font-bold text-[18px] tracking-tight">{APP_NAME}</p>
             <p className="text-[10px] font-semibold uppercase tracking-widest"
               style={{ color: 'rgba(219,234,254,.65)' }}>Inventory Intelligence</p>
           </div>
@@ -295,7 +238,7 @@ export default function SetupWizardPage() {
           </div>
           <h1 className="text-[32px] font-bold tracking-tight leading-tight text-white">
             Welcome to<br />
-            <span style={{ color: 'rgba(186,230,253,.95)' }}>StockWise</span>
+            <span style={{ color: 'rgba(186,230,253,.95)' }}>{APP_NAME}</span>
           </h1>
           <p className="text-[15px] leading-relaxed" style={{ color: 'rgba(219,234,254,.8)' }}>
             Set up your company workspace in just two steps. You'll be managing inventory in minutes.
@@ -320,7 +263,7 @@ export default function SetupWizardPage() {
       </div>
 
       {/* ── Right Form Panel ── */}
-      <div className="flex-1 flex items-center justify-center p-8" style={{ background: '#FFFFFF' }}>
+      <div className="flex-1 flex items-center justify-center p-8" style={{ background: 'var(--surface-page)' }}>
         <div className="w-full max-w-md space-y-8">
 
           {/* Mobile logo */}
@@ -329,15 +272,15 @@ export default function SetupWizardPage() {
               style={{ background: '#03045e' }}>
               <Package className="h-4 w-4 text-white" />
             </div>
-            <p className="font-bold text-[17px]" style={{ color: '#111827' }}>StockWise</p>
+            <p className="font-bold text-[17px]" style={{ color: 'var(--text-primary)' }}>{APP_NAME}</p>
           </div>
 
           {/* Header */}
           <div>
-            <h2 className="text-[26px] font-bold tracking-tight" style={{ color: '#111827' }}>
+            <h2 className="text-[26px] font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>
               {step === 0 ? 'Company Details' : 'Administrator Account'}
             </h2>
-            <p className="text-[13px] mt-1" style={{ color: '#6B7280' }}>
+            <p className="text-[13px] mt-1" style={{ color: 'var(--text-muted)' }}>
               {step === 0
                 ? 'Tell us about your business'
                 : `Setting up workspace for "${companyData?.companyName}"`}
@@ -351,20 +294,20 @@ export default function SetupWizardPage() {
                 <div className="flex items-center gap-2">
                   <div className="h-6 w-6 rounded-full flex items-center justify-center text-[11px] font-bold transition-all"
                     style={{
-                      background: i <= step ? '#2563EB' : '#F3F4F6',
-                      color:      i <= step ? '#fff'    : '#9CA3AF',
-                      border:     i <= step ? 'none'    : '1.5px solid #E5E7EB',
+                      background: i <= step ? '#2563EB' : 'var(--surface-muted)',
+                      color:      i <= step ? '#fff'    : 'var(--text-muted)',
+                      border:     i <= step ? 'none'    : '1.5px solid var(--border)',
                     }}>
                     {i < step ? <CheckCircle2 className="h-3.5 w-3.5" /> : i + 1}
                   </div>
                   <span className="text-[12px] font-semibold"
-                    style={{ color: i <= step ? '#2563EB' : '#9CA3AF' }}>
+                    style={{ color: i <= step ? '#2563EB' : 'var(--text-muted)' }}>
                     {label}
                   </span>
                 </div>
                 {i < STEPS.length - 1 && (
                   <div className="w-8 h-px mx-1"
-                    style={{ background: i < step ? '#2563EB' : '#E5E7EB' }} />
+                    style={{ background: i < step ? '#2563EB' : 'var(--border)' }} />
                 )}
               </div>
             ))}
@@ -372,7 +315,7 @@ export default function SetupWizardPage() {
 
           {/* Form card */}
           <div className="rounded-2xl p-7"
-            style={{ background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
+            style={{ background: 'var(--surface-card)', border: '1px solid var(--border)' }}>
             <AnimatePresence mode="wait">
               <motion.div
                 key={step}
@@ -389,7 +332,7 @@ export default function SetupWizardPage() {
             </AnimatePresence>
           </div>
 
-          <p className="text-center text-[12px]" style={{ color: '#D1D5DB' }}>
+          <p className="text-center text-[12px]" style={{ color: 'var(--text-muted)', opacity: 0.6 }}>
             This setup runs once. Admin can add more users after logging in.
           </p>
         </div>

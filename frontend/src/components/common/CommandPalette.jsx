@@ -10,6 +10,7 @@ import {
 import { useDispatch } from 'react-redux'
 import { setFilters as setInventoryFilters } from '@/store/slices/inventorySlice'
 import { useRole } from '@/hooks/useRole'
+import { MOTION } from '@/constants'
 
 function buildItems(prefix, isAdmin, isManager, isStaff) {
   const items = []
@@ -123,18 +124,21 @@ export function CommandPalette({ open, onClose }) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.15 }}
-            className="fixed inset-0 z-[60]"
+            transition={{ duration: MOTION.fast }}
+            className="fixed inset-0 z-60"
             style={{ background: 'rgba(0,0,0,.55)', backdropFilter: 'blur(4px)' }}
             onClick={onClose}
           />
 
           <motion.div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Command palette"
             initial={{ opacity: 0, scale: 0.97, y: -10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.97, y: -10 }}
-            transition={{ duration: 0.16, ease: [0.4, 0, 0.2, 1] }}
-            className="fixed left-1/2 -translate-x-1/2 top-[14vh] z-[61] w-full max-w-lg px-4"
+            transition={{ duration: MOTION.base, ease: MOTION.ease }}
+            className="fixed left-1/2 -translate-x-1/2 top-[14vh] z-61 w-full max-w-lg px-4"
           >
             <div
               className="rounded-2xl overflow-hidden"

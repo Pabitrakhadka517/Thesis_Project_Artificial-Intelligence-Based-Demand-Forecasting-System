@@ -10,7 +10,12 @@ import {
 import axiosInstance from '@/api/axiosInstance'
 import { useToast } from '@/hooks/useToast'
 import { useRole } from '@/hooks/useRole'
-import { formatDate, getProductImage, imgFallback } from '@/utils'
+import { formatDate, getProductImage, imgFallback, formatRs } from '@/utils'
+import { ErrorState } from '@/components/common/ErrorState'
+import { ConfirmDialog } from '@/components/common/Modal'
+import { Pagination } from '@/components/common/Pagination'
+import { useSortable } from '@/hooks/useSortable'
+import { SortableTH } from '@/components/common/SortableTH'
 
 // ── constants ─────────────────────────────────────────────────────────────────
 const PAYMENT_METHODS = ['cash', 'card', 'qr', 'credit']
@@ -22,13 +27,8 @@ const STATUS_CFG = {
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────
-function fmtRs(n) {
-  const v = Number(n || 0)
-  if (v >= 1_000_000) return `Rs. ${(v/1_000_000).toFixed(1)}M`
-  if (v >= 1_000)     return `Rs. ${(v/1_000).toFixed(0)}K`
-  return `Rs. ${v.toLocaleString()}`
-}
-function fmtFull(n) { return `Rs. ${Number(n || 0).toLocaleString()}` }
+const fmtRs = formatRs
+function fmtFull(n) { return formatRs(n, { abbreviate: false }) }
 
 // ── shared UI ─────────────────────────────────────────────────────────────────
 function StatusBadge({ status }) {
@@ -412,9 +412,11 @@ export default function SalesPage() {
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate]     = useState('')
   const [page, setPage]           = useState(1)
+  const [pageSize, setPageSize]   = useState(20)
   const [creating, setCreate]     = useState(false)
   const [expanded, setExpanded]   = useState(null)
-  const LIMIT = 15
+  const [voidTarget, setVoidTarget] = useState(null)
+  const sort = useSortable('saleDate', 'desc')
 
   const { data: statsRaw } = useQuery({
     queryKey: ['sales-stats'],
@@ -423,11 +425,11 @@ export default function SalesPage() {
   })
   const stats = statsRaw || {}
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['sales', page, search, status, startDate, endDate],
+  const { data, isLoading, isError, error, refetch } = useQuery({
+    queryKey: ['sales', page, pageSize, search, status, startDate, endDate, sort.sortBy, sort.sortDir],
     queryFn:  () => {
       const qs = new URLSearchParams({
-        page, limit: LIMIT,
+        page, limit: pageSize, sortBy: sort.sortBy, sortDir: sort.sortDir,
         ...(search    && { search }),
         ...(status    && { status }),
         ...(startDate && { startDate }),
@@ -438,9 +440,9 @@ export default function SalesPage() {
     staleTime: 30_000,
   })
 
+  const onSort = (key) => { sort.toggle(key); setPage(1) }
   const sales      = data?.data        || []
   const total      = data?.pagination?.total      || 0
-  const totalPages = data?.pagination?.totalPages || 1
 
   const voidMutation = useMutation({
     mutationFn: (id) => axiosInstance.delete(`/sales/${id}`),
@@ -448,6 +450,7 @@ export default function SalesPage() {
       qc.invalidateQueries({ queryKey: ['sales'] })
       qc.invalidateQueries({ queryKey: ['sales-stats'] })
       toast({ title: 'Sale voided', variant: 'success' })
+      setVoidTarget(null)
     },
     onError: (e) => toast({ title: e.response?.data?.message || 'Failed', variant: 'error' }),
   })
@@ -523,6 +526,8 @@ export default function SalesPage() {
             <div key={i} className="h-12 rounded-xl animate-pulse" style={{ background: 'var(--surface-card)' }} />
           ))}
         </div>
+      ) : isError ? (
+        <ErrorState error={error} onRetry={refetch} />
       ) : sales.length === 0 ? (
         <div className="text-center py-16">
           <ShoppingCart className="h-12 w-12 mx-auto mb-3 opacity-20" style={{ color: 'var(--text-muted)' }} />
@@ -530,15 +535,23 @@ export default function SalesPage() {
           {hasFilters && <button onClick={clearFilters} className="mt-3 text-[13px] underline" style={{ color: '#3B82F6' }}>Clear filters</button>}
         </div>
       ) : (
-        <div className="rounded-xl overflow-hidden"
+        <div className="rounded-xl overflow-x-auto"
           style={{ background: 'var(--surface-card)', border: '1px solid var(--border)' }}>
           <table className="w-full text-[13px]">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)', background: 'var(--surface-muted)' }}>
-                {['Invoice', 'Customer', 'Items', 'Total', 'Payment', 'Status', 'Date', 'Actions'].map(h => (
+                <SortableTH label="Invoice" sortKey="invoiceNumber" sortBy={sort.sortBy} sortDir={sort.sortDir} onSort={onSort} />
+                {['Customer', 'Items'].map(h => (
                   <th key={h} className="text-left px-4 py-3 font-semibold text-[11px] uppercase tracking-wider"
                     style={{ color: 'var(--text-muted)' }}>{h}</th>
                 ))}
+                <SortableTH label="Total" sortKey="grandTotal" sortBy={sort.sortBy} sortDir={sort.sortDir} onSort={onSort} />
+                {['Payment', 'Status'].map(h => (
+                  <th key={h} className="text-left px-4 py-3 font-semibold text-[11px] uppercase tracking-wider"
+                    style={{ color: 'var(--text-muted)' }}>{h}</th>
+                ))}
+                <SortableTH label="Date" sortKey="saleDate" sortBy={sort.sortBy} sortDir={sort.sortDir} onSort={onSort} />
+                <th className="text-left px-4 py-3 font-semibold text-[11px] uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -577,7 +590,7 @@ export default function SalesPage() {
                         </button>
                         {s.status === 'completed' && can('admin') && (
                           <button
-                            onClick={e => { e.stopPropagation(); window.confirm('Void this sale?') && voidMutation.mutate(s._id) }}
+                            onClick={e => { e.stopPropagation(); setVoidTarget(s) }}
                             className="h-6 px-2 rounded text-[11px] font-semibold"
                             style={{ color: '#EF4444', background: 'rgba(239,68,68,.1)' }}>
                             Void
@@ -595,23 +608,25 @@ export default function SalesPage() {
       )}
 
       {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between">
-          <p className="text-[12px]" style={{ color: 'var(--text-muted)' }}>Page {page} of {totalPages} · {total.toLocaleString()} sales</p>
-          <div className="flex gap-1.5">
-            <button disabled={page <= 1} onClick={() => setPage(p => p - 1)}
-              className="px-3 py-1.5 rounded-lg text-[12px] font-medium disabled:opacity-40"
-              style={{ background: 'var(--surface-card)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
-              Prev
-            </button>
-            <button disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}
-              className="px-3 py-1.5 rounded-lg text-[12px] font-medium disabled:opacity-40"
-              style={{ background: 'var(--surface-card)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
-              Next
-            </button>
-          </div>
-        </div>
+      {total > 0 && (
+        <Pagination
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          onPageChange={setPage}
+          onPageSizeChange={(s) => { setPageSize(s); setPage(1) }}
+        />
       )}
+
+      <ConfirmDialog
+        open={!!voidTarget}
+        onClose={() => setVoidTarget(null)}
+        onConfirm={() => voidMutation.mutate(voidTarget._id)}
+        title="Void this sale?"
+        description={`This voids invoice ${voidTarget?.invoiceNumber}. This action cannot be undone.`}
+        confirmLabel="Void Sale"
+        loading={voidMutation.isPending}
+      />
 
       <AnimatePresence>
         {creating && <NewSaleModal onClose={() => setCreate(false)} />}

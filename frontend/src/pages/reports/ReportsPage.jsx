@@ -14,6 +14,7 @@ import {
   XCircle, ChevronUp, ChevronDown, Search, RotateCcw, Info, Zap,
   Brain, Sparkles, TrendingDown, Cpu,
 } from 'lucide-react'
+import * as XLSX from 'xlsx'
 import { reportService } from '@/services/reportService'
 import { analyticsService } from '@/services/analyticsService'
 import axiosInstance from '@/api/axiosInstance'
@@ -131,12 +132,10 @@ function getExportRows(tab, data) {
 
 function downloadExcel(rows, filename) {
   if (!rows?.length) return
-  const headers = Object.keys(rows[0])
-  const tsv = [headers.join('\t'), ...rows.map(r => headers.map(h => r[h] ?? '').join('\t'))].join('\n')
-  const blob = new Blob([tsv], { type: 'application/vnd.ms-excel' })
-  const url  = URL.createObjectURL(blob)
-  const a = document.createElement('a'); a.href = url; a.download = filename + '.xls'; a.click()
-  URL.revokeObjectURL(url)
+  const worksheet = XLSX.utils.json_to_sheet(rows)
+  const workbook  = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Report')
+  XLSX.writeFile(workbook, `${filename}.xlsx`)
 }
 
 const PRINT_CSS = `
@@ -1597,7 +1596,7 @@ export default function ReportsPage() {
                 <button onClick={handlePrint}
                   className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-medium transition-opacity hover:opacity-80"
                   style={{ background: activeTab?.color || '#6366F1', color: '#fff', border: 'none' }}>
-                  <Printer className="w-3.5 h-3.5" /> Print PDF
+                  <Printer className="w-3.5 h-3.5" /> Print
                 </button>
               </>
             )}

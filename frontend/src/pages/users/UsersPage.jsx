@@ -13,6 +13,10 @@ import axiosInstance from '@/api/axiosInstance'
 import { formatRelativeTime, getInitials } from '@/utils'
 import { useToast } from '@/hooks/useToast'
 import { useAuth } from '@/hooks/useAuth'
+import { ErrorState } from '@/components/common/ErrorState'
+import { ConfirmDialog } from '@/components/common/Modal'
+import { Pagination } from '@/components/common/Pagination'
+import { RolePermissionsPanel } from '@/components/users/RolePermissionsPanel'
 
 const ROLES = [
   { value: 'admin',             label: 'Administrator',     icon: Shield,    color: '#EF4444', bg: 'rgba(239,68,68,.12)' },
@@ -115,6 +119,7 @@ function CreateUserModal({ onClose }) {
     mutationFn: (data) => axiosInstance.post('/users', data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['users'] })
+      qc.invalidateQueries({ queryKey: ['users-stats'] })
       toast({ title: 'User created successfully', variant: 'success' })
       onClose()
     },
@@ -176,6 +181,7 @@ function EditUserModal({ user, onClose }) {
     mutationFn: (data) => axiosInstance.patch(`/users/${user._id}`, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['users'] })
+      qc.invalidateQueries({ queryKey: ['users-stats'] })
       toast({ title: 'User updated', variant: 'success' })
       onClose()
     },
@@ -216,19 +222,27 @@ export default function UsersPage() {
   const [roleFilter, setRole] = useState('')
   const [creating, setCreate] = useState(false)
   const [editing, setEdit]    = useState(null)
+  const [deleteTarget, setDeleteTarget] = useState(null)
   const [page, setPage]       = useState(1)
-  const LIMIT = 15
+  const [pageSize, setPageSize] = useState(15)
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['users', page, search, roleFilter],
-    queryFn: () => axiosInstance.get(`/users?page=${page}&limit=${LIMIT}&search=${encodeURIComponent(search)}&role=${roleFilter}`)
+  const { data, isLoading, isError, error, refetch } = useQuery({
+    queryKey: ['users', page, pageSize, search, roleFilter],
+    queryFn: () => axiosInstance.get(`/users?page=${page}&limit=${pageSize}&search=${encodeURIComponent(search)}&role=${roleFilter}`)
       .then(r => r.data),
+    staleTime: 30_000,
+  })
+
+  // Server-side aggregate — independent of the current page/filter, unlike
+  // counting only the visible (paginated) rows.
+  const { data: statsData } = useQuery({
+    queryKey: ['users-stats'],
+    queryFn: () => axiosInstance.get('/users/stats').then(r => r.data),
     staleTime: 30_000,
   })
 
   const users      = data?.data || []
   const total      = data?.pagination?.total || 0
-  const totalPages = data?.pagination?.totalPages || 1
 
   const toggleActive = useMutation({
     mutationFn: (id) => axiosInstance.patch(`/users/${id}/toggle-active`),
@@ -238,20 +252,25 @@ export default function UsersPage() {
 
   const deleteUser = useMutation({
     mutationFn: (id) => axiosInstance.delete(`/users/${id}`),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['users'] }); toast({ title: 'User deleted', variant: 'success' }) },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['users'] })
+      qc.invalidateQueries({ queryKey: ['users-stats'] })
+      toast({ title: 'User deleted', variant: 'success' })
+      setDeleteTarget(null)
+    },
     onError: (e) => toast({ title: e.response?.data?.message || 'Delete failed', variant: 'error' }),
   })
 
   const handleDelete = (u) => {
     if (u._id === (me?._id || me?.id)) return toast({ title: 'Cannot delete your own account', variant: 'error' })
-    if (!window.confirm(`Delete ${u.fullName}?`)) return
-    deleteUser.mutate(u._id)
+    setDeleteTarget(u)
   }
 
+  const stats = statsData?.data
   const counts = {
-    admin:             users.filter(u => u.role === 'admin').length,
-    inventory_manager: users.filter(u => u.role === 'inventory_manager').length,
-    staff:             users.filter(u => u.role === 'staff').length,
+    admin:             stats?.admins  ?? 0,
+    inventory_manager: stats?.managers ?? 0,
+    staff:             stats?.staff   ?? 0,
   }
 
   return (
@@ -290,6 +309,8 @@ export default function UsersPage() {
         })}
       </div>
 
+      <RolePermissionsPanel />
+
       {/* Filters */}
       <div className="flex gap-3 flex-wrap">
         <div className="flex items-center gap-2 px-3 h-9 rounded-lg flex-1 min-w-48"
@@ -308,6 +329,9 @@ export default function UsersPage() {
       </div>
 
       {/* Table */}
+      {isError ? (
+        <ErrorState error={error} onRetry={refetch} />
+      ) : (
       <div className="rounded-xl overflow-hidden" style={{ background: 'var(--surface-card)', border: '1px solid var(--border)' }}>
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -399,27 +423,33 @@ export default function UsersPage() {
           </table>
         </div>
 
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t" style={{ borderColor: 'var(--border)' }}>
-            <p className="text-[12px]" style={{ color: 'var(--text-muted)' }}>
-              Page {page} of {totalPages} · {total} total
-            </p>
-            <div className="flex gap-1.5">
-              <button disabled={page <= 1} onClick={() => setPage(p => p - 1)}
-                className="px-3 py-1.5 rounded-lg text-[12px] font-medium disabled:opacity-40"
-                style={{ background: 'var(--surface-muted)', color: 'var(--text-secondary)' }}>Prev</button>
-              <button disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}
-                className="px-3 py-1.5 rounded-lg text-[12px] font-medium disabled:opacity-40"
-                style={{ background: 'var(--surface-muted)', color: 'var(--text-secondary)' }}>Next</button>
-            </div>
+        {total > 0 && (
+          <div className="px-4 py-3 border-t" style={{ borderColor: 'var(--border)' }}>
+            <Pagination
+              page={page}
+              pageSize={pageSize}
+              total={total}
+              onPageChange={setPage}
+              onPageSizeChange={(s) => { setPageSize(s); setPage(1) }}
+            />
           </div>
         )}
       </div>
+      )}
 
       <AnimatePresence>
         {creating && <CreateUserModal onClose={() => setCreate(false)} />}
         {editing  && <EditUserModal user={editing} onClose={() => setEdit(null)} />}
       </AnimatePresence>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => deleteUser.mutate(deleteTarget._id)}
+        title="Delete user?"
+        description={`This permanently deletes "${deleteTarget?.fullName}". This action cannot be undone.`}
+        loading={deleteUser.isPending}
+      />
     </div>
   )
 }

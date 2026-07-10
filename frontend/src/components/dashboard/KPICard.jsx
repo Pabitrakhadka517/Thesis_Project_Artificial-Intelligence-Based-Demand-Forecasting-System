@@ -4,7 +4,7 @@ import { TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import { cn, formatNumber } from '@/utils'
 
 const ACCENT = {
-  blue:   { top: '#03045e', icon: '#03045e', iconColor: '#BFDBFE', glow: 'rgba(37,99,235,.20)',  solid: '#2563EB' },
+  blue:   { top: 'linear-gradient(90deg,#03045e,#2563EB)', icon: 'linear-gradient(135deg,#03045e,#2563EB)', iconColor: '#BFDBFE', glow: 'rgba(37,99,235,.20)',  solid: '#2563EB' },
   green:  { top: 'linear-gradient(90deg,#15803D,#22C55E)', icon: 'linear-gradient(135deg,#166534,#22C55E)', iconColor: '#BBF7D0', glow: 'rgba(34,197,94,.18)',   solid: '#22C55E' },
   purple: { top: 'linear-gradient(90deg,#6D28D9,#8B5CF6)', icon: 'linear-gradient(135deg,#5B21B6,#8B5CF6)', iconColor: '#DDD6FE', glow: 'rgba(139,92,246,.20)', solid: '#8B5CF6' },
   amber:  { top: 'linear-gradient(90deg,#B45309,#F59E0B)', icon: 'linear-gradient(135deg,#92400E,#F59E0B)', iconColor: '#FDE68A', glow: 'rgba(245,158,11,.18)',  solid: '#F59E0B' },
@@ -87,14 +87,20 @@ export function KPICard({
   className,
   format,
   subtitle,
+  invert = false, // set true for "lower is better" KPIs (e.g. stockouts, costs) so an increase reads as bad, not good
 }) {
   const isNumeric = value != null && !isNaN(Number(value))
   const animated  = useCountUp(isNumeric ? Number(value) : null)
 
   if (loading) return <Skeleton />
 
-  const accent = ACCENT[color] || ACCENT.blue
-  const trend  = change == null ? null : change > 0 ? 'up' : change < 0 ? 'down' : 'flat'
+  const accent    = ACCENT[color] || ACCENT.blue
+  const direction = change == null ? null : change > 0 ? 'up' : change < 0 ? 'down' : 'flat'
+  // "trend" here means good/bad, not literally up/down — invert flips which
+  // arrow direction is treated as favorable.
+  const trend = direction == null || direction === 'flat'
+    ? direction
+    : invert ? (direction === 'up' ? 'down' : 'up') : direction
 
   const raw = isNumeric ? animated : value
 
@@ -191,9 +197,10 @@ export function KPICard({
               color: trend === 'up' ? '#16A34A' : trend === 'down' ? '#DC2626' : 'var(--text-muted)',
             }}
           >
-            {trend === 'up'   && <TrendingUp  style={{ width: '11px', height: '11px' }} />}
-            {trend === 'down' && <TrendingDown style={{ width: '11px', height: '11px' }} />}
-            {trend === 'flat' && <Minus        style={{ width: '11px', height: '11px' }} />}
+            {/* Color reflects good/bad (via trend/invert); the arrow itself still reflects the real numeric direction. */}
+            {direction === 'up'   && <TrendingUp  style={{ width: '11px', height: '11px' }} />}
+            {direction === 'down' && <TrendingDown style={{ width: '11px', height: '11px' }} />}
+            {direction === 'flat' && <Minus        style={{ width: '11px', height: '11px' }} />}
             {Math.abs(change).toFixed(1)}%
           </span>
         ) : null}

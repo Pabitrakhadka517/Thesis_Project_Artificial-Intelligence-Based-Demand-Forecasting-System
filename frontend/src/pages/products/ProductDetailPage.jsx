@@ -18,22 +18,20 @@ import { aiService } from '@/services/aiService'
 import { useRole } from '@/hooks/useRole'
 import { useToast } from '@/hooks/useToast'
 import { useMutation } from '@tanstack/react-query'
-import { formatCurrency, formatNumber, formatDate, formatRelativeTime, getProductImage, imgFallback } from '@/utils'
+import { formatRs, formatNumber, formatDate, formatRelativeTime, getProductImage, imgFallback, STOCK_STATUS } from '@/utils'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-const fmtRs  = v  => formatCurrency ? formatCurrency(v ?? 0) : `Rs. ${(+(v ?? 0)).toLocaleString()}`
+const fmtRs  = v  => formatRs(v ?? 0)
 const fmtNum = v  => formatNumber   ? formatNumber(v ?? 0)   : (+(v ?? 0)).toLocaleString()
 const fmtDt  = v  => formatDate     ? formatDate(v)          : v ? new Date(v).toLocaleDateString() : '—'
 const fmtRel = v  => formatRelativeTime ? formatRelativeTime(v) : fmtDt(v)
 const pct    = v  => v != null ? `${(+v).toFixed(1)}%` : '—'
 
 // ── Stock status config ───────────────────────────────────────────────────────
-const SS = {
-  out_of_stock: { label: 'Out of Stock', color: '#EF4444', bg: 'rgba(239,68,68,.12)', Icon: XCircle },
-  critical:     { label: 'Critical',     color: '#F59E0B', bg: 'rgba(245,158,11,.12)', Icon: AlertTriangle },
-  overstock:    { label: 'Overstock',    color: '#6366F1', bg: 'rgba(99,102,241,.12)', Icon: TrendingDown },
-  healthy:      { label: 'Healthy',      color: '#10B981', bg: 'rgba(16,185,129,.12)', Icon: CheckCircle },
-}
+const SS_ICON = { out_of_stock: XCircle, critical: AlertTriangle, overstock: TrendingDown, healthy: CheckCircle }
+const SS = Object.fromEntries(
+  Object.entries(STOCK_STATUS).map(([k, v]) => [k, { ...v, Icon: SS_ICON[k] || CheckCircle }])
+)
 
 const RISK = {
   high:   { color: '#EF4444', bg: 'rgba(239,68,68,.10)',  label: 'High Risk'   },

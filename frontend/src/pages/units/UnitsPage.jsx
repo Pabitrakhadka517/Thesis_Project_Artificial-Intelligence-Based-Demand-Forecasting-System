@@ -6,7 +6,7 @@ import { z } from 'zod'
 import { motion } from 'framer-motion'
 import {
   Scale, Plus, Search, Edit2, Trash2, RefreshCw,
-  Lock, ToggleLeft, ToggleRight, ChevronLeft, ChevronRight,
+  Lock, ToggleLeft, ToggleRight,
 } from 'lucide-react'
 import axiosInstance from '@/api/axiosInstance'
 import { Card, CardContent } from '@/components/common/Card'
@@ -16,6 +16,7 @@ import { Modal, ConfirmDialog } from '@/components/common/Modal'
 import { SkeletonTable } from '@/components/common/Skeleton'
 import { EmptyState } from '@/components/common/EmptyState'
 import { ErrorState } from '@/components/common/ErrorState'
+import { Pagination } from '@/components/common/Pagination'
 import { useToast } from '@/hooks/useToast'
 
 const UNIT_TYPES = ['weight', 'volume', 'count']
@@ -117,8 +118,6 @@ function StatCard({ label, value, color }) {
   )
 }
 
-const SIZE = 30
-
 export default function UnitsPage() {
   const qc = useQueryClient()
   const { toast } = useToast()
@@ -126,14 +125,15 @@ export default function UnitsPage() {
   const [search,     setSearch]     = useState('')
   const [typeFilter, setTypeFilter] = useState('')
   const [page,       setPage]       = useState(1)
+  const [pageSize,   setPageSize]   = useState(20)
   const [modalOpen,  setModalOpen]  = useState(false)
   const [editItem,   setEditItem]   = useState(null)
   const [deleteItem, setDeleteItem] = useState(null)
 
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ['units-page', page, search, typeFilter],
+    queryKey: ['units-page', page, pageSize, search, typeFilter],
     queryFn: () => axiosInstance.get('/units', {
-      params: { page, limit: SIZE, search: search || undefined, unitType: typeFilter || undefined },
+      params: { page, limit: pageSize, search: search || undefined, unitType: typeFilter || undefined },
     }).then(r => r.data),
     keepPreviousData: true,
   })
@@ -217,7 +217,6 @@ export default function UnitsPage() {
 
   const units      = data?.data ?? []
   const total      = data?.pagination?.total ?? 0
-  const totalPages = data?.pagination?.totalPages ?? 1
   const stats      = statsData?.data
 
   if (error) return <ErrorState error={error} onRetry={refetch} />
@@ -375,21 +374,15 @@ export default function UnitsPage() {
           </div>
         )}
 
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3" style={{ borderTop: '1px solid var(--border)' }}>
-            <span className="text-[12px]" style={{ color: 'var(--text-muted)' }}>
-              {(page - 1) * SIZE + 1}–{Math.min(page * SIZE, total)} of {total}
-            </span>
-            <div className="flex gap-1">
-              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
-                className="p-1.5 rounded-lg disabled:opacity-40" style={{ color: 'var(--text-muted)' }}>
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-              <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
-                className="p-1.5 rounded-lg disabled:opacity-40" style={{ color: 'var(--text-muted)' }}>
-                <ChevronRight className="h-4 w-4" />
-              </button>
-            </div>
+        {total > 0 && (
+          <div className="px-4 py-3" style={{ borderTop: '1px solid var(--border)' }}>
+            <Pagination
+              page={page}
+              pageSize={pageSize}
+              total={total}
+              onPageChange={setPage}
+              onPageSizeChange={(s) => { setPageSize(s); setPage(1) }}
+            />
           </div>
         )}
       </Card>

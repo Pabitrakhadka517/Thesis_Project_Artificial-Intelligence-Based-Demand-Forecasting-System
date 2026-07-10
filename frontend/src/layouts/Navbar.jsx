@@ -330,7 +330,7 @@ function UserDropdown({ open, onClose, user, profilePath, settingsPath, isAdmin,
 
 // ── Navbar ────────────────────────────────────────────────────────────────────
 
-export function Navbar() {
+export function Navbar({ onOpenCommandPalette }) {
   const dispatch    = useDispatch()
   const navigate    = useNavigate()
   const { isDark, toggle } = useTheme()
@@ -420,6 +420,20 @@ export function Navbar() {
       </button>
 
       <Breadcrumb />
+
+      {/* Command palette trigger — the search form below (and its ⌘K hint) is
+          hidden under sm:/lg:, so this is the only way to reach the palette
+          on tablet/mobile. */}
+      <button
+        onClick={onOpenCommandPalette}
+        className="sm:hidden h-9 w-9 rounded-lg flex items-center justify-center transition-colors"
+        style={{ color: 'var(--text-secondary)' }}
+        onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-muted)'}
+        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+        aria-label="Search (Ctrl+K)"
+      >
+        <Search className="h-4.5 w-4.5" />
+      </button>
 
       {/* Search */}
       <form

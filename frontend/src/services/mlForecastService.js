@@ -83,4 +83,8 @@ export const mlForecastService = {
   /** Generate LLM-powered business insights from current inventory data */
   generateInsights: () =>
     axiosInstance.post(`${BASE}/insights`, {}),
+
+  /** Last N days of actual (historical) daily quantity for a SKU */
+  getHistory: (skuId, days = 60) =>
+    axiosInstance.get(`${BASE}/history/${skuId}?days=${days}`),
 }

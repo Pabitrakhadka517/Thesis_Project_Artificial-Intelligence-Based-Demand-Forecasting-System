@@ -1,4 +1,5 @@
-import { useState, Fragment } from 'react'
+import { useState, useEffect, Fragment } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -11,7 +12,12 @@ import {
 import axiosInstance from '@/api/axiosInstance'
 import { useToast } from '@/hooks/useToast'
 import { useRole } from '@/hooks/useRole'
-import { formatDate, getProductImage, imgFallback } from '@/utils'
+import { formatDate, getProductImage, imgFallback, formatRs } from '@/utils'
+import { ErrorState } from '@/components/common/ErrorState'
+import { ConfirmDialog } from '@/components/common/Modal'
+import { Pagination } from '@/components/common/Pagination'
+import { useSortable } from '@/hooks/useSortable'
+import { SortableTH } from '@/components/common/SortableTH'
 
 // ── constants ─────────────────────────────────────────────────────────────────
 const PAY_STATUS_CFG = {
@@ -27,13 +33,8 @@ const STATUS_CONFIG = {
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────
-function fmtRs(n) {
-  const v = Number(n || 0)
-  if (v >= 1_000_000) return `Rs. ${(v / 1_000_000).toFixed(1)}M`
-  if (v >= 1_000)     return `Rs. ${(v / 1_000).toFixed(0)}K`
-  return `Rs. ${v.toLocaleString()}`
-}
-function fmtFull(n) { return `Rs. ${Number(n || 0).toLocaleString()}` }
+const fmtRs = formatRs
+function fmtFull(n) { return formatRs(n, { abbreviate: false }) }
 
 // ── shared UI ─────────────────────────────────────────────────────────────────
 function StatusBadge({ status }) {
@@ -73,13 +74,15 @@ function KpiCard({ title, value, sub, icon: Icon, color }) {
 }
 
 // ── NEW PURCHASE MODAL ────────────────────────────────────────────────────────
-function NewPurchaseModal({ onClose }) {
+function NewPurchaseModal({ onClose, preset }) {
   const qc = useQueryClient()
   const { toast } = useToast()
 
   const [items, setItems]          = useState([])
-  const [productSearch, setSearch] = useState('')
-  const [showProds, setShowProds]  = useState(false)
+  // Arrived here from a Recommendations "Create PO" click — pre-fill the
+  // product search with the suggested SKU so its result shows immediately.
+  const [productSearch, setSearch] = useState(() => preset?.sku || '')
+  const [showProds, setShowProds]  = useState(() => !!preset?.sku)
   const [supplierId, setSupplier]  = useState('')
   const [expectedDate, setExpDate] = useState('')
   const [notes, setNotes]          = useState('')
@@ -100,12 +103,13 @@ function NewPurchaseModal({ onClose }) {
   const suppliers = suppData?.data || []
 
   const addItem = (product) => {
+    const quantity = preset?.sku === product.sku ? (preset.quantity || 1) : 1
     setItems(prev => {
       const existing = prev.find(i => i.productId === product._id)
-      if (existing) return prev.map(i => i.productId === product._id ? { ...i, quantity: i.quantity + 1 } : i)
+      if (existing) return prev.map(i => i.productId === product._id ? { ...i, quantity: i.quantity + quantity } : i)
       return [...prev, {
         productId: product._id, name: product.name, sku: product.sku,
-        unit: product.unit, unitPrice: product.buyingPrice, quantity: 1,
+        unit: product.unit, unitPrice: product.buyingPrice, quantity,
         image: product.image || product.imageUrl || '',
       }]
     })
@@ -533,6 +537,18 @@ export default function PurchasesPage() {
   const qc = useQueryClient()
   const { toast } = useToast()
   const { can } = useRole()
+  const location = useLocation()
+  const navigate = useNavigate()
+
+  // Arrived here via a "Create PO" click from the Recommendations page —
+  // open the new-PO modal pre-loaded with the suggested product/quantity.
+  // Captured once on mount; location.state is cleared right after so
+  // navigating away and back doesn't silently reopen the modal.
+  const [poPreset] = useState(() => (
+    location.state?.presetSku
+      ? { sku: location.state.presetSku, quantity: location.state.presetQty }
+      : null
+  ))
 
   const [search, setSearch]         = useState('')
   const [status, setStatus]         = useState('')
@@ -540,10 +556,17 @@ export default function PurchasesPage() {
   const [startDate, setStartDate]   = useState('')
   const [endDate, setEndDate]       = useState('')
   const [page, setPage]             = useState(1)
-  const [creating, setCreate]       = useState(false)
+  const [pageSize, setPageSize]     = useState(20)
+  const [creating, setCreate]       = useState(!!poPreset)
+
+  useEffect(() => {
+    if (poPreset) navigate(location.pathname, { replace: true, state: null })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const [receiving, setReceive]     = useState(null)
   const [expanded, setExpanded]     = useState(null)
-  const LIMIT = 15
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const sort = useSortable('purchaseDate', 'desc')
 
   const { data: statsRaw } = useQuery({
     queryKey: ['purchase-stats'],
@@ -559,11 +582,11 @@ export default function PurchasesPage() {
   })
   const suppliersList = suppData?.data || []
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['purchases', page, search, status, supplierFilter, startDate, endDate],
+  const { data, isLoading, isError, error, refetch } = useQuery({
+    queryKey: ['purchases', page, pageSize, search, status, supplierFilter, startDate, endDate, sort.sortBy, sort.sortDir],
     queryFn: () => {
       const qs = new URLSearchParams({
-        page, limit: LIMIT,
+        page, limit: pageSize, sortBy: sort.sortBy, sortDir: sort.sortDir,
         ...(search         && { search }),
         ...(status         && { status }),
         ...(supplierFilter && { supplier: supplierFilter }),
@@ -575,9 +598,9 @@ export default function PurchasesPage() {
     staleTime: 30_000,
   })
 
+  const onSort = (key) => { sort.toggle(key); setPage(1) }
   const purchases  = data?.data        || []
   const total      = data?.pagination?.total      || 0
-  const totalPages = data?.pagination?.totalPages || 1
 
   const deleteMutation = useMutation({
     mutationFn: (id) => axiosInstance.delete(`/purchases/${id}`),
@@ -585,6 +608,7 @@ export default function PurchasesPage() {
       qc.invalidateQueries({ queryKey: ['purchases'] })
       qc.invalidateQueries({ queryKey: ['purchase-stats'] })
       toast({ title: 'Purchase order deleted', variant: 'success' })
+      setDeleteTarget(null)
     },
     onError: (e) => toast({ title: e.response?.data?.message || 'Failed', variant: 'error' }),
   })
@@ -668,6 +692,8 @@ export default function PurchasesPage() {
             <div key={i} className="h-12 rounded-xl animate-pulse" style={{ background: 'var(--surface-card)' }} />
           ))}
         </div>
+      ) : isError ? (
+        <ErrorState error={error} onRetry={refetch} />
       ) : purchases.length === 0 ? (
         <div className="text-center py-16">
           <ShoppingBag className="h-12 w-12 mx-auto mb-3 opacity-20" style={{ color: 'var(--text-muted)' }} />
@@ -675,12 +701,23 @@ export default function PurchasesPage() {
           {hasFilters && <button onClick={clearFilters} className="mt-3 text-[13px] underline" style={{ color: '#10B981' }}>Clear filters</button>}
         </div>
       ) : (
-        <div className="rounded-xl overflow-hidden"
+        <div className="rounded-xl overflow-x-auto"
           style={{ background: 'var(--surface-card)', border: '1px solid var(--border)' }}>
           <table className="w-full text-[13px]">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)', background: 'var(--surface-muted)' }}>
-                {['PO Number', 'Supplier', 'Items', 'Total', 'Status', 'Payment', 'Date', 'Actions', ''].map(h => (
+                <SortableTH label="PO Number" sortKey="purchaseNumber" sortBy={sort.sortBy} sortDir={sort.sortDir} onSort={onSort} />
+                {['Supplier', 'Items'].map(h => (
+                  <th key={h} className="text-left px-4 py-3 font-semibold text-[11px] uppercase tracking-wider"
+                    style={{ color: 'var(--text-muted)' }}>{h}</th>
+                ))}
+                <SortableTH label="Total" sortKey="grandTotal" sortBy={sort.sortBy} sortDir={sort.sortDir} onSort={onSort} />
+                {['Status', 'Payment'].map(h => (
+                  <th key={h} className="text-left px-4 py-3 font-semibold text-[11px] uppercase tracking-wider"
+                    style={{ color: 'var(--text-muted)' }}>{h}</th>
+                ))}
+                <SortableTH label="Date" sortKey="purchaseDate" sortBy={sort.sortBy} sortDir={sort.sortDir} onSort={onSort} />
+                {['Actions', ''].map(h => (
                   <th key={h} className="text-left px-4 py-3 font-semibold text-[11px] uppercase tracking-wider"
                     style={{ color: 'var(--text-muted)' }}>{h}</th>
                 ))}
@@ -733,7 +770,7 @@ export default function PurchasesPage() {
                           )}
                           {p.status === 'ordered' && can('admin') && (
                             <button
-                              onClick={() => window.confirm(`Delete PO ${p.purchaseNumber}?`) && deleteMutation.mutate(p._id)}
+                              onClick={() => setDeleteTarget(p)}
                               className="h-7 w-7 rounded-md flex items-center justify-center"
                               style={{ color: '#EF4444' }}
                               onMouseEnter={e => e.currentTarget.style.background = 'rgba(239,68,68,.1)'}
@@ -761,26 +798,27 @@ export default function PurchasesPage() {
       )}
 
       {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between">
-          <p className="text-[12px]" style={{ color: 'var(--text-muted)' }}>Page {page} of {totalPages} · {total.toLocaleString()} POs</p>
-          <div className="flex gap-1.5">
-            <button disabled={page <= 1} onClick={() => setPage(p => p - 1)}
-              className="px-3 py-1.5 rounded-lg text-[12px] font-medium disabled:opacity-40"
-              style={{ background: 'var(--surface-card)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
-              Prev
-            </button>
-            <button disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}
-              className="px-3 py-1.5 rounded-lg text-[12px] font-medium disabled:opacity-40"
-              style={{ background: 'var(--surface-card)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
-              Next
-            </button>
-          </div>
-        </div>
+      {total > 0 && (
+        <Pagination
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          onPageChange={setPage}
+          onPageSizeChange={(s) => { setPageSize(s); setPage(1) }}
+        />
       )}
 
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => deleteMutation.mutate(deleteTarget._id)}
+        title="Delete purchase order?"
+        description={`This permanently deletes PO ${deleteTarget?.purchaseNumber}. This action cannot be undone.`}
+        loading={deleteMutation.isPending}
+      />
+
       <AnimatePresence>
-        {creating  && <NewPurchaseModal onClose={() => setCreate(false)} />}
+        {creating  && <NewPurchaseModal onClose={() => setCreate(false)} preset={poPreset} />}
         {receiving && <ReceiveModal purchase={receiving} onClose={() => setReceive(null)} />}
       </AnimatePresence>
     </div>

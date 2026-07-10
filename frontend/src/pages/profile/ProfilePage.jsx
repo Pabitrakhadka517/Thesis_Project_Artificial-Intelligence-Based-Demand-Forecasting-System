@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/common/Ca
 import { Button } from '@/components/common/Button'
 import { Input } from '@/components/common/Input'
 import { ImageUpload } from '@/components/common/ImageUpload'
+import { ChangePasswordForm } from '@/components/common/ChangePasswordForm'
 import { getInitials, formatDate } from '@/utils'
 import { useToast } from '@/hooks/useToast'
 import { LogOut, User, Lock, Shield, Camera } from 'lucide-react'
@@ -17,17 +18,6 @@ const profileSchema = z.object({
   fullName: z.string().min(2, 'Name must be at least 2 characters'),
   phone:    z.string().optional(),
 })
-
-const passwordSchema = z
-  .object({
-    currentPassword: z.string().min(6, 'Required'),
-    newPassword:     z.string().min(8, 'New password must be at least 8 characters'),
-    confirmPassword: z.string(),
-  })
-  .refine((d) => d.newPassword === d.confirmPassword, {
-    message: 'Passwords do not match',
-    path: ['confirmPassword'],
-  })
 
 const ROLE_LABELS = {
   admin:             'Administrator',
@@ -50,11 +40,6 @@ export default function ProfilePage() {
   const profileForm = useForm({
     resolver: zodResolver(profileSchema),
     defaultValues: { fullName: '', phone: '' },
-  })
-
-  const passwordForm = useForm({
-    resolver: zodResolver(passwordSchema),
-    defaultValues: { currentPassword: '', newPassword: '', confirmPassword: '' },
   })
 
   useEffect(() => {
@@ -100,13 +85,18 @@ export default function ProfilePage() {
 
   const changePasswordMutation = useMutation({
     mutationFn: authService.changePassword,
-    onSuccess: () => {
-      passwordForm.reset()
-      toast({ title: 'Password changed successfully', variant: 'success' })
-    },
     onError: (e) =>
       toast({ title: 'Password change failed', description: e.response?.data?.message, variant: 'error' }),
   })
+
+  const handleChangePassword = (values, { reset }) => {
+    changePasswordMutation.mutate(values, {
+      onSuccess: () => {
+        reset()
+        toast({ title: 'Password changed successfully', variant: 'success' })
+      },
+    })
+  }
 
   const role = user?.role || 'admin'
   const roleStyle = ROLE_COLORS[role] || ROLE_COLORS.admin
@@ -254,35 +244,10 @@ export default function ProfilePage() {
           </div>
         </CardHeader>
         <CardContent>
-          <form
-            onSubmit={passwordForm.handleSubmit((d) => changePasswordMutation.mutate(d))}
-            className="space-y-4"
-          >
-            <Input
-              label="Current Password"
-              type="password"
-              placeholder="••••••••"
-              error={passwordForm.formState.errors.currentPassword?.message}
-              {...passwordForm.register('currentPassword')}
-            />
-            <Input
-              label="New Password"
-              type="password"
-              placeholder="Min. 8 characters"
-              error={passwordForm.formState.errors.newPassword?.message}
-              {...passwordForm.register('newPassword')}
-            />
-            <Input
-              label="Confirm New Password"
-              type="password"
-              placeholder="••••••••"
-              error={passwordForm.formState.errors.confirmPassword?.message}
-              {...passwordForm.register('confirmPassword')}
-            />
-            <Button type="submit" loading={changePasswordMutation.isPending}>
-              Update Password
-            </Button>
-          </form>
+          <ChangePasswordForm
+            onSubmit={handleChangePassword}
+            loading={changePasswordMutation.isPending}
+          />
         </CardContent>
       </Card>
 
@@ -299,7 +264,7 @@ export default function ProfilePage() {
                 <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>Log out of your account on this device</p>
               </div>
             </div>
-            <Button variant="danger" size="sm" icon={LogOut} onClick={logout}>
+            <Button variant="outline" size="sm" icon={LogOut} onClick={logout}>
               Sign Out
             </Button>
           </div>

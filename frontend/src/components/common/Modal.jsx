@@ -1,9 +1,15 @@
-import { useEffect, useId } from 'react'
+import { useEffect, useId, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X } from 'lucide-react'
+import { MOTION } from '@/constants'
+
+const FOCUSABLE = 'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])'
 
 export function Modal({ open, onClose, title, children, width = 520, footer }) {
   const titleId = useId()
+  const dialogRef = useRef(null)
+  const triggerRef = useRef(null)
+
   useEffect(() => {
     if (open) {
       document.body.style.overflow = 'hidden'
@@ -11,9 +17,29 @@ export function Modal({ open, onClose, title, children, width = 520, footer }) {
     return () => { document.body.style.overflow = '' }
   }, [open])
 
+  // Move focus into the dialog on open, and back to whatever triggered it on close.
+  useEffect(() => {
+    if (open) {
+      triggerRef.current = document.activeElement
+      const first = dialogRef.current?.querySelector(FOCUSABLE)
+      first ? first.focus() : dialogRef.current?.focus()
+    } else {
+      triggerRef.current?.focus?.()
+    }
+  }, [open])
+
   useEffect(() => {
     if (!open) return
-    const handler = (e) => { if (e.key === 'Escape') onClose() }
+    const handler = (e) => {
+      if (e.key === 'Escape') { onClose(); return }
+      if (e.key !== 'Tab' || !dialogRef.current) return
+      const focusable = dialogRef.current.querySelectorAll(FOCUSABLE)
+      if (!focusable.length) return
+      const first = focusable[0]
+      const last  = focusable[focusable.length - 1]
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus() }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus() }
+    }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [open, onClose])
@@ -26,19 +52,21 @@ export function Modal({ open, onClose, title, children, width = 520, footer }) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.15 }}
+            transition={{ duration: MOTION.fast }}
             className="absolute inset-0"
             style={{ background: 'rgba(0,0,0,.55)', backdropFilter: 'blur(6px)' }}
             onClick={onClose}
           />
           <motion.div
+            ref={dialogRef}
             role="dialog"
             aria-modal="true"
             aria-labelledby={titleId}
+            tabIndex={-1}
             initial={{ opacity: 0, y: 24, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 12, scale: 0.97 }}
-            transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+            transition={{ duration: MOTION.base, ease: MOTION.ease }}
             className="relative w-full flex flex-col"
             style={{
               maxWidth: width,

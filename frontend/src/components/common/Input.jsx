@@ -2,7 +2,7 @@ import { cn } from '@/utils'
 import { forwardRef } from 'react'
 
 export const Input = forwardRef(function Input(
-  { className, label, error, icon: Icon, hint, ...props },
+  { className, label, error, icon: Icon, hint, rightElement, ...props },
   ref
 ) {
   const inputId = props.id || (props.name ? `input-${props.name}` : undefined)
@@ -39,7 +39,7 @@ export const Input = forwardRef(function Input(
               ? '1.5px solid #EF4444'
               : '1.5px solid var(--border)',
             borderRadius: '8px',
-            padding: Icon ? '9px 12px 9px 34px' : '9px 12px',
+            padding: `9px ${rightElement ? '34px' : '12px'} 9px ${Icon ? '34px' : '12px'}`,
             color: 'var(--text-primary)',
           }}
           onFocus={e => {
@@ -56,6 +56,11 @@ export const Input = forwardRef(function Input(
           }}
           {...props}
         />
+        {rightElement && (
+          <span className="absolute right-3 top-1/2 -translate-y-1/2">
+            {rightElement}
+          </span>
+        )}
       </div>
       {error && (
         <p className="text-[11px] font-medium" style={{ color: '#EF4444' }}>{error}</p>

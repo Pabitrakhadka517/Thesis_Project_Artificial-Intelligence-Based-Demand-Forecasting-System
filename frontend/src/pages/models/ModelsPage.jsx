@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/common/Ca
 import { Button } from '@/components/common/Button'
 import { SkeletonCard, SkeletonTable } from '@/components/common/Skeleton'
 import { EmptyState } from '@/components/common/EmptyState'
+import { TrainingProgress } from '@/components/common/TrainingProgress'
 import { useToast } from '@/hooks/useToast'
 
 // ── model definitions (the 3 models actually implemented) ─────────────────────
@@ -84,14 +85,16 @@ function ModelCard({ model, trainedMeta, onTrain, isTraining }) {
       {hasMetrics && (
         <div className="grid grid-cols-2 gap-2 mb-4">
           {[
-            { label: 'MAE',    value: m.mae?.toFixed(2)  },
-            { label: 'RMSE',   value: m.rmse?.toFixed(2) },
-            { label: 'MAPE',   value: m.mape?.toFixed(2) + '%', color: m.mape > 30 ? '#EF4444' : m.mape > 15 ? '#F59E0B' : '#22C55E' },
-            { label: 'R²',     value: m.r2?.toFixed(4)   },
+            { label: 'MAE',  value: m.mae?.toFixed(2),  gloss: 'Avg. units off, either way' },
+            { label: 'RMSE', value: m.rmse?.toFixed(2), gloss: 'Same, penalizes big misses' },
+            { label: 'MAPE', value: m.mape?.toFixed(2) + '%', gloss: 'Avg. % error — lower is better',
+              color: m.mape > 30 ? '#EF4444' : m.mape > 15 ? '#F59E0B' : '#22C55E' },
+            { label: 'R²',   value: m.r2?.toFixed(4),   gloss: 'Fit quality, 1.0 = perfect' },
           ].map(stat => (
             <div key={stat.label} className="rounded-lg p-2.5" style={{ background: 'var(--surface-muted)' }}>
               <p className="text-[10px] uppercase font-semibold" style={{ color: 'var(--text-muted)' }}>{stat.label}</p>
               <p className="text-[15px] font-bold num" style={{ color: stat.color || model.color }}>{stat.value ?? '—'}</p>
+              <p className="text-[9.5px] mt-0.5 leading-tight" style={{ color: 'var(--text-muted)' }}>{stat.gloss}</p>
             </div>
           ))}
         </div>
@@ -142,8 +145,8 @@ function MetricsTable({ rows }) {
       : <ChevronDown style={{ width: 11, height: 11, display: 'inline', marginLeft: 3 }} />
   }
 
-  const TH = ({ k, children }) => (
-    <th onClick={() => toggle(k)} style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}>
+  const TH = ({ k, title, children }) => (
+    <th onClick={() => toggle(k)} title={title} style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}>
       {children}<SortIcon k={k} />
     </th>
   )
@@ -157,10 +160,10 @@ function MetricsTable({ rows }) {
           <tr>
             <th>Product (SKU)</th>
             <th>Best Model</th>
-            <TH k="mape_rf">RF MAPE%</TH>
-            <TH k="mape_xgboost">XGB MAPE%</TH>
-            <TH k="mape_lstm">LSTM MAPE%</TH>
-            <TH k="r2_xgboost">Best R²</TH>
+            <TH k="mape_rf" title="Random Forest — average % error, lower is better">RF MAPE%</TH>
+            <TH k="mape_xgboost" title="XGBoost — average % error, lower is better">XGB MAPE%</TH>
+            <TH k="mape_lstm" title="LSTM — average % error, lower is better">LSTM MAPE%</TH>
+            <TH k="r2_xgboost" title="Fit quality of the best model, 1.0 = perfect">Best R²</TH>
             <th>Trained</th>
           </tr>
         </thead>
@@ -311,7 +314,7 @@ export default function ModelsPage() {
       <h2 className="text-[18px] font-bold" style={{ color: 'var(--text-primary)' }}>ML Model Management</h2>
       <p className="text-[13px] text-center max-w-sm" style={{ color: 'var(--text-muted)' }}>
         Train and compare Random Forest, XGBoost, and LSTM models on 3 years of Nepal wholesale grocery data.
-        Requires the FastAPI AI service running on port 8000.
+        Requires the AI service to be running.
       </p>
       <button onClick={() => setConnected(true)}
         className="px-5 py-2 rounded-lg text-[13px] font-semibold"
@@ -380,6 +383,19 @@ export default function ModelsPage() {
           )}
         </CardContent>
       </Card>
+
+      {(trainMut.isPending || trainAllMut.isPending) && (
+        <Card>
+          <CardContent className="py-4">
+            <p className="text-[12px] mb-2.5" style={{ color: 'var(--text-muted)' }}>
+              {trainAllMut.isPending
+                ? 'Training queued for all SKUs in the background — this page will keep working while it runs.'
+                : 'Training Random Forest, XGBoost, and LSTM for this SKU — usually 2–5 minutes.'}
+            </p>
+            <TrainingProgress active={trainMut.isPending} />
+          </CardContent>
+        </Card>
+      )}
 
       {/* Tab bar */}
       <div className="flex gap-1 p-1 rounded-xl w-fit" style={{ background: 'var(--surface-muted)', border: '1px solid var(--border)' }}>

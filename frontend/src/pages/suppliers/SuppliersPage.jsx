@@ -19,8 +19,11 @@ import { z } from 'zod'
 import { suppliersService } from '@/services/suppliersService'
 import { useToast } from '@/hooks/useToast'
 import { useRole } from '@/hooks/useRole'
-import { formatDate, formatRelativeTime } from '@/utils'
+import { formatDate, formatRelativeTime, formatRs } from '@/utils'
 import { ImageUpload } from '@/components/common/ImageUpload'
+import { ErrorState } from '@/components/common/ErrorState'
+import { ConfirmDialog } from '@/components/common/Modal'
+import { Pagination } from '@/components/common/Pagination'
 
 // ── constants ─────────────────────────────────────────────────────────────────
 const PAYMENT_TERMS = [
@@ -35,12 +38,7 @@ const BAR_COLORS    = ['#2563EB', '#8B5CF6', '#10B981', '#F59E0B', '#F97316']
 const MONTHS        = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
 // ── helpers ───────────────────────────────────────────────────────────────────
-function fmtRs(v) {
-  if (v == null || v === 0) return 'Rs. 0'
-  if (v >= 1_000_000) return `Rs. ${(v / 1_000_000).toFixed(1)}M`
-  if (v >= 1_000)     return `Rs. ${(v / 1_000).toFixed(0)}K`
-  return `Rs. ${Math.round(v).toLocaleString()}`
-}
+const fmtRs = formatRs
 function fmtN(v) { return v == null ? '—' : Number(v).toLocaleString() }
 function monthLabel({ year, month }) { return `${MONTHS[month]} '${String(year).slice(2)}` }
 
@@ -836,20 +834,20 @@ function ListView({ onSelectSupplier, can }) {
   const [search, setSearch]   = useState('')
   const [status, setStatus]   = useState('')
   const [page, setPage]       = useState(1)
+  const [pageSize, setPageSize] = useState(20)
   const [creating, setCreate] = useState(false)
   const [editing, setEdit]    = useState(null)
+  const [deleteTarget, setDeleteTarget] = useState(null)
   const pendingLogoRef        = useRef(null)
-  const LIMIT = 12
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['suppliers', page, search, status],
-    queryFn:  () => suppliersService.getAll({ page, limit: LIMIT, search, status }).then(r => r.data),
+  const { data, isLoading, isError, error, refetch } = useQuery({
+    queryKey: ['suppliers', page, pageSize, search, status],
+    queryFn:  () => suppliersService.getAll({ page, limit: pageSize, search, status }).then(r => r.data),
     staleTime: 30_000,
   })
 
   const suppliers  = data?.data        || []
   const total      = data?.pagination?.total      || 0
-  const totalPages = data?.pagination?.totalPages || 1
 
   const logoDeleteMutation = useMutation({
     mutationFn: (id) => suppliersService.deleteLogo(id),
@@ -893,7 +891,7 @@ function ListView({ onSelectSupplier, can }) {
   })
   const deleteMutation = useMutation({
     mutationFn: (id) => suppliersService.delete(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['suppliers'] }); toast({ title: 'Deleted', variant: 'success' }) },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['suppliers'] }); toast({ title: 'Deleted', variant: 'success' }); setDeleteTarget(null) },
     onError:   (e) => toast({ title: e.response?.data?.message || 'Failed', variant: 'error' }),
   })
 
@@ -930,6 +928,8 @@ function ListView({ onSelectSupplier, can }) {
             <div key={i} className="rounded-xl h-52 animate-pulse" style={{ background: 'var(--surface-card)' }} />
           ))}
         </div>
+      ) : isError ? (
+        <ErrorState error={error} onRetry={refetch} />
       ) : suppliers.length === 0 ? (
         <div className="text-center py-16">
           <Truck className="h-12 w-12 mx-auto mb-3 opacity-20" style={{ color: 'var(--text-muted)' }} />
@@ -1003,7 +1003,7 @@ function ListView({ onSelectSupplier, can }) {
                         <Edit2 className="h-3.5 w-3.5" />
                       </button>
                       <button
-                        onClick={e => { e.stopPropagation(); window.confirm(`Delete "${s.name}"?`) && deleteMutation.mutate(s._id) }}
+                        onClick={e => { e.stopPropagation(); setDeleteTarget(s) }}
                         className="h-7 w-7 rounded-md flex items-center justify-center"
                         style={{ color: '#EF4444' }}
                         onMouseEnter={e => { e.stopPropagation(); e.currentTarget.style.background = 'rgba(239,68,68,.1)' }}
@@ -1020,23 +1020,24 @@ function ListView({ onSelectSupplier, can }) {
       )}
 
       {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between">
-          <p className="text-[12px]" style={{ color: 'var(--text-muted)' }}>Page {page} of {totalPages}</p>
-          <div className="flex gap-1.5">
-            <button disabled={page <= 1} onClick={() => setPage(p => p - 1)}
-              className="px-3 py-1.5 rounded-lg text-[12px] font-medium disabled:opacity-40"
-              style={{ background: 'var(--surface-card)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
-              Prev
-            </button>
-            <button disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}
-              className="px-3 py-1.5 rounded-lg text-[12px] font-medium disabled:opacity-40"
-              style={{ background: 'var(--surface-card)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
-              Next
-            </button>
-          </div>
-        </div>
+      {total > 0 && (
+        <Pagination
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          onPageChange={setPage}
+          onPageSizeChange={(s) => { setPageSize(s); setPage(1) }}
+        />
       )}
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => deleteMutation.mutate(deleteTarget._id)}
+        title="Delete supplier?"
+        description={`This permanently deletes "${deleteTarget?.name}". This action cannot be undone.`}
+        loading={deleteMutation.isPending}
+      />
 
       {/* CRUD Modals */}
       <AnimatePresence>

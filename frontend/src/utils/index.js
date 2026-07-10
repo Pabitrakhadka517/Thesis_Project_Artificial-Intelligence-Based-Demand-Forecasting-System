@@ -51,6 +51,31 @@ export function formatCurrency(value, currency = 'NPR') {
   }).format(value)
 }
 
+// The app's display convention is "Rs. X" (not the Intl currency-code style
+// `formatCurrency` above), optionally abbreviated for large values. Single
+// source of truth — was previously redefined with drifting thresholds in
+// ProductsPage/SuppliersPage/PurchasesPage/SalesPage.
+export function formatRs(value, { abbreviate = true } = {}) {
+  const n = Number(value) || 0
+  if (abbreviate) {
+    if (Math.abs(n) >= 1_000_000) return `Rs. ${(n / 1_000_000).toFixed(1)}M`
+    if (Math.abs(n) >= 1_000)     return `Rs. ${(n / 1_000).toFixed(1)}K`
+  }
+  return `Rs. ${n.toLocaleString()}`
+}
+
+// Canonical stock-status color/label map — single source of truth. Was
+// previously redefined independently across Products/Inventory/ProductDetail
+// pages with drifting hex values (e.g. "healthy" was #10B981 in some files
+// and #22C55E in others for the same semantic state).
+export const STOCK_STATUS = {
+  out_of_stock: { label: 'Out of Stock', color: '#EF4444', bg: 'rgba(239,68,68,.1)' },
+  critical:     { label: 'Critical',     color: '#F59E0B', bg: 'rgba(245,158,11,.1)' },
+  low:          { label: 'Low Stock',    color: '#F59E0B', bg: 'rgba(245,158,11,.1)' },
+  healthy:      { label: 'Healthy',      color: '#10B981', bg: 'rgba(16,185,129,.1)' },
+  overstock:    { label: 'Overstock',    color: '#6366F1', bg: 'rgba(99,102,241,.1)' },
+}
+
 export function formatNumber(value, decimals = 0) {
   if (value == null) return '—'
   return new Intl.NumberFormat('en-US', {

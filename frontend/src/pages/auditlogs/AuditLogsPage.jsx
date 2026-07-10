@@ -1,13 +1,35 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ClipboardList, RefreshCw, ChevronLeft, ChevronRight, Filter } from 'lucide-react'
+import { motion } from 'framer-motion'
+import { ClipboardList, RefreshCw, Filter } from 'lucide-react'
 import { adminService } from '@/services/adminService'
 import { Card, CardContent } from '@/components/common/Card'
 import { Button } from '@/components/common/Button'
 import { SkeletonTable } from '@/components/common/Skeleton'
 import { EmptyState } from '@/components/common/EmptyState'
 import { ErrorState } from '@/components/common/ErrorState'
+import { Pagination } from '@/components/common/Pagination'
 import { formatNumber } from '@/utils'
+
+// Turns a raw details payload into a short human-readable line instead of a
+// JSON.stringify dump — an audit log's whole purpose is human review.
+function formatLogDetail(details) {
+  if (details == null) return '—'
+  if (typeof details === 'string') return details
+  if (typeof details !== 'object') return String(details)
+  const entries = Object.entries(details).filter(([, v]) => v != null && v !== '')
+  if (!entries.length) return '—'
+  return entries
+    .map(([key, value]) => {
+      const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, c => c.toUpperCase())
+      if (value && typeof value === 'object' && ('from' in value || 'to' in value)) {
+        return `${label}: ${value.from ?? '—'} → ${value.to ?? '—'}`
+      }
+      if (typeof value === 'object') return `${label}: ${JSON.stringify(value)}`
+      return `${label}: ${value}`
+    })
+    .join(' · ')
+}
 
 const ACTION_STYLES = {
   created: { bg: 'rgba(34,197,94,.1)',   color: '#22C55E' },
@@ -55,24 +77,32 @@ function TimeAgo({ ts }) {
 
 export default function AuditLogsPage() {
   const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(50)
   const [modFilter, setModFilter] = useState('')
   const [actFilter, setActFilter] = useState('')
-  const SIZE = 50
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
 
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ['audit-logs', page, modFilter, actFilter],
-    queryFn: () => adminService.getAuditLogs({ page, limit: SIZE, resource: modFilter || undefined, action: actFilter || undefined }).then(r => r.data),
+    queryKey: ['audit-logs', page, pageSize, modFilter, actFilter, startDate, endDate],
+    queryFn: () => adminService.getAuditLogs({
+      page, limit: pageSize,
+      resource: modFilter || undefined, action: actFilter || undefined,
+      startDate: startDate || undefined, endDate: endDate || undefined,
+    }).then(r => r.data),
     refetchInterval: 30_000,
   })
 
-  const items      = data?.data || []
-  const total      = data?.pagination?.total || 0
-  const totalPages = data?.pagination?.totalPages || 1
+  const items = data?.data || []
+  const total = data?.pagination?.total || 0
+  const hasFilters = modFilter || actFilter || startDate || endDate
+  const clearFilters = () => { setModFilter(''); setActFilter(''); setStartDate(''); setEndDate(''); setPage(1) }
 
   if (error) return <ErrorState error={error} onRetry={refetch} />
 
   return (
-    <div className="space-y-5 pb-6">
+    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}
+      className="space-y-5 pb-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <div className="flex items-center gap-2 mb-1">
@@ -109,8 +139,14 @@ export default function AuditLogsPage() {
               <option value="deleted">Deleted</option>
               <option value="login">Login</option>
             </select>
-            {(modFilter || actFilter) && (
-              <button onClick={() => { setModFilter(''); setActFilter(''); setPage(1) }}
+            <input type="date" value={startDate} onChange={e => { setStartDate(e.target.value); setPage(1) }}
+              className="text-[13px] px-3 py-2 rounded-lg outline-none"
+              style={{ background: 'var(--surface-input)', border: '1.5px solid var(--border)', color: 'var(--text-primary)' }} />
+            <input type="date" value={endDate} onChange={e => { setEndDate(e.target.value); setPage(1) }}
+              className="text-[13px] px-3 py-2 rounded-lg outline-none"
+              style={{ background: 'var(--surface-input)', border: '1.5px solid var(--border)', color: 'var(--text-primary)' }} />
+            {hasFilters && (
+              <button onClick={clearFilters}
                 className="text-[12px] font-medium px-2 py-1 rounded"
                 style={{ color: '#2563EB' }}>
                 Clear filters
@@ -158,8 +194,8 @@ export default function AuditLogsPage() {
                           </span>
                         </td>
                         <td>
-                          <p className="text-[12px] max-w-70 truncate" style={{ color: 'var(--text-secondary)' }}>
-                            {typeof log.details === 'string' ? log.details : JSON.stringify(log.details) || '—'}
+                          <p className="text-[12px] max-w-70 truncate" style={{ color: 'var(--text-secondary)' }} title={formatLogDetail(log.details)}>
+                            {formatLogDetail(log.details)}
                           </p>
                         </td>
                         <td><TimeAgo ts={log.createdAt} /></td>
@@ -171,26 +207,19 @@ export default function AuditLogsPage() {
             </div>
           )}
 
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between px-4 py-3" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-              <p className="text-[12px]" style={{ color: 'var(--text-muted)' }}>Page {page} of {totalPages} · {formatNumber(total)} events</p>
-              <div className="flex items-center gap-1">
-                <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
-                  className="h-7 w-7 rounded-lg flex items-center justify-center disabled:opacity-40"
-                  style={{ background: 'var(--surface-muted)', color: 'var(--text-muted)' }}>
-                  <ChevronLeft style={{ width: 14, height: 14 }} />
-                </button>
-                <span className="px-3 text-[12px]" style={{ color: 'var(--text-secondary)' }}>{page} / {totalPages}</span>
-                <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
-                  className="h-7 w-7 rounded-lg flex items-center justify-center disabled:opacity-40"
-                  style={{ background: 'var(--surface-muted)', color: 'var(--text-muted)' }}>
-                  <ChevronRight style={{ width: 14, height: 14 }} />
-                </button>
-              </div>
+          {total > 0 && (
+            <div className="px-4 py-3" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+              <Pagination
+                page={page}
+                pageSize={pageSize}
+                total={total}
+                onPageChange={setPage}
+                onPageSizeChange={(s) => { setPageSize(s); setPage(1) }}
+              />
             </div>
           )}
         </CardContent>
       </Card>
-    </div>
+    </motion.div>
   )
 }

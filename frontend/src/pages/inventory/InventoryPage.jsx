@@ -9,9 +9,13 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import axiosInstance from '@/api/axiosInstance'
-import { getProductImage, imgFallback } from '@/utils'
+import { getProductImage, imgFallback, formatRs, STOCK_STATUS } from '@/utils'
 import { useToast } from '@/hooks/useToast'
 import { useRole } from '@/hooks/useRole'
+import { ErrorState } from '@/components/common/ErrorState'
+import { Pagination } from '@/components/common/Pagination'
+import { useSortable } from '@/hooks/useSortable'
+import { SortableTH } from '@/components/common/SortableTH'
 
 const adjustSchema = z.object({
   type:     z.enum(['addition','deduction','adjustment']),
@@ -20,12 +24,10 @@ const adjustSchema = z.object({
   notes:    z.string().optional(),
 })
 
-const STATUS_CONFIG = {
-  out_of_stock: { label: 'Out of Stock', color: '#EF4444', bg: 'rgba(239,68,68,.1)',  Icon: XCircle },
-  critical:     { label: 'Critical',     color: '#F59E0B', bg: 'rgba(245,158,11,.1)', Icon: AlertTriangle },
-  healthy:      { label: 'Healthy',      color: '#10B981', bg: 'rgba(16,185,129,.1)', Icon: CheckCircle },
-  overstock:    { label: 'Overstock',    color: '#6366F1', bg: 'rgba(99,102,241,.1)', Icon: TrendingDown },
-}
+const STATUS_ICON = { out_of_stock: XCircle, critical: AlertTriangle, healthy: CheckCircle, overstock: TrendingDown }
+const STATUS_CONFIG = Object.fromEntries(
+  Object.entries(STOCK_STATUS).map(([k, v]) => [k, { ...v, Icon: STATUS_ICON[k] || CheckCircle }])
+)
 
 function StockBadge({ status }) {
   const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.healthy
@@ -261,23 +263,24 @@ export default function InventoryPage() {
   const [search, setSearch]       = useState('')
   const [stockFilter, setStock]   = useState('')
   const [page, setPage]           = useState(1)
+  const [pageSize, setPageSize]   = useState(20)
   const [adjusting, setAdjust]    = useState(null)
   const [viewingMov, setViewMov]  = useState(null)
-  const LIMIT = 15
+  const sort = useSortable('createdAt', 'desc')
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['inventory', page, search, stockFilter],
+  const { data, isLoading, isError, error, refetch } = useQuery({
+    queryKey: ['inventory', page, pageSize, search, stockFilter, sort.sortBy, sort.sortDir],
     queryFn: () => axiosInstance
-      .get(`/products?page=${page}&limit=${LIMIT}&search=${encodeURIComponent(search)}&stockStatus=${stockFilter}`)
+      .get(`/products?page=${page}&limit=${pageSize}&search=${encodeURIComponent(search)}&stockStatus=${stockFilter}&sortBy=${sort.sortBy}&sortDir=${sort.sortDir}`)
       .then(r => r.data),
     staleTime: 30_000,
   })
 
+  const onSort = (key) => { sort.toggle(key); setPage(1) }
   const products   = data?.data || []
   const total      = data?.pagination?.total || 0
-  const totalPages = data?.pagination?.totalPages || 1
 
-  const formatPrice = (n) => `Rs. ${Number(n || 0).toLocaleString()}`
+  const formatPrice = (n) => formatRs(n, { abbreviate: false })
 
   const summaryStats = {
     total,
@@ -344,21 +347,26 @@ export default function InventoryPage() {
             <div key={i} className="h-12 rounded-xl animate-pulse" style={{ background: 'var(--surface-card)' }} />
           ))}
         </div>
+      ) : isError ? (
+        <ErrorState error={error} onRetry={refetch} />
       ) : products.length === 0 ? (
         <div className="text-center py-16">
           <Warehouse className="h-12 w-12 mx-auto mb-3 opacity-20" style={{ color: 'var(--text-muted)' }} />
           <p className="text-[14px]" style={{ color: 'var(--text-muted)' }}>No products found</p>
         </div>
       ) : (
-        <div className="rounded-xl overflow-hidden"
+        <div className="rounded-xl overflow-x-auto"
           style={{ background: 'var(--surface-card)', border: '1px solid var(--border)' }}>
           <table className="w-full text-[13px]">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)', background: 'var(--surface-muted)' }}>
-                {['Product', 'Category', 'Current Stock', 'Min / Max', 'Stock Value', 'Status', 'Actions'].map(h => (
-                  <th key={h} className="text-left px-4 py-3 font-semibold text-[11px] uppercase tracking-wider"
-                    style={{ color: 'var(--text-muted)' }}>{h}</th>
-                ))}
+                <SortableTH label="Product" sortKey="name" sortBy={sort.sortBy} sortDir={sort.sortDir} onSort={onSort} />
+                <th className="text-left px-4 py-3 font-semibold text-[11px] uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Category</th>
+                <SortableTH label="Current Stock" sortKey="currentStock" sortBy={sort.sortBy} sortDir={sort.sortDir} onSort={onSort} />
+                <th className="text-left px-4 py-3 font-semibold text-[11px] uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Min / Max</th>
+                <SortableTH label="Stock Value" sortKey="stockValue" sortBy={sort.sortBy} sortDir={sort.sortDir} onSort={onSort} />
+                <th className="text-left px-4 py-3 font-semibold text-[11px] uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Status</th>
+                <th className="text-left px-4 py-3 font-semibold text-[11px] uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -431,22 +439,14 @@ export default function InventoryPage() {
       )}
 
       {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between">
-          <p className="text-[12px]" style={{ color: 'var(--text-muted)' }}>Page {page} of {totalPages}</p>
-          <div className="flex gap-1.5">
-            <button disabled={page <= 1} onClick={() => setPage(p => p - 1)}
-              className="px-3 py-1.5 rounded-lg text-[12px] font-medium disabled:opacity-40"
-              style={{ background: 'var(--surface-card)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
-              Prev
-            </button>
-            <button disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}
-              className="px-3 py-1.5 rounded-lg text-[12px] font-medium disabled:opacity-40"
-              style={{ background: 'var(--surface-card)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
-              Next
-            </button>
-          </div>
-        </div>
+      {total > 0 && (
+        <Pagination
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          onPageChange={setPage}
+          onPageSizeChange={(s) => { setPageSize(s); setPage(1) }}
+        />
       )}
 
       {/* Modals */}

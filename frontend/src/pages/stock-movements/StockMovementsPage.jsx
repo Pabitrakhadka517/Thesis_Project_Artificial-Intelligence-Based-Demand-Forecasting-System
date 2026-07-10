@@ -6,6 +6,8 @@ import {
   ShoppingCart, ShoppingBag, Search, AlertTriangle,
 } from 'lucide-react'
 import axiosInstance from '@/api/axiosInstance'
+import { ErrorState } from '@/components/common/ErrorState'
+import { Pagination } from '@/components/common/Pagination'
 
 const TYPE_CONFIG = {
   purchase:   { label: 'Purchase',   color: '#10B981', bg: 'rgba(16,185,129,.1)',  Icon: ArrowUpCircle,   sign: '+' },
@@ -17,30 +19,21 @@ const TYPE_CONFIG = {
 }
 
 export default function StockMovementsPage() {
-  const [search, setSearch]   = useState('')
-  const [typeFilter, setType] = useState('')
-  const [page, setPage]       = useState(1)
-  const LIMIT = 20
+  const [search, setSearch]     = useState('')
+  const [typeFilter, setType]   = useState('')
+  const [page, setPage]         = useState(1)
+  const [pageSize, setPageSize] = useState(20)
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['stock-movements', page, typeFilter],
+  const { data, isLoading, isError, error, refetch } = useQuery({
+    queryKey: ['stock-movements', page, pageSize, typeFilter, search],
     queryFn: () => axiosInstance
-      .get(`/inventory/movements?page=${page}&limit=${LIMIT}&type=${typeFilter}`)
+      .get(`/inventory/movements?page=${page}&limit=${pageSize}&type=${typeFilter}&search=${encodeURIComponent(search)}`)
       .then(r => r.data),
     staleTime: 30_000,
   })
 
   const movements  = data?.data || []
   const total      = data?.pagination?.total || 0
-  const totalPages = data?.pagination?.totalPages || 1
-
-  // Client-side search on product name (movements don't support server search)
-  const filtered = search
-    ? movements.filter(m =>
-        (m.productName || m.product?.name || '').toLowerCase().includes(search.toLowerCase()) ||
-        (m.notes || '').toLowerCase().includes(search.toLowerCase())
-      )
-    : movements
 
   const fmt = (n) => `Rs. ${Number(n || 0).toLocaleString()}`
 
@@ -60,7 +53,7 @@ export default function StockMovementsPage() {
           style={{ background: 'var(--surface-card)', border: '1px solid var(--border)' }}>
           <Search className="h-3.5 w-3.5 shrink-0" style={{ color: 'var(--text-muted)' }} />
           <input type="text" placeholder="Filter by product or note…" value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={e => { setSearch(e.target.value); setPage(1) }}
             className="flex-1 bg-transparent text-[13px] outline-none"
             style={{ color: 'var(--text-primary)' }} />
         </div>
@@ -81,13 +74,15 @@ export default function StockMovementsPage() {
             <div key={i} className="h-12 rounded-xl animate-pulse" style={{ background: 'var(--surface-card)' }} />
           ))}
         </div>
-      ) : filtered.length === 0 ? (
+      ) : isError ? (
+        <ErrorState error={error} onRetry={refetch} />
+      ) : movements.length === 0 ? (
         <div className="text-center py-16">
           <Activity className="h-12 w-12 mx-auto mb-3 opacity-20" style={{ color: 'var(--text-muted)' }} />
           <p className="text-[14px]" style={{ color: 'var(--text-muted)' }}>No movements found</p>
         </div>
       ) : (
-        <div className="rounded-xl overflow-hidden"
+        <div className="rounded-xl overflow-x-auto"
           style={{ background: 'var(--surface-card)', border: '1px solid var(--border)' }}>
           <table className="w-full text-[13px]">
             <thead>
@@ -99,7 +94,7 @@ export default function StockMovementsPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((m, idx) => {
+              {movements.map((m, idx) => {
                 const cfg = TYPE_CONFIG[m.type] || TYPE_CONFIG.adjustment
                 const Icon = cfg.Icon
                 const qty  = m.quantity || 0
@@ -163,24 +158,14 @@ export default function StockMovementsPage() {
       )}
 
       {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between">
-          <p className="text-[12px]" style={{ color: 'var(--text-muted)' }}>
-            Page {page} of {totalPages} · {total} total movements
-          </p>
-          <div className="flex gap-1.5">
-            <button disabled={page <= 1} onClick={() => setPage(p => p - 1)}
-              className="px-3 py-1.5 rounded-lg text-[12px] font-medium disabled:opacity-40"
-              style={{ background: 'var(--surface-card)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
-              Prev
-            </button>
-            <button disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}
-              className="px-3 py-1.5 rounded-lg text-[12px] font-medium disabled:opacity-40"
-              style={{ background: 'var(--surface-card)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
-              Next
-            </button>
-          </div>
-        </div>
+      {total > 0 && (
+        <Pagination
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          onPageChange={setPage}
+          onPageSizeChange={(s) => { setPageSize(s); setPage(1) }}
+        />
       )}
     </div>
   )

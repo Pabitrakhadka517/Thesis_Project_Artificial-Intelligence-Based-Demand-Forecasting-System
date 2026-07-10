@@ -14,6 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/common/Ca
 import { Button } from '@/components/common/Button'
 import { SkeletonCard, SkeletonTable } from '@/components/common/Skeleton'
 import { EmptyState } from '@/components/common/EmptyState'
+import { TrainingProgress } from '@/components/common/TrainingProgress'
 import { useToast } from '@/hooks/useToast'
 
 // ── constants ──────────────────────────────────────────────────────────────────
@@ -47,12 +48,14 @@ function mapeToAccuracy(mape) {
 // ── Custom tooltip for chart ───────────────────────────────────────────────────
 function ChartTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null
-  const pred = payload.find(p => p.dataKey === 'predicted_qty')
+  const actual = payload.find(p => p.dataKey === 'actual_qty')
+  const pred   = payload.find(p => p.dataKey === 'predicted_qty')
   return (
     <div className="rounded-xl px-4 py-3 text-[12px]"
       style={{ background: 'var(--surface-card)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-md)' }}>
       <p className="font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>{label}</p>
-      {pred && <p style={{ color: '#2563EB' }}>Forecast: <strong>{smartRound(pred.value)}</strong> units</p>}
+      {actual?.value != null && <p style={{ color: '#16A34A' }}>Actual: <strong>{smartRound(actual.value)}</strong> units</p>}
+      {pred?.value != null && <p style={{ color: '#2563EB' }}>Forecast: <strong>{smartRound(pred.value)}</strong> units</p>}
     </div>
   )
 }
@@ -261,13 +264,29 @@ export default function ForecastingPage() {
   const today = todayStr()
   const futurePredictions = (result?.predictions || []).filter(p => p.date >= today)
 
-  // ── Chart data ───────────────────────────────────────────────────────────
-  const chartData = futurePredictions.map(p => ({
+  // ── Historical actuals (so the chart shows trend context, not just the
+  // future in isolation) ───────────────────────────────────────────────────
+  const { data: historyData } = useQuery({
+    queryKey: ['ml-history', selectedSku],
+    queryFn: () => mlForecastService.getHistory(selectedSku, 60).then(r => r.data?.data || []),
+    enabled: !!selectedSku && !!result,
+    staleTime: 5 * 60_000,
+  })
+  const history = historyData || []
+
+  // ── Chart data — historical actuals followed by the forecast, with the
+  // last actual point duplicated onto predicted_qty so the two lines join
+  // instead of leaving a visual gap. ───────────────────────────────────────
+  const historyPoints = history.map(h => ({ date: h.date, actual_qty: smartRound(h.qty) }))
+  const lastActual = historyPoints[historyPoints.length - 1]
+  const bridgePoint = lastActual ? [{ ...lastActual, predicted_qty: lastActual.actual_qty }] : []
+  const futurePoints = futurePredictions.map(p => ({
     date:          p.date,
     predicted_qty: smartRound(p.predicted_qty),
     lower_bound:   p.lower_bound,
     upper_bound:   p.upper_bound,
   }))
+  const chartData = [...historyPoints.slice(0, -1), ...bridgePoint, ...futurePoints]
 
   const inv = result?.inventory || {}
 
@@ -398,17 +417,19 @@ export default function ForecastingPage() {
               </div>
 
               {loading && (
-                <motion.p
+                <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  className="text-[12px] mt-3"
-                  style={{ color: 'var(--text-muted)' }}>
-                  {trainMut.isPending
-                    ? 'Training AI models… this may take 2–5 minutes.'
-                    : autoTraining
-                    ? 'No saved model found — training first… this may take 2–5 minutes.'
-                    : 'Running forecast…'}
-                </motion.p>
+                  className="mt-3 space-y-2">
+                  <p className="text-[12px]" style={{ color: 'var(--text-muted)' }}>
+                    {trainMut.isPending
+                      ? 'Training AI models… this may take 2–5 minutes.'
+                      : autoTraining
+                      ? 'No saved model found — training first… this may take 2–5 minutes.'
+                      : 'Running forecast…'}
+                  </p>
+                  <TrainingProgress active={trainMut.isPending || autoTraining} />
+                </motion.div>
               )}
             </CardContent>
           </Card>
@@ -451,9 +472,9 @@ export default function ForecastingPage() {
               {/* Forecast chart */}
               <Card>
                 <CardHeader>
-                  <CardTitle>Demand Forecast — Next {horizon} Days</CardTitle>
+                  <CardTitle>Demand Forecast — Last 60 Days + Next {horizon} Days</CardTitle>
                   <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-                    Shaded area = confidence interval · showing future dates only
+                    Solid line = actual history · dashed line = forecast · shaded area = confidence interval
                   </p>
                 </CardHeader>
                 <CardContent>
@@ -464,14 +485,15 @@ export default function ForecastingPage() {
                         dataKey="date"
                         tick={{ fontSize: 10, fill: 'var(--text-muted)' }}
                         tickFormatter={v => v?.slice(5)}
-                        interval={Math.floor(chartData.length / 7)}
+                        interval={Math.floor(chartData.length / 8)}
                       />
                       <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} width={60} />
                       <Tooltip content={<ChartTooltip />} />
                       <Legend wrapperStyle={{ fontSize: 12 }} />
                       <Area dataKey="upper_bound" stroke="transparent" fill="rgba(37,99,235,.12)" name="Upper bound" legendType="none" />
                       <Area dataKey="lower_bound" stroke="transparent" fill="white" fillOpacity={1} name="Lower bound" legendType="none" />
-                      <Line type="monotone" dataKey="predicted_qty" stroke="#2563EB" strokeWidth={2} dot={false} name="Predicted qty" />
+                      <Line type="monotone" dataKey="actual_qty" stroke="#16A34A" strokeWidth={2} dot={false} name="Actual" connectNulls={false} />
+                      <Line type="monotone" dataKey="predicted_qty" stroke="#2563EB" strokeWidth={2} strokeDasharray="5 3" dot={false} name="Forecast" connectNulls={false} />
                     </ComposedChart>
                   </ResponsiveContainer>
                 </CardContent>

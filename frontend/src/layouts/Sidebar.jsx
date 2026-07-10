@@ -1,6 +1,7 @@
 ﻿import { useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
+import { useQuery } from '@tanstack/react-query'
 import {
   selectSidebarCollapsed,
   selectSidebarMobileOpen,
@@ -18,6 +19,7 @@ import { cn } from '@/utils'
 import { APP_NAME } from '@/constants'
 import { selectUnreadCount } from '@/store/slices/alertSlice'
 import { useRole } from '@/hooks/useRole'
+import { aiService } from '@/services/aiService'
 
 // ── Role badges ───────────────────────────────────────────────────────────────
 
@@ -216,6 +218,15 @@ function SidebarContent({ collapsed }) {
   const unreadCount = useSelector(selectUnreadCount)
   const { role, isAdmin, isManager, prefix } = useRole()
 
+  const { data: aiHealth, isError: aiHealthError } = useQuery({
+    queryKey: ['ai-health'],
+    queryFn: () => aiService.getHealth().then(r => r.data?.data),
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+    retry: false,
+  })
+  const aiOnline = aiHealthError ? false : aiHealth?.online
+
   const badge      = BADGES[role] || BADGES.staff
   const BadgeIcon  = badge.icon
   const sections   = isAdmin ? getAdminSections() : isManager ? getManagerSections() : getStaffSections()
@@ -311,17 +322,26 @@ function SidebarContent({ collapsed }) {
           >
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
-                <div className="h-2 w-2 rounded-full bg-green-400 shrink-0 pulse-green" />
+                <div className={cn(
+                  'h-2 w-2 rounded-full shrink-0',
+                  aiOnline === false ? 'bg-red-400' : aiOnline === true ? 'bg-green-400 pulse-green' : 'bg-gray-400',
+                )} />
                 <span className="text-[11px] font-medium" style={{ color: 'rgba(255,255,255,.7)' }}>
-                  AI Engine Online
+                  {aiOnline === false ? 'AI Engine Offline' : aiOnline === true ? 'AI Engine Online' : 'Checking AI Engine…'}
                 </span>
               </div>
-              <span
-                className="text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0"
-                style={{ background: 'rgba(34,197,94,.2)', color: '#4ADE80', letterSpacing: '.04em' }}
-              >
-                LIVE
-              </span>
+              {aiOnline !== undefined && (
+                <span
+                  className="text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0"
+                  style={
+                    aiOnline === false
+                      ? { background: 'rgba(239,68,68,.2)', color: '#F87171', letterSpacing: '.04em' }
+                      : { background: 'rgba(34,197,94,.2)', color: '#4ADE80', letterSpacing: '.04em' }
+                  }
+                >
+                  {aiOnline === false ? 'OFFLINE' : 'LIVE'}
+                </span>
+              )}
             </div>
           </div>
         )}

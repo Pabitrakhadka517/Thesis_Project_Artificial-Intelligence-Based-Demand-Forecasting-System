@@ -34,8 +34,14 @@
     /* Text – Light */
     --text-primary:   #111827;
     --text-secondary: #374151;
-    --text-muted:     #9CA3AF;
+    --text-muted:     #6B7280;
     --text-inverse:   #F9FAFB;
+
+    /* Motion */
+    --motion-fast: 0.12s;
+    --motion-base: 0.2s;
+    --motion-slow: 0.32s;
+    --motion-ease: cubic-bezier(.4,0,.2,1);
 
     /* Borders */
     --border:         #E5E7EB;

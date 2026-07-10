@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import axiosInstance from '@/api/axiosInstance'
 import { Button } from '@/components/common/Button'
+import { TrainingProgress } from '@/components/common/TrainingProgress'
 import { useToast } from '@/hooks/useToast'
 import { formatNumber } from '@/utils'
 
@@ -292,9 +293,18 @@ export default function SyntheticDataPage() {
               </button>
 
               {generateMut.isPending && (
-                <p className="text-[11px] text-center" style={{ color: 'var(--text-muted)' }}>
-                  Building 50 products, inserting 200K+ records into MongoDB. Please wait.
-                </p>
+                <div className="space-y-2">
+                  <p className="text-[11px] text-center" style={{ color: 'var(--text-muted)' }}>
+                    Building 50 products, inserting 200K+ records into MongoDB. Please wait.
+                  </p>
+                  <div className="flex justify-center">
+                    <TrainingProgress
+                      active
+                      steps={['Generating products', 'Simulating sales', 'Writing to MongoDB', 'Finalizing']}
+                      stepDurationMs={20_000}
+                    />
+                  </div>
+                </div>
               )}
             </div>
           </div>
@@ -380,9 +390,14 @@ export default function SyntheticDataPage() {
                           CSV saved — {lastResult.training_data_size_mb} MB
                         </span>
                       </div>
-                      <p className="font-mono text-[10px] break-all" style={{ color: 'var(--text-muted)' }}>
-                        {lastResult.training_data_path}
-                      </p>
+                      <details>
+                        <summary className="text-[10px] cursor-pointer" style={{ color: 'var(--text-muted)' }}>
+                          Technical details
+                        </summary>
+                        <p className="font-mono text-[10px] break-all mt-1" style={{ color: 'var(--text-muted)' }}>
+                          {lastResult.training_data_path}
+                        </p>
+                      </details>
                     </div>
                   )}
 

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -9,6 +10,8 @@ import { mlForecastService } from '@/services/mlForecastService'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/common/Card'
 import { SkeletonTable } from '@/components/common/Skeleton'
 import { EmptyState } from '@/components/common/EmptyState'
+import { Button } from '@/components/common/Button'
+import { useRole } from '@/hooks/useRole'
 
 // ── helpers ────────────────────────────────────────────────────────────────────
 const RISK_STYLE = {
@@ -232,6 +235,14 @@ function InsightsPanel() {
 // ── Main page ──────────────────────────────────────────────────────────────────
 export default function RecommendationsPage() {
   const [riskFilter, setRiskFilter] = useState(null)
+  const navigate = useNavigate()
+  const { prefix, can } = useRole()
+
+  const createPO = (row) => {
+    navigate(`${prefix}/purchases`, {
+      state: { presetSku: row.sku_id, presetQty: Math.ceil(row.suggested_purchase) },
+    })
+  }
 
   const { data: recs, isLoading, refetch, isFetching } = useQuery({
     queryKey: ['ml-inventory-recs', riskFilter],
@@ -356,6 +367,7 @@ export default function RecommendationsPage() {
                     <th>Stockout Risk</th>
                     <th>Overstock Risk</th>
                     <th>Trend</th>
+                    {can('inventory_manager') && <th></th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -410,6 +422,15 @@ export default function RecommendationsPage() {
                         </div>
                       </td>
                       <td><TrendIcon trend={row.demand_trend} /></td>
+                      {can('inventory_manager') && (
+                        <td>
+                          {row.suggested_purchase > 0 && (
+                            <Button size="xs" variant="secondary" icon={ShoppingCart} onClick={() => createPO(row)}>
+                              Create PO
+                            </Button>
+                          )}
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>

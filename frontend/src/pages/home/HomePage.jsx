@@ -7,7 +7,7 @@ import {
   Users, Eye, CheckCircle, LineChart, AlertTriangle, DollarSign,
   Target, Upload, Cpu, Layers, Activity, Menu, X as XIcon,
   TrendingDown, LayoutDashboard, FlaskConical, Globe,
-  GraduationCap, MapPin, Sparkles, Shield, Clock,
+  GraduationCap, MapPin, Shield, Clock,
 } from 'lucide-react'
 import { APP_NAME } from '@/constants'
 
@@ -90,22 +90,22 @@ function Counter({ to, suffix = '', prefix = '', duration = 1.6 }) {
 
 // ─── Reusable small components ────────────────────────────────────────────────
 
+// Plain uppercase label — no pill, no border, no background. A colored
+// gradient badge repeated on every section reads as templated; a section
+// label doesn't need a container to do its job.
 function Tag({ children, color = T.blue }) {
   return (
-    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest"
-      style={{ background: `${color}14`, border: `1px solid ${color}30`, color }}>
+    <span className="text-[11px] font-bold uppercase tracking-widest" style={{ color }}>
       {children}
     </span>
   )
 }
 
+// Solid brand color instead of a blue→purple gradient clip-text effect —
+// that gradient-headline treatment is one of the most recognizable
+// AI-generated-website signatures, so it's gone in favor of one confident color.
 function BlueText({ children }) {
-  return (
-    <span style={{
-      background: `linear-gradient(135deg, ${T.blueLight} 0%, ${T.purple} 100%)`,
-      WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
-    }}>{children}</span>
-  )
+  return <span style={{ color: '#03045e' }}>{children}</span>
 }
 
 const glassCard = {
@@ -126,38 +126,6 @@ const glassReset = {
   transform:   'translateY(0)',
 }
 
-// ─── Marquee ──────────────────────────────────────────────────────────────────
-const TICKER = [
-  'Prophet Forecasting', 'LSTM Neural Network', 'Random Forest', 'Safety Stock',
-  'Reorder Point (ROP)', 'Economic Order Quantity', 'Demand Intelligence', 'FastAPI Backend',
-  'MongoDB Database', 'React.js Frontend', 'AI Recommendations', 'Role-Based Access Control',
-  'Real-time Alerts', 'Inventory Optimization', 'Seasonal Adjustment', 'EOQ Computation',
-]
-
-function Marquee() {
-  const items = [...TICKER, ...TICKER]
-  return (
-    <div className="relative overflow-hidden py-3"
-      style={{ borderTop: `1px solid ${T.border}`, borderBottom: `1px solid ${T.border}`, background: T.sidebarBg }}>
-      <div className="absolute left-0 top-0 bottom-0 w-16 z-10 pointer-events-none"
-        style={{ background: `linear-gradient(90deg,${T.sidebarBg},transparent)` }} />
-      <div className="absolute right-0 top-0 bottom-0 w-16 z-10 pointer-events-none"
-        style={{ background: `linear-gradient(270deg,${T.sidebarBg},transparent)` }} />
-      <motion.div className="flex gap-8 whitespace-nowrap"
-        animate={{ x: ['0%', '-50%'] }}
-        transition={{ duration: 35, ease: 'linear', repeat: Infinity }}>
-        {items.map((item, i) => (
-          <span key={i} className="flex items-center gap-2 text-[11px] font-medium shrink-0"
-            style={{ color: T.textFaint }}>
-            <span className="h-1 w-1 rounded-full shrink-0" style={{ background: T.blue }} />
-            {item}
-          </span>
-        ))}
-      </motion.div>
-    </div>
-  )
-}
-
 // ─── App Mockup — updated to match the white FlowStock UI ────────────────────
 function AppMockup() {
   const BAR  = [38, 52, 42, 68, 55, 72, 48, 65, 78, 58, 70, 62]
@@ -167,10 +135,6 @@ function AppMockup() {
 
   return (
     <div className="relative select-none" style={{ maxWidth: 540, margin: '0 auto' }}>
-      {/* Outer glow */}
-      <div className="absolute -inset-6 rounded-3xl pointer-events-none"
-        style={{ background: `radial-gradient(ellipse 70% 55% at 50% 55%, rgba(37,99,235,.1) 0%, transparent 70%)`, filter: 'blur(12px)' }} />
-
       <div className="relative rounded-xl overflow-hidden"
         style={{ background: '#FFFFFF', border: `1px solid rgba(37,99,235,.2)`,
           boxShadow: `0 24px 64px rgba(0,0,0,.1), 0 4px 12px rgba(0,0,0,.06)` }}>
@@ -318,20 +282,6 @@ function AppMockup() {
           </div>
         </div>
       </div>
-
-      {/* Floating badges */}
-      <motion.div animate={{ y: [0,-7,0] }} transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
-        className="absolute -right-3 top-14 px-3.5 py-2 rounded-xl"
-        style={{ background: '#03045e', boxShadow: '0 8px 24px rgba(3,4,94,.4)' }}>
-        <p className="text-[8px] font-medium mb-0.5" style={{ color: 'rgba(186,230,253,.9)' }}>Forecast Acc.</p>
-        <p className="text-[13px] font-extrabold text-white">94.2%</p>
-      </motion.div>
-      <motion.div animate={{ y: [0,7,0] }} transition={{ duration: 3.5, repeat: Infinity, ease: 'easeInOut', delay: 0.8 }}
-        className="absolute -left-3 bottom-20 px-3.5 py-2 rounded-xl"
-        style={{ background: 'linear-gradient(135deg,#15803D,#22C55E)', boxShadow: '0 8px 24px rgba(34,197,94,.3)' }}>
-        <p className="text-[8px] font-medium mb-0.5" style={{ color: 'rgba(187,247,208,.9)' }}>ML Models</p>
-        <p className="text-[13px] font-extrabold text-white">3 Active</p>
-      </motion.div>
     </div>
   )
 }
@@ -438,30 +388,17 @@ function Navbar() {
 function HeroSection() {
   return (
     <section className="relative overflow-hidden" style={{ background: T.page, paddingTop: 56 }}>
-      {/* Subtle grid */}
-      <div className="absolute inset-0 pointer-events-none"
-        style={{ backgroundImage: `linear-gradient(${T.border} 1px,transparent 1px),linear-gradient(90deg,${T.border} 1px,transparent 1px)`,
-          backgroundSize: '52px 52px', opacity: 0.4 }} />
-      {/* Glow blobs */}
-      <div className="absolute pointer-events-none"
-        style={{ top: '-80px', right: '-80px', width: 480, height: 480, borderRadius: '50%',
-          background: `radial-gradient(circle, rgba(37,99,235,.08) 0%, transparent 70%)`, filter: 'blur(40px)' }} />
-      <div className="absolute pointer-events-none"
-        style={{ bottom: '0', left: '-60px', width: 360, height: 360, borderRadius: '50%',
-          background: `radial-gradient(circle, rgba(139,92,246,.05) 0%, transparent 70%)`, filter: 'blur(40px)' }} />
-
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 lg:py-20">
         <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
 
           {/* Left */}
           <div>
-            <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }}
+            <motion.p initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.45 }}
-              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest mb-6"
-              style={{ background: T.blueMid, border: `1px solid rgba(37,99,235,.2)`, color: T.blue }}>
-              <Sparkles className="h-3 w-3" />
-              AI-Powered · Built for Nepal's Wholesale Market
-            </motion.div>
+              className="text-[11px] font-bold uppercase tracking-widest mb-4"
+              style={{ color: T.blue }}>
+              Built for Nepal's Wholesale Market
+            </motion.p>
 
             <motion.h1 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.55, delay: 0.07, ease }}
@@ -528,8 +465,6 @@ function HeroSection() {
           </motion.div>
         </div>
       </div>
-
-      <Marquee />
     </section>
   )
 }
@@ -681,10 +616,8 @@ function MetricsSection() {
         <Grid className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {STATS.map(({ val, suffix, label, sub, color }) => (
             <motion.div key={label} variants={fadeUp}
-              className="rounded-xl p-6 text-center relative overflow-hidden"
+              className="rounded-xl p-6 text-center"
               style={{ ...glassCard }}>
-              <div className="absolute top-0 left-0 right-0 h-0.5 rounded-t-xl"
-                style={{ background: `linear-gradient(90deg,transparent,${color},transparent)` }} />
               <p className="text-4xl font-extrabold mb-2" style={{ color }}>
                 <Counter to={val} suffix={suffix} />
               </p>
@@ -778,27 +711,24 @@ function RolesSection() {
         <Grid className="grid md:grid-cols-3 gap-5">
           {ROLES.map(({ icon: Icon, title, badge, color, desc, perms, featured }) => (
             <motion.div key={title} variants={fadeUp}
-              className="rounded-xl p-6 flex flex-col relative overflow-hidden"
+              className="rounded-xl p-6 flex flex-col"
               style={featured
                 ? { ...glassCard, borderColor: `${color}35`, boxShadow: `0 4px 24px ${color}12, 0 1px 3px rgba(0,0,0,.06)` }
                 : glassCard}>
-              {featured && (
-                <div className="absolute top-0 left-0 right-0 h-0.5"
-                  style={{ background: `linear-gradient(90deg,transparent,${color},transparent)` }} />
-              )}
-              {featured && (
-                <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full text-[9px] font-bold text-white"
-                  style={{ background: color }}>Most Used</div>
-              )}
-
               <div className="flex items-start gap-3 mb-4">
                 <div className="h-11 w-11 rounded-xl flex items-center justify-center shrink-0"
                   style={{ background: `${color}12` }}>
                   <Icon className="h-5 w-5" style={{ color }} />
                 </div>
-                <div>
-                  <h3 className="font-bold text-[15px]" style={{ color: T.text }}>{title}</h3>
-                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="font-bold text-[15px]" style={{ color: T.text }}>{title}</h3>
+                    {featured && (
+                      <span className="shrink-0 px-2 py-0.5 rounded-full text-[9px] font-bold text-white"
+                        style={{ background: color }}>Most Used</span>
+                    )}
+                  </div>
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full inline-block mt-1"
                     style={{ background: `${color}12`, color }}>{badge}</span>
                 </div>
               </div>
@@ -868,19 +798,8 @@ function CTASection() {
     <section className="py-16 lg:py-20" style={{ background: T.pageMid }}>
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         <Reveal>
-          <div className="rounded-2xl p-10 lg:p-16 text-center relative overflow-hidden"
-            style={{ background: 'linear-gradient(135deg,rgba(37,99,235,.1) 0%,rgba(139,92,246,.07) 100%)',
-              border: `1px solid rgba(37,99,235,.18)` }}>
-            {/* Grid overlay */}
-            <div className="absolute inset-0 pointer-events-none rounded-2xl"
-              style={{ backgroundImage: `linear-gradient(${T.border} 1px,transparent 1px),linear-gradient(90deg,${T.border} 1px,transparent 1px)`,
-                backgroundSize: '32px 32px', opacity: 0.5 }} />
-            {/* Glow blobs */}
-            <div className="absolute -top-16 -left-16 w-48 h-48 rounded-full pointer-events-none"
-              style={{ background: `radial-gradient(circle,rgba(37,99,235,.15),transparent)`, filter: 'blur(40px)' }} />
-            <div className="absolute -bottom-16 -right-16 w-48 h-48 rounded-full pointer-events-none"
-              style={{ background: `radial-gradient(circle,rgba(139,92,246,.12),transparent)`, filter: 'blur(40px)' }} />
-
+          <div className="rounded-2xl p-10 lg:p-16 text-center"
+            style={{ background: 'rgba(3,4,94,.04)', border: `1px solid rgba(3,4,94,.14)` }}>
             <div className="relative z-10">
               <Tag color={T.blue}>Ready to get started?</Tag>
               <h2 className="font-extrabold tracking-tight mt-5 mb-4" style={{ fontSize: 'clamp(26px,4vw,38px)', color: T.text }}>
