@@ -18,11 +18,22 @@ const alertSchema = new mongoose.Schema(
     acknowledgedBy:  { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     acknowledgedAt:  Date,
 
+    isResolved:      { type: Boolean, default: false },
+    resolvedBy:      { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    resolvedAt:      Date,
+
     metadata:  mongoose.Schema.Types.Mixed,
     expiresAt: Date,
   },
-  { timestamps: true }
+  { timestamps: true, toJSON: { virtuals: true }, toObject: { virtuals: true } }
 )
+
+// Derived lifecycle status for the UI — active → acknowledged → resolved.
+alertSchema.virtual('status').get(function () {
+  if (this.isResolved)      return 'resolved'
+  if (this.isAcknowledged)  return 'acknowledged'
+  return 'active'
+})
 
 // ── Indexes ────────────────────────────────────────────────────────────────────
 

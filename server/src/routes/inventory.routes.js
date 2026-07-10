@@ -38,10 +38,20 @@ router.get('/movements', async (req, res) => {
   const page  = Math.max(1, parseInt(req.query.page)  || 1)
   const limit = Math.min(Math.max(1, parseInt(req.query.limit) || 30), 100) // Fix #21 cap
   const skip  = (page - 1) * limit
-  const { product, type } = req.query
+  const { product, type, search } = req.query
   const query = {}
   if (product) query.product = product
   if (type)    query.type    = type
+
+  if (search) {
+    const regex = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')
+    const matchingProducts = await Product.find({ name: regex }).select('_id')
+    query.$or = [
+      { product: { $in: matchingProducts.map(p => p._id) } },
+      { notes: regex },
+      { reference: regex },
+    ]
+  }
 
   const [moves, total] = await Promise.all([
     StockMovement.find(query)

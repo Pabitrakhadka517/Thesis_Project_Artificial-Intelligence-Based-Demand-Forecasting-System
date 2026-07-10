@@ -186,11 +186,16 @@ exports.getAuditLogs = async (req, res) => {
   const limit = Math.min(Math.max(1, parseInt(req.query.limit) || 50), 200)
   const skip  = (page - 1) * limit
 
-  const { userId, action, resource } = req.query
+  const { userId, action, resource, startDate, endDate } = req.query
   const query = {}
   if (userId)   query.user     = userId
   if (action)   query.action   = { $regex: escapeRegex(action),   $options: 'i' }
   if (resource) query.resource = { $regex: escapeRegex(resource), $options: 'i' }
+  if (startDate || endDate) {
+    query.createdAt = {}
+    if (startDate) query.createdAt.$gte = new Date(startDate)
+    if (endDate)   query.createdAt.$lte = new Date(endDate + 'T23:59:59')
+  }
 
   const [logs, total] = await Promise.all([
     AuditLog.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit)

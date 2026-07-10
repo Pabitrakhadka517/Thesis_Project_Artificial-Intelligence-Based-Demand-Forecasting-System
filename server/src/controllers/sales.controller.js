@@ -7,12 +7,16 @@ const AuditLog = require('../models/AuditLog')
 require('../models/User') // register User schema so Sale.populate('recordedBy') resolves
 const { success, created, error, paginated } = require('../utils/response')
 
+const SALES_SORTABLE_FIELDS = { saleDate: 'saleDate', grandTotal: 'grandTotal', invoiceNumber: 'invoiceNumber' }
+
 exports.getSales = async (req, res) => {
   try {
-    const { startDate, endDate, status, search } = req.query
+    const { startDate, endDate, status, search, sortBy, sortDir } = req.query
     const page  = Math.max(1, parseInt(req.query.page)  || 1)
     const limit = Math.min(Math.max(1, parseInt(req.query.limit) || 20), 100)
     const skip  = (page - 1) * limit
+    const sortField = SALES_SORTABLE_FIELDS[sortBy] || 'saleDate'
+    const sortOrder  = sortDir === 'asc' ? 1 : -1
     const query = {}
 
     if (startDate || endDate) {
@@ -28,7 +32,7 @@ exports.getSales = async (req, res) => {
     }
 
     const [sales, total] = await Promise.all([
-      Sale.find(query).populate('recordedBy', 'fullName email').sort({ saleDate: -1 }).skip(skip).limit(limit),
+      Sale.find(query).populate('recordedBy', 'fullName email').sort({ [sortField]: sortOrder }).skip(skip).limit(limit),
       Sale.countDocuments(query),
     ])
 

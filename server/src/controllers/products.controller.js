@@ -12,8 +12,17 @@ const getProductImage = require('../../utils/productImageMapper')
 
 const IMAGES_DIR = path.join(__dirname, '../../assets/product-images')
 
+// Allowlist of sortable fields — never pass req.query.sortBy straight into a
+// Mongo $sort key (that would let a client sort/probe arbitrary field names).
+const SORTABLE_FIELDS = {
+  name: 'name', currentStock: 'currentStock', buyingPrice: 'buyingPrice',
+  sellingPrice: 'sellingPrice', stockValue: 'stockValue', createdAt: 'createdAt',
+}
+
 exports.getProducts = async (req, res) => {
-  const { search, category, supplier, status, stockStatus } = req.query
+  const { search, category, supplier, status, stockStatus, sortBy, sortDir } = req.query
+  const sortField = SORTABLE_FIELDS[sortBy] || 'createdAt'
+  const sortOrder = sortDir === 'asc' ? 1 : -1
   // Fix #20: clamp page/limit to prevent NaN skip
   const page  = Math.max(1, parseInt(req.query.page)  || 1)
   const limit = Math.min(Math.max(1, parseInt(req.query.limit) || 20), 100)
@@ -65,7 +74,7 @@ exports.getProducts = async (req, res) => {
   const [countPipeline] = [[ ...pipeline, { $count: 'total' } ]]
   const dataPipeline = [
     ...pipeline,
-    { $sort: { createdAt: -1 } },
+    { $sort: { [sortField]: sortOrder } },
     { $skip: skip },
     { $limit: limit },
   ]

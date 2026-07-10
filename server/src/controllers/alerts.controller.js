@@ -3,13 +3,16 @@ const Product = require('../models/Product')
 const { success, error, paginated } = require('../utils/response')
 
 exports.getAlerts = async (req, res) => {
-  const { page = 1, limit: _limit = 20, isRead, priority, type } = req.query
+  const { page = 1, limit: _limit = 20, isRead, priority, type, status } = req.query
   const limit = Math.min(parseInt(_limit), 100)
   const skip  = (parseInt(page) - 1) * limit
   const query = {}
   if (isRead   !== undefined) query.isRead   = isRead   === 'true'
   if (priority) query.priority = priority
   if (type)     query.type     = type
+  if (status === 'active')       { query.isAcknowledged = false; query.isResolved = false }
+  else if (status === 'acknowledged') { query.isAcknowledged = true;  query.isResolved = false }
+  else if (status === 'resolved')     { query.isResolved = true }
 
   // Fix #17: the third promise computed `unread` but it was never included in
   // the response — a full extra round trip wasted on every page load.
@@ -37,6 +40,16 @@ exports.acknowledge = async (req, res) => {
   const alert = await Alert.findByIdAndUpdate(
     req.params.id,
     { isAcknowledged: true, acknowledgedBy: req.user._id, acknowledgedAt: new Date(), isRead: true },
+    { new: true }
+  )
+  if (!alert) return error(res, 'Alert not found', 404)
+  return success(res, { alert })
+}
+
+exports.resolve = async (req, res) => {
+  const alert = await Alert.findByIdAndUpdate(
+    req.params.id,
+    { isResolved: true, resolvedBy: req.user._id, resolvedAt: new Date(), isAcknowledged: true, isRead: true },
     { new: true }
   )
   if (!alert) return error(res, 'Alert not found', 404)

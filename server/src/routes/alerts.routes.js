@@ -11,6 +11,7 @@ router.post('/generate',   managerOrAdmin, ctrl.generateStockAlerts)
 router.patch('/mark-all-read', managerOrAdmin, ctrl.markAllRead)
 router.patch('/:id/read',  ctrl.markRead)
 router.patch('/:id/acknowledge', ctrl.acknowledge)
+router.patch('/:id/resolve', managerOrAdmin, ctrl.resolve)
 router.delete('/:id',      managerOrAdmin, ctrl.deleteAlert)
 
 module.exports = router
