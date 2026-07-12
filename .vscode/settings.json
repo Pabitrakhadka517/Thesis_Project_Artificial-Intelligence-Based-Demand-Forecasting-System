@@ -4,7 +4,5 @@
     "${workspaceFolder}/ai-service"
   ],
   "python.analysis.autoImportCompletions": true,
-  "[python]": {
-    "editor.defaultFormatter": "ms-python.black-formatter"
-  }
+  "python.terminal.activateEnvironment": false
 }

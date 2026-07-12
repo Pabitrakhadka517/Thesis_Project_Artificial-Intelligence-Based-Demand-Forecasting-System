@@ -321,7 +321,7 @@ function NewSaleModal({ onClose }) {
         <div className="px-6 py-4 border-t" style={{ borderColor: 'var(--border)' }}>
           <button onClick={handleSubmit} disabled={mutation.isPending || !items.length}
             className="w-full py-3 rounded-xl text-[14px] font-bold text-white disabled:opacity-50"
-            style={{ background: '#03045e' }}>
+            style={{ background: 'var(--brand-primary)' }}>
             {mutation.isPending ? 'Recording…' : `Record Sale · ${fmtFull(total)}`}
           </button>
         </div>
@@ -478,7 +478,7 @@ export default function SalesPage() {
         </div>
         <button onClick={() => setCreate(true)}
           className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-[13px] font-bold text-white"
-          style={{ background: '#03045e', boxShadow: '0 4px 16px rgba(3,4,94,.4)' }}>
+          style={{ background: 'var(--brand-primary)', boxShadow: '0 4px 16px rgba(3,4,94,.4)' }}>
           <Plus className="h-4 w-4" /> New Sale
         </button>
       </div>

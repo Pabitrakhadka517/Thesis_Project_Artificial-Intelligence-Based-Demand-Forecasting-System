@@ -165,7 +165,7 @@ function AdjustModal({ product, onClose }) {
 
           <button type="submit" disabled={mutation.isPending}
             className="w-full py-2.5 rounded-xl text-[14px] font-bold text-white"
-            style={{ background: '#03045e', opacity: mutation.isPending ? .7 : 1 }}>
+            style={{ background: 'var(--brand-primary)', opacity: mutation.isPending ? .7 : 1 }}>
             {mutation.isPending ? 'Saving…' : 'Apply Adjustment'}
           </button>
         </form>

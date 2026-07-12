@@ -164,7 +164,7 @@ function CreateUserModal({ onClose }) {
         </Field>
         <button type="submit" disabled={mutation.isPending}
           className="w-full py-2.5 rounded-xl text-[14px] font-bold text-white"
-          style={{ background: '#03045e', opacity: mutation.isPending ? .7 : 1 }}>
+          style={{ background: 'var(--brand-primary)', opacity: mutation.isPending ? .7 : 1 }}>
           {mutation.isPending ? 'Creating…' : 'Create User'}
         </button>
       </form>
@@ -209,7 +209,7 @@ function EditUserModal({ user, onClose }) {
         </Field>
         <button type="submit" disabled={mutation.isPending}
           className="w-full py-2.5 rounded-xl text-[14px] font-bold text-white"
-          style={{ background: '#03045e', opacity: mutation.isPending ? .7 : 1 }}>
+          style={{ background: 'var(--brand-primary)', opacity: mutation.isPending ? .7 : 1 }}>
           {mutation.isPending ? 'Saving…' : 'Save Changes'}
         </button>
       </form>
@@ -289,7 +289,7 @@ export default function UsersPage() {
         </div>
         <button onClick={() => setCreate(true)}
           className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-[13px] font-bold text-white"
-          style={{ background: '#03045e', boxShadow: '0 4px 16px rgba(3,4,94,.4)' }}>
+          style={{ background: 'var(--brand-primary)', boxShadow: '0 4px 16px rgba(3,4,94,.4)' }}>
           <UserPlus className="h-4 w-4" /> Add User
         </button>
       </div>
@@ -366,7 +366,7 @@ export default function UsersPage() {
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
                           <div className="h-8 w-8 rounded-full flex items-center justify-center text-[12px] font-bold text-white shrink-0"
-                            style={{ background: '#03045e' }}>
+                            style={{ background: 'var(--brand-primary)' }}>
                             {getInitials(u.fullName || u.email)}
                           </div>
                           <div>

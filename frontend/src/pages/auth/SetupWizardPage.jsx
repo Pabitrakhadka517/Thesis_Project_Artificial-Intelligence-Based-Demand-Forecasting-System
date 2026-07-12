@@ -203,7 +203,7 @@ export default function SetupWizardPage() {
       {/* ── Left Brand Panel ── */}
       <div
         className="hidden lg:flex flex-col justify-between w-[52%] relative overflow-hidden p-12"
-        style={{ background: '#03045e' }}
+        style={{ background: 'var(--brand-primary)' }}
       >
         {/* Subtle grid */}
         <div className="absolute inset-0 opacity-[0.07]"
@@ -269,7 +269,7 @@ export default function SetupWizardPage() {
           {/* Mobile logo */}
           <div className="flex lg:hidden items-center gap-3 mb-4">
             <div className="h-9 w-9 rounded-xl flex items-center justify-center"
-              style={{ background: '#03045e' }}>
+              style={{ background: 'var(--brand-primary)' }}>
               <Package className="h-4 w-4 text-white" />
             </div>
             <p className="font-bold text-[17px]" style={{ color: 'var(--text-primary)' }}>{APP_NAME}</p>

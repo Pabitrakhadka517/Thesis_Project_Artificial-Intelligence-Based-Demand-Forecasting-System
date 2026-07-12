@@ -259,7 +259,7 @@ function SupplierForm({ defaultValues, onSubmit, isPending, submitLabel, onLogoS
       </Field>
       <button type="submit" disabled={isPending}
         className="w-full py-2.5 rounded-xl text-[14px] font-bold text-white"
-        style={{ background: '#03045e', opacity: isPending ? .7 : 1 }}>
+        style={{ background: 'var(--brand-primary)', opacity: isPending ? .7 : 1 }}>
         {isPending ? 'Saving…' : submitLabel}
       </button>
     </form>
@@ -1076,7 +1076,7 @@ function ListView({ onSelectSupplier, can }) {
         <div className="fixed bottom-8 right-8 z-30">
           <button onClick={() => setCreate(true)}
             className="flex items-center gap-2 px-4 py-3 rounded-2xl text-[13px] font-bold text-white shadow-xl"
-            style={{ background: '#03045e', boxShadow: '0 6px 24px rgba(3,4,94,.5)' }}>
+            style={{ background: 'var(--brand-primary)', boxShadow: '0 6px 24px rgba(3,4,94,.5)' }}>
             <Plus className="h-4 w-4" /> Add Supplier
           </button>
         </div>
@@ -1144,7 +1144,7 @@ export default function SuppliersPage() {
           <button key={t.id} onClick={() => setTab(t.id)}
             className="flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-semibold transition-all"
             style={{
-              background: tab === t.id ? '#03045e' : 'transparent',
+              background: tab === t.id ? 'var(--brand-primary)' : 'transparent',
               color:      tab === t.id ? '#fff' : 'var(--text-muted)',
               boxShadow:  tab === t.id ? '0 2px 8px rgba(3,4,94,.4)' : 'none',
             }}>

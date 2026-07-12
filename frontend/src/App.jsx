@@ -8,6 +8,15 @@ import { AppRoutes } from '@/routes'
 import { PageLoader } from '@/components/common/PageLoader'
 import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 import { QUERY_STALE_TIME, QUERY_CACHE_TIME } from '@/constants'
+import { useTheme } from '@/hooks/useTheme'
+
+// Applies the persisted light/dark theme class to <html> on every route —
+// Navbar (dashboard-only) also calls useTheme for its toggle button, but
+// public routes like "/" render no Navbar and would otherwise never sync.
+function ThemeSync() {
+  useTheme()
+  return null
+}
 
 // Wire store.dispatch into axiosInstance so 401s can dispatch forceLogout
 // without creating a circular module dependency
@@ -35,6 +44,7 @@ export default function App() {
       <Provider store={store}>
         <PersistGate loading={<PageLoader />} persistor={persistor}>
           <QueryClientProvider client={queryClient}>
+            <ThemeSync />
             <BrowserRouter>
               <AppRoutes />
             </BrowserRouter>

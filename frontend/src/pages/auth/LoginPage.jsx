@@ -43,7 +43,7 @@ export default function LoginPage() {
       {/* ── Left Brand Panel ── */}
       <div
         className="hidden lg:flex flex-col justify-between w-[52%] relative overflow-hidden p-12"
-        style={{ background: '#03045e' }}
+        style={{ background: 'var(--brand-primary)' }}
       >
         {/* Subtle grid */}
         <div className="absolute inset-0 opacity-[0.07]"
@@ -118,7 +118,7 @@ export default function LoginPage() {
           {/* Mobile logo */}
           <div className="lg:hidden flex items-center gap-2 mb-8">
             <div className="h-9 w-9 rounded-xl flex items-center justify-center"
-              style={{ background: '#03045e' }}>
+              style={{ background: 'var(--brand-primary)' }}>
               <Zap className="h-4 w-4 text-white" strokeWidth={2.5} />
             </div>
             <span className="text-[17px] font-bold" style={{ color: 'var(--text-primary)' }}>{APP_NAME}</span>

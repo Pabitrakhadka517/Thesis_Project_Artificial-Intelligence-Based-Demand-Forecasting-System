@@ -55,7 +55,7 @@ export default function ForgotPasswordPage() {
         {/* Logo */}
         <div className="flex items-center gap-2.5 mb-8">
           <div className="h-9 w-9 rounded-xl flex items-center justify-center"
-            style={{ background: '#03045e', boxShadow: '0 4px 16px rgba(3,4,94,.35)' }}>
+            style={{ background: 'var(--brand-primary)', boxShadow: '0 4px 16px rgba(3,4,94,.35)' }}>
             <Zap className="h-4 w-4 text-white" strokeWidth={2.5} />
           </div>
           <span className="text-[17px] font-bold" style={{ color: 'var(--text-primary)' }}>{APP_NAME}</span>

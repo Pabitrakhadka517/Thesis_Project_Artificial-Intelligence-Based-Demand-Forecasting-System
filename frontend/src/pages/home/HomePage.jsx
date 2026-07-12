@@ -1,27 +1,32 @@
 ﻿import { useRef, useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { motion, useInView, useMotionValue, animate } from 'framer-motion'
+import { motion, useInView, useMotionValue, animate, AnimatePresence } from 'framer-motion'
 import {
   TrendingUp, Package, BarChart3, Bell, Lightbulb, ShieldCheck,
   ArrowRight, ChevronRight, ChevronDown, Zap, Brain, Database, Code2,
   Users, Eye, CheckCircle, LineChart, AlertTriangle, DollarSign,
   Target, Upload, Cpu, Layers, Activity, Menu, X as XIcon,
   TrendingDown, LayoutDashboard, FlaskConical, Globe,
-  GraduationCap, MapPin, Shield, Clock,
+  GraduationCap, MapPin, Shield, Clock, Sun, Moon,
 } from 'lucide-react'
 import { APP_NAME } from '@/constants'
+import { useTheme } from '@/hooks/useTheme'
 
-// ─── Design tokens — FlowStock light theme ───────────────────────────────────
+// ─── Design tokens — mapped onto the app's CSS variables so the landing
+// page follows the same light/dark toggle as the dashboard instead of
+// carrying its own frozen light palette. Semantic accent colors (blue,
+// green, amber, etc.) stay fixed hex — they read fine on both surfaces,
+// matching how the dashboard treats status/brand colors. ────────────────
 const T = {
-  page:        '#FFFFFF',
-  pageMid:     '#F9FAFB',
-  card:        '#FFFFFF',
-  cardMid:     '#F9FAFB',
-  muted:       '#F3F4F6',
+  page:        'var(--surface-page)',
+  pageMid:     'var(--surface-muted)',
+  card:        'var(--surface-card)',
+  cardMid:     'var(--surface-muted)',
+  muted:       'var(--surface-muted)',
   hover:       '#EFF6FF',
-  sidebarBg:   '#F9FAFB',
-  border:      '#E5E7EB',
-  borderFaint: '#F3F4F6',
+  sidebarBg:   'var(--surface-muted)',
+  border:      'var(--border)',
+  borderFaint: 'var(--border-subtle)',
   blue:        '#2563EB',
   blueLight:   '#3B82F6',
   blueMid:     'rgba(37,99,235,.1)',
@@ -31,10 +36,10 @@ const T = {
   red:         '#DC2626',
   cyan:        '#0891B2',
   indigo:      '#4F46E5',
-  text:        '#111827',
-  textSub:     '#374151',
-  textMuted:   '#6B7280',
-  textFaint:   '#9CA3AF',
+  text:        'var(--text-primary)',
+  textSub:     'var(--text-secondary)',
+  textMuted:   'var(--text-muted)',
+  textFaint:   'var(--text-muted)',
 }
 
 // ─── Animation helpers ────────────────────────────────────────────────────────
@@ -105,23 +110,25 @@ function Tag({ children, color = T.blue }) {
 // that gradient-headline treatment is one of the most recognizable
 // AI-generated-website signatures, so it's gone in favor of one confident color.
 function BlueText({ children }) {
-  return <span style={{ color: '#03045e' }}>{children}</span>
+  // T.blue (not brand-primary) — brand-primary darkens for dark-mode
+  // surfaces, which makes it unreadable used as text on a dark page.
+  return <span style={{ color: T.blue }}>{children}</span>
 }
 
 const glassCard = {
   background:   T.card,
   border:       `1px solid ${T.border}`,
   borderRadius: 12,
-  boxShadow:    '0 1px 4px rgba(0,0,0,.05)',
+  boxShadow:    'var(--shadow-sm)',
   transition:   'box-shadow 0.2s ease, border-color 0.2s ease, transform 0.2s ease',
 }
 const glassHover = {
-  boxShadow:   '0 8px 24px rgba(37,99,235,.1), 0 2px 8px rgba(0,0,0,.06)',
+  boxShadow:   'var(--shadow-md), 0 8px 24px rgba(37,99,235,.1)',
   borderColor: 'rgba(37,99,235,.25)',
   transform:   'translateY(-2px)',
 }
 const glassReset = {
-  boxShadow:   '0 1px 4px rgba(0,0,0,.05)',
+  boxShadow:   'var(--shadow-sm)',
   borderColor: T.border,
   transform:   'translateY(0)',
 }
@@ -165,7 +172,7 @@ function AppMockup() {
           <div style={{ background: '#FFFFFF', borderRight: `1px solid #E5E7EB`, padding: '10px 0' }}>
             <div style={{ padding: '0 10px 8px', borderBottom: `1px solid #E5E7EB`, marginBottom: 6 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                <div style={{ width: 22, height: 22, borderRadius: 6, background: '#03045e', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 3px 8px rgba(3,4,94,.35)' }}>
+                <div style={{ width: 22, height: 22, borderRadius: 6, background: 'var(--brand-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 3px 8px rgba(3,4,94,.35)' }}>
                   <Zap style={{ width: 10, height: 10, color: '#fff', strokeWidth: 2.5 }} />
                 </div>
                 <div>
@@ -287,6 +294,34 @@ function AppMockup() {
 }
 
 // ─── Navbar ───────────────────────────────────────────────────────────────────
+function ThemeToggle({ className = '' }) {
+  const { isDark, toggle } = useTheme()
+  return (
+    <button
+      onClick={toggle}
+      className={`h-9 w-9 rounded-lg flex items-center justify-center transition-colors ${className}`}
+      style={{ color: T.textMuted }}
+      onMouseEnter={e => { e.currentTarget.style.background = T.muted; e.currentTarget.style.color = T.text }}
+      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = T.textMuted }}
+      title={isDark ? 'Light mode' : 'Dark mode'}
+      aria-label="Toggle theme"
+    >
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.span
+          key={isDark ? 'sun' : 'moon'}
+          initial={{ rotate: -90, opacity: 0 }}
+          animate={{ rotate: 0, opacity: 1 }}
+          exit={{ rotate: 90, opacity: 0 }}
+          transition={{ duration: .15 }}
+          className="flex items-center justify-center"
+        >
+          {isDark ? <Sun className="h-4.5 w-4.5" /> : <Moon className="h-4.5 w-4.5" />}
+        </motion.span>
+      </AnimatePresence>
+    </button>
+  )
+}
+
 function Navbar() {
   const [scrolled, setScrolled]     = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -304,7 +339,9 @@ function Navbar() {
   ]
 
   const navBase = {
-    background:     scrolled ? 'rgba(255,255,255,.97)' : 'rgba(255,255,255,.92)',
+    background:     scrolled
+      ? 'color-mix(in srgb, var(--surface-navbar) 97%, transparent)'
+      : 'color-mix(in srgb, var(--surface-navbar) 92%, transparent)',
     backdropFilter: 'blur(20px)',
     borderBottom:   scrolled ? `1px solid ${T.border}` : '1px solid transparent',
     boxShadow:      scrolled ? '0 1px 12px rgba(0,0,0,.06)' : 'none',
@@ -322,7 +359,7 @@ function Navbar() {
           {/* Logo */}
           <div className="flex items-center gap-2.5">
             <div className="h-7 w-7 rounded-lg flex items-center justify-center"
-              style={{ background: '#03045e', boxShadow: '0 3px 10px rgba(3,4,94,.4)' }}>
+              style={{ background: 'var(--brand-primary)', boxShadow: '0 3px 10px rgba(3,4,94,.4)' }}>
               <Zap className="h-3.5 w-3.5 text-white" strokeWidth={2.5} />
             </div>
             <span className="font-bold text-[15px] tracking-tight" style={{ color: T.text }}>{APP_NAME}</span>
@@ -343,16 +380,25 @@ function Navbar() {
 
           {/* CTA */}
           <div className="hidden sm:flex items-center gap-2">
+            <ThemeToggle />
             <Link to="/login"
               className="flex items-center gap-1.5 text-[13px] font-semibold px-4 py-2 rounded-lg text-white"
-              style={{ background: '#03045e', boxShadow: '0 2px 10px rgba(3,4,94,.4)' }}
+              style={{ background: 'var(--brand-primary)', boxShadow: '0 2px 10px rgba(3,4,94,.4)' }}
               onMouseEnter={e => e.currentTarget.style.boxShadow = '0 4px 18px rgba(3,4,94,.4)'}
               onMouseLeave={e => e.currentTarget.style.boxShadow = '0 2px 10px rgba(3,4,94,.4)'}>
               Sign In <ArrowRight className="h-3.5 w-3.5" />
             </Link>
           </div>
 
-          <button className="lg:hidden p-1.5 rounded-lg" style={{ color: T.textMuted }}
+          <div className="flex items-center gap-1 sm:hidden">
+            <ThemeToggle />
+            <button className="p-1.5 rounded-lg" style={{ color: T.textMuted }}
+              onClick={() => setMobileOpen(v => !v)}>
+              {mobileOpen ? <XIcon className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            </button>
+          </div>
+
+          <button className="hidden sm:block lg:hidden p-1.5 rounded-lg" style={{ color: T.textMuted }}
             onClick={() => setMobileOpen(v => !v)}>
             {mobileOpen ? <XIcon className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
@@ -363,7 +409,7 @@ function Navbar() {
       {mobileOpen && (
         <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
           className="fixed top-14 inset-x-0 z-40 p-4 shadow-lg"
-          style={{ background: '#FFFFFF', borderBottom: `1px solid ${T.border}` }}>
+          style={{ background: T.card, borderBottom: `1px solid ${T.border}` }}>
           <div className="space-y-0.5 mb-4">
             {LINKS.map(({ label, href }) => (
               <a key={label} href={href} onClick={() => setMobileOpen(false)}
@@ -376,7 +422,7 @@ function Navbar() {
           <div className="pt-3" style={{ borderTop: `1px solid ${T.border}` }}>
             <Link to="/login" onClick={() => setMobileOpen(false)}
               className="block text-center py-2.5 rounded-lg text-[13px] font-semibold text-white"
-              style={{ background: '#03045e' }}>Sign In to Dashboard</Link>
+              style={{ background: 'var(--brand-primary)' }}>Sign In to Dashboard</Link>
           </div>
         </motion.div>
       )}
@@ -424,7 +470,7 @@ function HeroSection() {
               className="flex flex-wrap gap-3 mb-10">
               <Link to="/login"
                 className="flex items-center gap-2 px-6 py-3 rounded-xl text-[13px] font-semibold text-white"
-                style={{ background: '#03045e', boxShadow: '0 2px 14px rgba(3,4,94,.4)' }}
+                style={{ background: 'var(--brand-primary)', boxShadow: '0 2px 14px rgba(3,4,94,.4)' }}
                 onMouseEnter={e => e.currentTarget.style.boxShadow = '0 4px 22px rgba(3,4,94,.4)'}
                 onMouseLeave={e => e.currentTarget.style.boxShadow = '0 2px 14px rgba(3,4,94,.4)'}>
                 Sign In to Dashboard <ArrowRight className="h-4 w-4" />
@@ -799,7 +845,7 @@ function CTASection() {
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         <Reveal>
           <div className="rounded-2xl p-10 lg:p-16 text-center"
-            style={{ background: 'rgba(3,4,94,.04)', border: `1px solid rgba(3,4,94,.14)` }}>
+            style={{ background: 'rgba(37,99,235,.06)', border: `1px solid rgba(37,99,235,.18)` }}>
             <div className="relative z-10">
               <Tag color={T.blue}>Ready to get started?</Tag>
               <h2 className="font-extrabold tracking-tight mt-5 mb-4" style={{ fontSize: 'clamp(26px,4vw,38px)', color: T.text }}>
@@ -814,7 +860,7 @@ function CTASection() {
               <div className="flex flex-wrap items-center justify-center gap-3 mb-8">
                 <Link to="/login"
                   className="flex items-center gap-2 px-7 py-3.5 rounded-xl text-[13px] font-bold text-white"
-                  style={{ background: '#03045e', boxShadow: '0 4px 18px rgba(3,4,94,.45)' }}
+                  style={{ background: 'var(--brand-primary)', boxShadow: '0 4px 18px rgba(3,4,94,.45)' }}
                   onMouseEnter={e => e.currentTarget.style.boxShadow = '0 6px 28px rgba(3,4,94,.45)'}
                   onMouseLeave={e => e.currentTarget.style.boxShadow = '0 4px 18px rgba(3,4,94,.45)'}>
                   Sign In to Dashboard <ArrowRight className="h-4 w-4" />
@@ -854,7 +900,7 @@ function Footer() {
           <div>
             <div className="flex items-center gap-2 mb-4">
               <div className="h-7 w-7 rounded-lg flex items-center justify-center"
-                style={{ background: '#03045e', boxShadow: '0 3px 10px rgba(3,4,94,.35)' }}>
+                style={{ background: 'var(--brand-primary)', boxShadow: '0 3px 10px rgba(3,4,94,.35)' }}>
                 <Zap className="h-3.5 w-3.5 text-white" strokeWidth={2.5} />
               </div>
               <span className="font-bold text-[15px]" style={{ color: T.text }}>{APP_NAME}</span>

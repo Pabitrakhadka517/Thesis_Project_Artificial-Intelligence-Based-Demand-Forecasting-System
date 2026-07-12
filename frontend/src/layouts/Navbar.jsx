@@ -390,7 +390,7 @@ export function Navbar({ onOpenCommandPalette }) {
     <header
       className="sticky top-0 z-30 flex items-center gap-3 px-4 h-16"
       style={{
-        background: 'var(--surface-card)',
+        background: 'var(--surface-navbar)',
         borderBottom: '1px solid var(--border)',
         boxShadow: 'var(--shadow-xs)',
       }}
@@ -550,7 +550,7 @@ export function Navbar({ onOpenCommandPalette }) {
           >
             <div
               className="h-8 w-8 rounded-full flex items-center justify-center text-[13px] font-semibold text-white shrink-0"
-              style={{ background: '#03045e', boxShadow: '0 2px 8px rgba(3,4,94,.4)' }}
+              style={{ background: 'var(--brand-primary)', boxShadow: '0 2px 8px rgba(3,4,94,.4)' }}
             >
               {getInitials(user?.fullName || user?.email || 'U')}
             </div>

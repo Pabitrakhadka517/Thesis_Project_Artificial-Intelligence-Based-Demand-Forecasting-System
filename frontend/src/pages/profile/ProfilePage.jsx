@@ -145,7 +145,7 @@ export default function ProfilePage() {
                   type="button"
                   onClick={() => avatarUploadMutation.mutate(pendingAvatar)}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold text-white"
-                  style={{ background: '#03045e' }}
+                  style={{ background: 'var(--brand-primary)' }}
                 >
                   <Camera className="h-3 w-3" /> Save Picture
                 </button>

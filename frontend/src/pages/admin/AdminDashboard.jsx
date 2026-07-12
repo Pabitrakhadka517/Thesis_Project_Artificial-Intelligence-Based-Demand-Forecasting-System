@@ -410,7 +410,7 @@ export default function AdminDashboard() {
     new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }),
   [])
 
-  const bannerGradient = '#03045e'
+  const bannerGradient = 'var(--brand-primary)'
 
   const refreshAll = () => {
     queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] })

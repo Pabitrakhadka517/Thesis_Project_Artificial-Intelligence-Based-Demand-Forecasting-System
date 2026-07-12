@@ -3,7 +3,7 @@ import { Loader2 } from 'lucide-react'
 
 const VARIANTS = {
   primary: {
-    background: '#03045e',
+    background: 'var(--brand-primary)',
     color: '#fff',
     border: 'none',
     boxShadow: '0 2px 8px rgba(3,4,94,.4)',

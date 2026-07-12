@@ -163,7 +163,7 @@ function ChatMessage({ msg }) {
       >
         <div className="max-w-[75%] px-4 py-3 rounded-2xl rounded-tr-sm text-[13px] leading-relaxed"
           style={{
-            background:  'linear-gradient(135deg,#03045e,#0353A4)',
+            background:  'linear-gradient(135deg,var(--brand-primary),#0353A4)',
             color:       '#fff',
             boxShadow:   '0 2px 8px rgba(3,4,94,.35)',
           }}>

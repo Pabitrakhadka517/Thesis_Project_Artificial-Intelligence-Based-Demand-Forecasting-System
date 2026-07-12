@@ -8,6 +8,7 @@
 @layer base {
   :root {
     /* Brand Palette */
+    --brand-primary: #03045e;
     --brand-navy:   #0F172A;
     --brand-blue:   #2563EB;
     --brand-blue-l: #3B82F6;
@@ -30,6 +31,7 @@
     --surface-muted:  #F9FAFB;
     --surface-input:  #FFFFFF;
     --surface-hover:  #F3F4F6;
+    --surface-navbar: #FFFFFF;
 
     /* Text – Light */
     --text-primary:   #111827;
@@ -72,6 +74,7 @@
   }
 
   .dark {
+    --brand-primary: #01021f;
     --surface-page:  #07101F;
     --surface-card:  #0D1A2D;
     --surface-muted: #132035;
@@ -84,6 +87,7 @@
 
     --border:        #1C2E45;
     --border-subtle: #142030;
+    --surface-navbar: #081120;
 
     --shadow-sm:  0 1px 4px 0 rgba(0,0,0,.35),  0 1px 2px -1px rgba(0,0,0,.25);
     --shadow-md:  0 4px 16px 0 rgba(0,0,0,.40), 0 2px 6px -2px rgba(0,0,0,.30);
@@ -165,7 +169,7 @@
   .accent-teal   { border-left: 3px solid var(--brand-teal);   }
 
   /* ── Gradients ── */
-  .grad-blue   { background: #03045e; }
+  .grad-blue   { background: var(--brand-primary); }
   .grad-purple { background: linear-gradient(135deg,#7C3AED 0%,#8B5CF6 100%); }
   .grad-green  { background: linear-gradient(135deg,#15803D 0%,#22C55E 100%); }
   .grad-amber  { background: linear-gradient(135deg,#B45309 0%,#F59E0B 100%); }
@@ -175,11 +179,10 @@
 
   /* ── Sidebar ── */
   .sidebar-bg {
-    background: #03045e;
+    background: var(--brand-primary);
     border-right: 1px solid rgba(255,255,255,.1);
   }
   .dark .sidebar-bg {
-    background: #02034a;
     border-right: 1px solid rgba(255,255,255,.08);
   }
   .sidebar-item {

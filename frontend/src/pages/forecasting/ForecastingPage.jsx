@@ -432,7 +432,7 @@ export default function ForecastingPage() {
                     loading={trainMut.isPending}
                     disabled={!selectedSku || loading}
                     onClick={() => trainMut.mutate()}
-                    style={{ background: '#03045e' }}
+                    style={{ background: 'var(--brand-primary)' }}
                   >
                     Train + Forecast
                   </Button>
@@ -514,7 +514,7 @@ export default function ForecastingPage() {
                       <Tooltip content={<ChartTooltip />} />
                       <Legend wrapperStyle={{ fontSize: 12 }} />
                       <Area dataKey="upper_bound" stroke="transparent" fill="rgba(37,99,235,.12)" name="Upper bound" legendType="none" />
-                      <Area dataKey="lower_bound" stroke="transparent" fill="white" fillOpacity={1} name="Lower bound" legendType="none" />
+                      <Area dataKey="lower_bound" stroke="transparent" fill="var(--surface-card)" fillOpacity={1} name="Lower bound" legendType="none" />
                       <Line type="monotone" dataKey="actual_qty" stroke="#16A34A" strokeWidth={2} dot={false} name="Actual" connectNulls={false} />
                       <Line type="monotone" dataKey="predicted_qty" stroke="#2563EB" strokeWidth={2} strokeDasharray="5 3" dot={false} name="Forecast" connectNulls={false} />
                     </ComposedChart>

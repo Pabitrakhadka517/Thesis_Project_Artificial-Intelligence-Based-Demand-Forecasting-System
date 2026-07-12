@@ -102,7 +102,7 @@ function SaveBtn({ isPending, label = 'Save Changes' }) {
   return (
     <button type="submit" disabled={isPending}
       className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-[13px] font-bold text-white mt-5"
-      style={{ background: '#03045e', opacity: isPending ? .7 : 1 }}>
+      style={{ background: 'var(--brand-primary)', opacity: isPending ? .7 : 1 }}>
       <Save className="h-4 w-4" />
       {isPending ? 'Saving…' : label}
     </button>
@@ -228,7 +228,7 @@ function CompanyTab() {
                 type="button"
                 onClick={() => logoUploadMutation.mutate(pendingLogo)}
                 className="flex items-center gap-2 mt-3 px-4 py-2 rounded-lg text-[12px] font-bold text-white"
-                style={{ background: '#03045e' }}
+                style={{ background: 'var(--brand-primary)' }}
               >
                 <Save className="h-3.5 w-3.5" /> Save Logo
               </button>
