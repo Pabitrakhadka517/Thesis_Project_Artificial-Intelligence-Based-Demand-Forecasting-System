@@ -169,7 +169,7 @@ function AdminStep({ companyData, onBack }) {
 
       {apiError && (
         <p role="alert" className="text-[13px] text-center px-3 py-2 rounded-lg"
-          style={{ background: '#FEF2F2', border: '1px solid #FECACA', color: '#991B1B' }}>
+          style={{ background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.25)', color: 'var(--color-danger)' }}>
           {apiError}
         </p>
       )}

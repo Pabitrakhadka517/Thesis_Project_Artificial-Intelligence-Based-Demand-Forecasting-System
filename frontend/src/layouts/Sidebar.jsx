@@ -322,10 +322,10 @@ function SidebarContent({ collapsed }) {
           >
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
-                <div className={cn(
-                  'h-2 w-2 rounded-full shrink-0',
-                  aiOnline === false ? 'bg-red-400' : aiOnline === true ? 'bg-green-400 pulse-green' : 'bg-gray-400',
-                )} />
+                <div
+                  className={cn('h-2 w-2 rounded-full shrink-0', aiOnline === true && 'pulse-green')}
+                  style={{ background: aiOnline === false ? '#F87171' : aiOnline === true ? '#4ADE80' : 'var(--text-muted)' }}
+                />
                 <span className="text-[11px] font-medium" style={{ color: 'rgba(255,255,255,.7)' }}>
                   {aiOnline === false ? 'AI Engine Offline' : aiOnline === true ? 'AI Engine Online' : 'Checking AI Engine…'}
                 </span>

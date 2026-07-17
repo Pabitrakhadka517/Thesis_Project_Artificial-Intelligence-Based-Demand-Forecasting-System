@@ -171,9 +171,9 @@ export default function LoginPage() {
                 className="rounded-lg p-3.5 flex items-start gap-2.5"
                 role="alert"
                 style={{
-                  background: isLocked ? '#FFFBEB' : '#FEF2F2',
-                  border:     isLocked ? '1px solid #FDE68A' : '1px solid #FECACA',
-                  color:      isLocked ? '#92400E' : '#991B1B',
+                  background: isLocked ? 'rgba(245,158,11,.08)' : 'rgba(239,68,68,.08)',
+                  border:     isLocked ? '1px solid rgba(245,158,11,.25)' : '1px solid rgba(239,68,68,.25)',
+                  color:      isLocked ? 'var(--color-warning)' : 'var(--color-danger)',
                 }}
               >
                 <AlertOctagon className="h-4 w-4 shrink-0 mt-0.5" />

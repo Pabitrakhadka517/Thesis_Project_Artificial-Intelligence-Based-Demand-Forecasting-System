@@ -164,9 +164,9 @@ export default function ResetPasswordPage() {
               {/* Server error */}
               {serverError && (
                 <div className="flex items-center gap-2 rounded-lg p-3" role="alert"
-                  style={{ background: '#FEF2F2', border: '1px solid #FECACA' }}>
-                  <AlertOctagon className="h-4 w-4 shrink-0" style={{ color: '#DC2626' }} />
-                  <span className="text-[13px]" style={{ color: '#991B1B' }}>{serverError}</span>
+                  style={{ background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.25)' }}>
+                  <AlertOctagon className="h-4 w-4 shrink-0" style={{ color: 'var(--color-danger)' }} />
+                  <span className="text-[13px]" style={{ color: 'var(--color-danger)' }}>{serverError}</span>
                 </div>
               )}
 

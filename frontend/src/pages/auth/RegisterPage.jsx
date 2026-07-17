@@ -195,7 +195,7 @@ export default function RegisterPage() {
                 transition={{ duration: 0.2 }}
                 role="alert"
                 className="rounded-lg p-3.5 text-[13px]"
-                style={{ background: '#FEF2F2', border: '1px solid #FECACA', color: '#991B1B' }}
+                style={{ background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.25)', color: 'var(--color-danger)' }}
               >
                 {error}
               </motion.div>
