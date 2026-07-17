@@ -16,6 +16,7 @@ import { useToast } from '@/hooks/useToast'
 import { useRole } from '@/hooks/useRole'
 import { ImageUpload } from '@/components/common/ImageUpload'
 import { ErrorState } from '@/components/common/ErrorState'
+import { SkeletonTable } from '@/components/common/Skeleton'
 import { ConfirmDialog } from '@/components/common/Modal'
 import { Pagination } from '@/components/common/Pagination'
 import { useSortable } from '@/hooks/useSortable'
@@ -373,10 +374,9 @@ export default function ProductsPage() {
 
       {/* Table */}
       {isLoading ? (
-        <div className="space-y-2">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="h-12 rounded-xl animate-pulse" style={{ background: 'var(--surface-card)' }} />
-          ))}
+        <div className="rounded-xl p-5"
+          style={{ background: 'var(--surface-card)', border: '1px solid var(--border)' }}>
+          <SkeletonTable rows={8} cols={8} />
         </div>
       ) : isError ? (
         <ErrorState error={error} onRetry={refetch} />
