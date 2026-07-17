@@ -27,7 +27,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from app.database import get_db
 from app.ml.model_trainer import load_metadata
-from app.services.ml_forecast_service import MLForecastService
+from app.services.ml_forecast_service import MLForecastService, TrainingBusyError
 
 router = APIRouter(prefix="/ml", tags=["ML Forecast"])
 
@@ -69,6 +69,8 @@ async def train_sku(sku_id: str):
         return {"success": True, "data": result}
     except ValueError as exc:
         raise HTTPException(404, str(exc))
+    except TrainingBusyError as exc:
+        raise HTTPException(429, str(exc))
     except Exception as exc:
         raise HTTPException(500, f"Training failed: {exc}")
 

@@ -133,7 +133,9 @@ def _extract_feature_importance(model, feature_cols: list[str], top_n: int = 15)
 
 # Real and demo SKUs are alphanumeric with dashes/underscores (e.g. "SYN-BV-001").
 # Reject anything else so sku_id can never be used to escape trained_models/.
-_SKU_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+# \Z (not $) — $ matches just before a trailing "\n" too, which re.match()
+# would otherwise let slip through as "valid".
+_SKU_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}\Z")
 
 
 def _model_dir(sku_id: str) -> Path:

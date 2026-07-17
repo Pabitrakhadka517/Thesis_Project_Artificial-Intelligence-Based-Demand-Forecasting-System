@@ -41,6 +41,17 @@ ORDERING_COST = 500.0    # NPR per purchase order (fixed across SKUs)
 Z_95          = 1.645    # 95 % service level
 HOLDING_RATE  = 0.20     # 20 % of buying price per year
 
+# RF+XGBoost+LSTM training is CPU/memory heavy (2-5 min/SKU). With no auth in
+# front of this service (tracked separately), cap concurrent training jobs so
+# a burst of requests can't exhaust the host. Module-level (not per-instance)
+# since each request builds a fresh MLForecastService.
+_MAX_CONCURRENT_TRAININGS = 2
+_active_trainings = 0
+
+
+class TrainingBusyError(Exception):
+    """Raised when the concurrent-training cap is already reached."""
+
 
 class MLForecastService:
     def __init__(self, db):
@@ -53,11 +64,20 @@ class MLForecastService:
 
     async def train_sku(self, sku_id: str) -> dict:
         """Train RF + XGBoost + LSTM for one SKU; persist metadata to MongoDB."""
-        result = await asyncio.get_event_loop().run_in_executor(
-            None, self.trainer.train_sku, sku_id
-        )
-        await self._upsert_model_meta(result)
-        return result
+        global _active_trainings
+        if _active_trainings >= _MAX_CONCURRENT_TRAININGS:
+            raise TrainingBusyError(
+                f"Too many training jobs already running (max {_MAX_CONCURRENT_TRAININGS} concurrent) — retry shortly."
+            )
+        _active_trainings += 1
+        try:
+            result = await asyncio.get_event_loop().run_in_executor(
+                None, self.trainer.train_sku, sku_id
+            )
+            await self._upsert_model_meta(result)
+            return result
+        finally:
+            _active_trainings -= 1
 
     async def train_all(self, sku_ids: Optional[list[str]] = None) -> dict:
         """
