@@ -251,6 +251,7 @@ class InventoryAnalysisService:
     def _run_prophet(self, df: pd.DataFrame, horizon: int) -> dict:
         from prophet import Prophet
         from sklearn.metrics import mean_absolute_percentage_error, mean_squared_error
+        from app.ml.preprocessor import get_nepal_holidays_df
 
         prop_df = df.rename(columns={"date": "ds", "qty": "y"})
         prop_df = prop_df[prop_df["y"] >= 0].copy()
@@ -258,12 +259,21 @@ class InventoryAnalysisService:
         split = max(7, int(len(prop_df) * 0.8))
         train, test = prop_df.iloc[:split], prop_df.iloc[split:]
 
+        # Same Dashain/Tihar/etc. calendar the RF/XGBoost/LSTM feature
+        # pipeline already trains on (app/ml/preprocessor.py::_FESTIVALS),
+        # so Prophet's forecast is festival-aware too, not just a vanilla
+        # univariate time series.
+        last_date = prop_df["ds"].max()
+        future_end = last_date + pd.Timedelta(days=horizon)
+        holidays = get_nepal_holidays_df(prop_df["ds"].min().year - 1, future_end.year + 1)
+
         m = Prophet(
             daily_seasonality=True,
             weekly_seasonality=True,
             yearly_seasonality=(len(prop_df) >= 180),
             interval_width=0.90,
             changepoint_prior_scale=0.05,
+            holidays=holidays,
         )
         m.fit(train)
 
@@ -278,13 +288,16 @@ class InventoryAnalysisService:
             rmse_val = float(np.sqrt(mean_squared_error(y_true, y_pred)))
             metrics  = {"mape": round(mape_val, 2), "rmse": round(rmse_val, 2)}
 
-        # Final model on full data
+        # Final model on full data (metrics above come from the holdout `m`;
+        # this refit uses all available history for the returned forecast —
+        # standard practice, not leakage: no held-out point is scored twice).
         m2     = Prophet(
             daily_seasonality=True,
             weekly_seasonality=True,
             yearly_seasonality=(len(prop_df) >= 180),
             interval_width=0.90,
             changepoint_prior_scale=0.05,
+            holidays=holidays,
         )
         m2.fit(prop_df)
         future = m2.make_future_dataframe(periods=horizon)

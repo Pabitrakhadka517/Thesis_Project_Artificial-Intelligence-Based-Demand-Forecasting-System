@@ -173,6 +173,30 @@ def _infer_annual_trend(year: int) -> float:
     return round(1.0 + (year - 2023) * 0.07, 4)
 
 
+def get_nepal_holidays_df(start_year: int, end_year: int) -> pd.DataFrame:
+    """Prophet-compatible `holidays` dataframe (columns: holiday, ds,
+    lower_window, upper_window) built from the same _FESTIVALS calendar used
+    by the tabular/LSTM feature pipeline, so Prophet sees the same Dashain/
+    Tihar/etc. demand spikes RF/XGBoost/LSTM already train on.
+    """
+    rows = []
+    for name, month, day_center, spread_before, spread_after in _FESTIVALS:
+        for year in range(start_year, end_year + 1):
+            try:
+                anchor = date(year, month, min(day_center, 28))
+            except ValueError:
+                continue
+            rows.append({
+                "holiday":      name,
+                "ds":           pd.Timestamp(anchor),
+                "lower_window": -spread_before,
+                "upper_window": spread_after,
+            })
+    if not rows:
+        return pd.DataFrame(columns=["holiday", "ds", "lower_window", "upper_window"])
+    return pd.DataFrame(rows)
+
+
 # ── main class ────────────────────────────────────────────────────────────────
 
 class DataPreprocessor:
