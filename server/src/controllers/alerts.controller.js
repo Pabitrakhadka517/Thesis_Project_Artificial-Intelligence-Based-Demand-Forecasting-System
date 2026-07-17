@@ -4,9 +4,10 @@ const { success, error, paginated } = require('../utils/response')
 const { isOverstocked, buildOverstockAlert } = require('../utils/stockAlerts')
 
 exports.getAlerts = async (req, res) => {
-  const { page = 1, limit: _limit = 20, isRead, priority, type, status } = req.query
-  const limit = Math.min(parseInt(_limit), 100)
-  const skip  = (parseInt(page) - 1) * limit
+  const { page: _page = 1, limit: _limit = 20, isRead, priority, type, status } = req.query
+  const page  = Math.max(1, parseInt(_page) || 1)
+  const limit = Math.min(Math.max(1, parseInt(_limit) || 20), 100)
+  const skip  = (page - 1) * limit
   const query = {}
   if (isRead   !== undefined) query.isRead   = isRead   === 'true'
   if (priority) query.priority = priority
@@ -23,7 +24,7 @@ exports.getAlerts = async (req, res) => {
     Alert.countDocuments(query),
   ])
 
-  return paginated(res, { data: alerts, total, page: parseInt(page), limit: parseInt(limit) })
+  return paginated(res, { data: alerts, total, page, limit })
 }
 
 exports.markRead = async (req, res) => {
@@ -64,7 +65,11 @@ exports.deleteAlert = async (req, res) => {
 }
 
 exports.getUnreadCount = async (req, res) => {
-  const unread = await Alert.countDocuments({ isRead: false })
+  // Several system paths auto-acknowledge/auto-resolve alerts (stock received,
+  // overstock cleared, forecast gone stable, manual stock adjustment) without
+  // setting isRead — those are no longer actionable, so exclude them here
+  // rather than counting alerts nobody can act on anymore.
+  const unread = await Alert.countDocuments({ isRead: false, isAcknowledged: false, isResolved: false })
   return success(res, { unread })
 }
 

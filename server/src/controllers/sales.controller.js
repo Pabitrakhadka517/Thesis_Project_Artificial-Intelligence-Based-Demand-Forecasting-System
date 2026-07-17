@@ -59,6 +59,10 @@ exports.getSale = async (req, res) => {
 
 exports.createSale = async (req, res) => {
   try {
+    const { validationResult } = require('express-validator')
+    const errs = validationResult(req)
+    if (!errs.isEmpty()) return error(res, 'Validation failed', 400, errs.array())
+
     const { items, customerName, customerPhone, paymentMethod, discount = 0, tax = 0, notes } = req.body
 
     if (!items?.length) return error(res, 'Sale must have at least one item', 400)

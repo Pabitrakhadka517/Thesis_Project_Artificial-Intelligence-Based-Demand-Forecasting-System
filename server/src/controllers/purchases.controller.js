@@ -15,9 +15,10 @@ const SORTABLE_FIELDS = {
 
 exports.getPurchases = async (req, res) => {
   try {
-    const { page = 1, limit: _limit = 20, supplier, status, startDate, endDate, search, sortBy, sortDir } = req.query
-    const limit = Math.min(parseInt(_limit), 100)
-    const skip  = (parseInt(page) - 1) * limit
+    const { page: _page = 1, limit: _limit = 20, supplier, status, startDate, endDate, search, sortBy, sortDir } = req.query
+    const page  = Math.max(1, parseInt(_page) || 1)
+    const limit = Math.min(Math.max(1, parseInt(_limit) || 20), 100)
+    const skip  = (page - 1) * limit
     const sortField = SORTABLE_FIELDS[sortBy] || 'purchaseDate'
     const sortOrder  = sortDir === 'asc' ? 1 : -1
     const query = {}
@@ -43,7 +44,7 @@ exports.getPurchases = async (req, res) => {
       Purchase.countDocuments(query),
     ])
 
-    return paginated(res, { data: purchases, total, page: parseInt(page), limit: parseInt(limit) })
+    return paginated(res, { data: purchases, total, page, limit })
   } catch (err) {
     console.error('[Purchases] getPurchases Error:', err)
     return res.status(500).json({ success: false, message: 'Failed to fetch purchases.', timestamp: new Date() })
@@ -67,6 +68,10 @@ exports.getPurchase = async (req, res) => {
 
 exports.createPurchase = async (req, res) => {
   try {
+    const { validationResult } = require('express-validator')
+    const errs = validationResult(req)
+    if (!errs.isEmpty()) return error(res, 'Validation failed', 400, errs.array())
+
     const { supplier, items, discount = 0, paymentMethod, paymentStatus, deliveryDate, notes } = req.body
 
     if (!items?.length) return error(res, 'Purchase must have at least one item', 400)
