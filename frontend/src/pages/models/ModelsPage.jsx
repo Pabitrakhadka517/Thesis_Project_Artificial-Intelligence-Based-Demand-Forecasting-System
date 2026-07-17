@@ -258,14 +258,14 @@ export default function ModelsPage() {
   // ── Train one SKU mutation ───────────────────────────────────────────────
   const trainMut = useMutation({
     mutationFn: (skuId) => mlForecastService.trainSku(skuId),
-    onSuccess: (res) => {
+    onSuccess: (res, skuId) => {
       const data = res.data?.data
       toast({
         title: `Training complete — best model: ${data?.best_model?.replace('_', ' ')}`,
         variant: 'success',
       })
       setTrainingKey(null)
-      qc.invalidateQueries({ queryKey: ['ml-model-meta', selectedSku] })
+      qc.invalidateQueries({ queryKey: ['ml-model-meta', skuId] })
       qc.invalidateQueries({ queryKey: ['ml-all-models'] })
     },
     onError: (e) => {
@@ -355,14 +355,16 @@ export default function ModelsPage() {
             <p className="text-[13px] font-medium shrink-0" style={{ color: 'var(--text-secondary)' }}>Train for:</p>
             <select
               value={selectedSku}
+              disabled={trainMut.isPending || trainAllMut.isPending}
               onChange={e => setSelectedSku(e.target.value)}
-              className="text-[13px] px-3 py-2 rounded-lg outline-none flex-1 max-w-xs"
+              className="text-[13px] px-3 py-2 rounded-lg outline-none flex-1 max-w-xs disabled:opacity-60 disabled:cursor-not-allowed"
               style={{ background: 'var(--surface-input)', border: '1.5px solid var(--border)', color: 'var(--text-primary)' }}>
               <option value="">All {skus.length} Dataset SKUs</option>
               {skus.map(s => <option key={s.product_sku} value={s.product_sku}>{s.product_name} ({s.product_sku})</option>)}
             </select>
             {selectedSku && (
-              <button onClick={() => setSelectedSku('')} className="text-[12px] font-medium" style={{ color: '#2563EB' }}>
+              <button onClick={() => setSelectedSku('')} disabled={trainMut.isPending || trainAllMut.isPending}
+                className="text-[12px] font-medium disabled:opacity-60 disabled:cursor-not-allowed" style={{ color: '#2563EB' }}>
                 Clear
               </button>
             )}

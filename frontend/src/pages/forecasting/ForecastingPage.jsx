@@ -201,6 +201,7 @@ export default function ForecastingPage() {
   const [horizon,      setHorizon]     = useState(30)
   const [model,        setModel]       = useState('')
   const [result,       setResult]      = useState(null)
+  const [resultSku,    setResultSku]   = useState(null)
   const [compareData,  setCompareData] = useState(null)
   const [autoTraining, setAutoTraining] = useState(false)
 
@@ -216,23 +217,26 @@ export default function ForecastingPage() {
   const demoSkus       = skus.filter(s => s.source !== 'live')
 
   // ── Run forecast mutation ────────────────────────────────────────────────
+  // Note: `sku`/`horizonArg`/`modelArg` are passed explicitly via `.mutate(...)`
+  // rather than closed over, so a SKU switch mid-flight can't mislabel results.
   const forecastMut = useMutation({
-    mutationFn: async () => {
+    mutationFn: async ({ sku, horizonArg, modelArg }) => {
       try {
-        await mlForecastService.getModel(selectedSku)
+        await mlForecastService.getModel(sku)
       } catch {
         setAutoTraining(true)
-        await mlForecastService.trainSku(selectedSku)
+        await mlForecastService.trainSku(sku)
         setAutoTraining(false)
       }
-      return mlForecastService.runForecast(selectedSku, horizon, model || null)
+      return mlForecastService.runForecast(sku, horizonArg, modelArg || null)
     },
-    onSuccess: (res) => {
+    onSuccess: (res, { sku }) => {
       setAutoTraining(false)
       const data = res.data?.data
       setResult(data)
+      setResultSku(sku)
       toast({ title: `Forecast ready — ${data?.confidence_score}% confidence`, variant: 'success' })
-      mlForecastService.compareModels(selectedSku)
+      mlForecastService.compareModels(sku)
         .then(r => setCompareData(r.data?.data))
         .catch(() => {})
     },
@@ -244,15 +248,16 @@ export default function ForecastingPage() {
 
   // ── Train + forecast mutation ────────────────────────────────────────────
   const trainMut = useMutation({
-    mutationFn: async () => {
-      await mlForecastService.trainSku(selectedSku)
-      return mlForecastService.runForecast(selectedSku, horizon, model || null)
+    mutationFn: async ({ sku, horizonArg, modelArg }) => {
+      await mlForecastService.trainSku(sku)
+      return mlForecastService.runForecast(sku, horizonArg, modelArg || null)
     },
-    onSuccess: (res) => {
+    onSuccess: (res, { sku }) => {
       const data = res.data?.data
       setResult(data)
+      setResultSku(sku)
       toast({ title: 'Training complete — forecast generated', variant: 'success' })
-      mlForecastService.compareModels(selectedSku)
+      mlForecastService.compareModels(sku)
         .then(r => setCompareData(r.data?.data))
         .catch(() => {})
     },
@@ -270,9 +275,9 @@ export default function ForecastingPage() {
   // ── Historical actuals (so the chart shows trend context, not just the
   // future in isolation) ───────────────────────────────────────────────────
   const { data: historyData } = useQuery({
-    queryKey: ['ml-history', selectedSku],
-    queryFn: () => mlForecastService.getHistory(selectedSku, 60).then(r => r.data?.data || []),
-    enabled: !!selectedSku && !!result,
+    queryKey: ['ml-history', resultSku],
+    queryFn: () => mlForecastService.getHistory(resultSku, 60).then(r => r.data?.data || []),
+    enabled: !!resultSku && !!result,
     staleTime: 5 * 60_000,
   })
   const history = historyData || []
@@ -358,8 +363,9 @@ export default function ForecastingPage() {
                   </label>
                   <select
                     value={selectedSku}
-                    onChange={e => { setSelectedSku(e.target.value); setResult(null); setCompareData(null) }}
-                    className="text-[13px] px-3 py-2 rounded-lg outline-none"
+                    disabled={loading}
+                    onChange={e => { setSelectedSku(e.target.value); setResult(null); setResultSku(null); setCompareData(null) }}
+                    className="text-[13px] px-3 py-2 rounded-lg outline-none disabled:opacity-60 disabled:cursor-not-allowed"
                     style={{ background: 'var(--surface-input)', border: '1.5px solid var(--border)', color: 'var(--text-primary)' }}>
                     <option value="">— Select a product —</option>
                     {skuLoading ? (
@@ -422,7 +428,7 @@ export default function ForecastingPage() {
                     icon={loading ? RefreshCw : Play}
                     loading={forecastMut.isPending}
                     disabled={!selectedSku || loading}
-                    onClick={() => forecastMut.mutate()}
+                    onClick={() => forecastMut.mutate({ sku: selectedSku, horizonArg: horizon, modelArg: model })}
                     variant="outline"
                   >
                     Forecast
@@ -431,7 +437,7 @@ export default function ForecastingPage() {
                     icon={loading ? RefreshCw : Brain}
                     loading={trainMut.isPending}
                     disabled={!selectedSku || loading}
-                    onClick={() => trainMut.mutate()}
+                    onClick={() => trainMut.mutate({ sku: selectedSku, horizonArg: horizon, modelArg: model })}
                     style={{ background: 'var(--brand-primary)' }}
                   >
                     Train + Forecast
@@ -526,7 +532,7 @@ export default function ForecastingPage() {
               {compareData && (
                 <Card>
                   <CardHeader>
-                    <CardTitle>Model Comparison — {selectedSku}</CardTitle>
+                    <CardTitle>Model Comparison — {resultSku}</CardTitle>
                     <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
                       All three AI models evaluated — best match selected automatically
                     </p>
