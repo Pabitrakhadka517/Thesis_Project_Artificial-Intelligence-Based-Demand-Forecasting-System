@@ -1,6 +1,7 @@
 const express = require('express')
 const axios   = require('axios')
 const { protect } = require('../middleware/auth')
+const { managerOrAdmin } = require('../middleware/authorize')
 
 const AI_BASE = process.env.AI_SERVICE_URL || 'http://localhost:8000'
 
@@ -8,8 +9,12 @@ const AI_PREFIXES = ['prophet', 'rf', 'lstm', 'recommendations', 'optimization',
 
 // ── Generic proxy (existing prefixes) ────────────────────────────────────────
 // req.path is the portion after the mount point, e.g. /predict/SYN-PF-001
+// Reads (GET) stay open to any authenticated role — staff legitimately reads
+// /skus and /recommendations. Writes (train/retrain/generate/delete — the
+// expensive, mutating operations) require manager/admin.
 const router = express.Router()
 router.use(protect)
+router.use((req, res, next) => (req.method === 'GET' ? next() : managerOrAdmin(req, res, next)))
 
 router.all('*', async (req, res) => {
   const target = `${AI_BASE}${req.path}`
@@ -35,8 +40,11 @@ router.all('*', async (req, res) => {
 
 // ── ML proxy (/api/v1/ml/* → http://AI_BASE/api/ai/ml/*) ─────────────────────
 // Training (LSTM) can take several minutes — use a 10-minute timeout.
+// Only used by the admin/manager Forecasting & Models pages (staff has no
+// route to them) — restricted to manager/admin so a staff account can't
+// trigger repeated multi-minute retrains.
 const mlRouter = express.Router()
-mlRouter.use(protect)
+mlRouter.use(protect, managerOrAdmin)
 
 mlRouter.all('*', async (req, res) => {
   const target = `${AI_BASE}/api/ai/ml${req.path}`
