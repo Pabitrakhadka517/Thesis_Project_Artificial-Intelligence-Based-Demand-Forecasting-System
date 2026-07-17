@@ -1,5 +1,6 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit'
 import { authService } from '@/services/authService'
+import { queryClient } from '@/api/queryClient'
 import { TOKEN_KEY, REFRESH_TOKEN_KEY } from '@/constants'
 
 // Node.js API returns: { success, message, data: { user, accessToken, refreshToken } }
@@ -60,6 +61,9 @@ export const logout = createAsyncThunk('auth/logout', async (_, { getState }) =>
   const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY)
   try { await authService.logout({ refreshToken }) } catch { /* ignore */ }
   clearTokens()
+  // Prevent the next user on this machine from seeing this user's cached
+  // dashboard/product/report data before their own queries refetch.
+  queryClient.clear()
 })
 
 const authSlice = createSlice({
@@ -83,6 +87,7 @@ const authSlice = createSlice({
       state.isAuthenticated = false
       state.error           = null
       state.errorStatus     = null
+      queryClient.clear()
     },
     updateUser: (state, action) => {
       state.user = { ...state.user, ...action.payload }
@@ -143,6 +148,7 @@ const authSlice = createSlice({
         state.token           = null
         state.isAuthenticated = false
         clearTokens()
+        queryClient.clear()
       })
       // ── Logout ──
       .addCase(logout.fulfilled, (state) => {
