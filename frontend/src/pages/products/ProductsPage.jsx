@@ -252,20 +252,20 @@ export default function ProductsPage() {
 
   const { data: supplierData } = useQuery({
     queryKey: ['suppliers-list'],
-    queryFn: () => axiosInstance.get('/suppliers?limit=100').then(r => r.data),
+    queryFn: () => axiosInstance.get('/suppliers?limit=100').then(r => r.data?.data?.suppliers || r.data?.data || []),
     staleTime: 60_000,
   })
 
   const { data: catData } = useQuery({
     queryKey: ['categories-list'],
-    queryFn: () => axiosInstance.get('/categories?limit=100').then(r => r.data),
+    queryFn: () => axiosInstance.get('/categories?limit=100').then(r => r.data?.data?.categories || r.data?.data || []),
     staleTime: 60_000,
   })
 
   const products   = data?.data || []
   const total      = data?.pagination?.total || 0
-  const suppliers  = supplierData?.data || []
-  const categories = catData?.data?.categories || []
+  const suppliers  = supplierData || []
+  const categories = catData || []
 
   const createMutation = useMutation({
     mutationFn: (d) => productsService.create(d),
