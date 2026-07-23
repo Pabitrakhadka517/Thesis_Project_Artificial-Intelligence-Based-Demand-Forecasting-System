@@ -1,6 +1,7 @@
 const router   = require('express').Router()
 const Category = require('../models/Category')
 const Product  = require('../models/Product')
+const AuditLog = require('../models/AuditLog')
 const { protect }                  = require('../middleware/auth')
 const { managerOrAdmin, adminOnly } = require('../middleware/authorize')
 const { upload }                   = require('../middleware/upload')
@@ -46,6 +47,13 @@ router.post('/', managerOrAdmin, upload.single('image'), async (req, res) => {
     throw dbErr
   }
 
+  AuditLog.create({
+    user: req.user._id, userEmail: req.user.email,
+    action: 'CATEGORY_CREATED', resource: 'Category', resourceId: category._id.toString(),
+    details: { name: category.name },
+    status: 'success',
+  }).catch(() => {})
+
   return created(res, { category }, 'Category created')
 })
 
@@ -57,6 +65,14 @@ router.patch('/:id', managerOrAdmin, async (req, res) => {
   )
   const category = await Category.findByIdAndUpdate(req.params.id, updates, { new: true, runValidators: true })
   if (!category) return error(res, 'Category not found', 404)
+
+  AuditLog.create({
+    user: req.user._id, userEmail: req.user.email,
+    action: 'CATEGORY_UPDATED', resource: 'Category', resourceId: category._id.toString(),
+    details: { changed: Object.keys(updates), name: category.name },
+    status: 'success',
+  }).catch(() => {})
+
   return success(res, { category })
 })
 
@@ -114,6 +130,14 @@ router.delete('/:id', adminOnly, async (req, res) => {
   if (category.imagePublicId) await cloudinary.deleteImage(category.imagePublicId)
 
   await category.deleteOne()
+
+  AuditLog.create({
+    user: req.user._id, userEmail: req.user.email,
+    action: 'CATEGORY_DELETED', resource: 'Category', resourceId: req.params.id,
+    details: { name: category.name },
+    status: 'success',
+  }).catch(() => {})
+
   return success(res, {}, 'Category deleted')
 })
 

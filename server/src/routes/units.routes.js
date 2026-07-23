@@ -1,5 +1,6 @@
 const router = require('express').Router()
 const Unit = require('../models/Unit')
+const AuditLog = require('../models/AuditLog')
 const { protect } = require('../middleware/auth')
 const { managerOrAdmin, adminOnly } = require('../middleware/authorize')
 const { success, created, error, paginated } = require('../utils/response')
@@ -55,12 +56,28 @@ router.get('/:id', async (req, res) => {
 
 router.post('/', managerOrAdmin, async (req, res) => {
   const unit = await Unit.create(req.body)
+
+  AuditLog.create({
+    user: req.user._id, userEmail: req.user.email,
+    action: 'UNIT_CREATED', resource: 'Unit', resourceId: unit._id.toString(),
+    details: { name: unit.name, unitType: unit.unitType },
+    status: 'success',
+  }).catch(() => {})
+
   return created(res, { unit }, 'Unit created')
 })
 
 router.patch('/:id', managerOrAdmin, async (req, res) => {
   const unit = await Unit.findByIdAndUpdate(req.params.id, req.body, { new: true })
   if (!unit) return error(res, 'Unit not found', 404)
+
+  AuditLog.create({
+    user: req.user._id, userEmail: req.user.email,
+    action: 'UNIT_UPDATED', resource: 'Unit', resourceId: unit._id.toString(),
+    details: { changed: Object.keys(req.body), name: unit.name },
+    status: 'success',
+  }).catch(() => {})
+
   return success(res, { unit })
 })
 
@@ -69,6 +86,14 @@ router.delete('/:id', adminOnly, async (req, res) => {
   if (!unit) return error(res, 'Unit not found', 404)
   if (unit.isSystem) return error(res, 'System units cannot be deleted', 400)
   await unit.deleteOne()
+
+  AuditLog.create({
+    user: req.user._id, userEmail: req.user.email,
+    action: 'UNIT_DELETED', resource: 'Unit', resourceId: req.params.id,
+    details: { name: unit.name, unitType: unit.unitType },
+    status: 'success',
+  }).catch(() => {})
+
   return success(res, {}, 'Unit deleted')
 })
 

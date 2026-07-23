@@ -2,6 +2,7 @@ const mongoose = require('mongoose')
 const Supplier      = require('../models/Supplier')
 const Purchase      = require('../models/Purchase')
 const Product       = require('../models/Product')
+const AuditLog      = require('../models/AuditLog')
 const { success, created, error, paginated } = require('../utils/response')
 const cloudinary    = require('../services/cloudinary.service')
 
@@ -50,6 +51,14 @@ exports.createSupplier = async (req, res) => {
     name, contactPerson, phone, email, address, district,
     leadTimeDays, paymentTerms, status, rating, notes,
   })
+
+  AuditLog.create({
+    user: req.user._id, userEmail: req.user.email,
+    action: 'SUPPLIER_CREATED', resource: 'Supplier', resourceId: supplier._id.toString(),
+    details: { name: supplier.name },
+    status: 'success',
+  }).catch(() => {})
+
   return created(res, { supplier }, 'Supplier created')
 }
 
@@ -64,6 +73,14 @@ exports.updateSupplier = async (req, res) => {
   )
   const supplier = await Supplier.findByIdAndUpdate(req.params.id, updates, { new: true, runValidators: true })
   if (!supplier) return error(res, 'Supplier not found', 404)
+
+  AuditLog.create({
+    user: req.user._id, userEmail: req.user.email,
+    action: 'SUPPLIER_UPDATED', resource: 'Supplier', resourceId: supplier._id.toString(),
+    details: { changed: Object.keys(updates), name: supplier.name },
+    status: 'success',
+  }).catch(() => {})
+
   return success(res, { supplier }, 'Supplier updated')
 }
 
@@ -72,6 +89,14 @@ exports.deleteSupplier = async (req, res) => {
     req.params.id, { status: 'inactive' }, { new: true }
   )
   if (!supplier) return error(res, 'Supplier not found', 404)
+
+  AuditLog.create({
+    user: req.user._id, userEmail: req.user.email,
+    action: 'SUPPLIER_DELETED', resource: 'Supplier', resourceId: supplier._id.toString(),
+    details: { name: supplier.name },
+    status: 'success',
+  }).catch(() => {})
+
   return success(res, {}, 'Supplier deactivated')
 }
 
