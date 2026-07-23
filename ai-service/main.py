@@ -8,10 +8,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import forecast, optimization, inventory_ai, ml_forecast, ai_chat
+from app.core.security import verify_internal_key
+from app.routers import inventory_ai, ml_forecast, ai_chat
 
 app = FastAPI(
     title="StockWise AI Service",
@@ -28,11 +29,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(forecast.router,       prefix="/api/ai")
-app.include_router(optimization.router,   prefix="/api/ai")
-app.include_router(inventory_ai.router,   prefix="/api/ai")
-app.include_router(ml_forecast.router,    prefix="/api/ai")
-app.include_router(ai_chat.router,        prefix="/api/ai")
+# All routes require the internal shared-secret header — this service is only
+# ever called by the Node server's proxy (server/src/routes/ai.proxy.js),
+# which already enforces user auth/RBAC and injects the header. Never exposed
+# directly to browsers.
+_internal_only = [Depends(verify_internal_key)]
+
+app.include_router(inventory_ai.router,   prefix="/api/ai", dependencies=_internal_only)
+app.include_router(ml_forecast.router,    prefix="/api/ai", dependencies=_internal_only)
+app.include_router(ai_chat.router,        prefix="/api/ai", dependencies=_internal_only)
 
 
 @app.get("/api/ai/health")
