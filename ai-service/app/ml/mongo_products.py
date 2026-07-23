@@ -39,11 +39,18 @@ def list_live_products(min_days: int = MIN_SALE_DAYS) -> list[dict]:
     pipeline = [
         {"$match": {"notes": {"$ne": _SYNTHETIC_MARKER}, "status": "completed"}},
         {"$unwind": "$items"},
+        # Group by (sku, calendar day) first so sale_days below counts distinct
+        # days with an actual sale, not the calendar span between first/last —
+        # a SKU with 4 sales spread across 90 days must not look like 90 days
+        # of real history.
         {"$group": {
-            "_id":        "$items.sku",
-            "first_date": {"$min": "$saleDate"},
-            "last_date":  {"$max": "$saleDate"},
-            "records":    {"$sum": 1},
+            "_id":     {"sku": "$items.sku", "day": {"$dateToString": {"format": "%Y-%m-%d", "date": "$saleDate"}}},
+            "records": {"$sum": 1},
+        }},
+        {"$group": {
+            "_id":        "$_id.sku",
+            "sale_days":  {"$sum": 1},
+            "records":    {"$sum": "$records"},
         }},
     ]
     spans = {row["_id"]: row for row in db["sales"].aggregate(pipeline) if row["_id"]}
@@ -59,7 +66,7 @@ def list_live_products(min_days: int = MIN_SALE_DAYS) -> list[dict]:
     for p in prod_docs:
         sku  = p["sku"]
         span = spans.get(sku)
-        sale_days    = (span["last_date"] - span["first_date"]).days + 1 if span else 0
+        sale_days    = span["sale_days"] if span else 0
         sale_records = span["records"] if span else 0
         eligible     = sale_days >= min_days
         out.append({
