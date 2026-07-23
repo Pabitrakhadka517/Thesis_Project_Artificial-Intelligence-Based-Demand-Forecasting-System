@@ -20,6 +20,7 @@ GET  /api/ai/ml/skus                     — list all SKUs available in the data
 """
 from __future__ import annotations
 
+import asyncio
 from typing import Literal, Optional
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
@@ -266,7 +267,8 @@ async def list_skus():
         d.setdefault("eligible", True)
 
     try:
-        details.extend(mongo_products.list_live_products())
+        # Sync pymongo call — offload to a thread so it doesn't block the event loop.
+        details.extend(await asyncio.to_thread(mongo_products.list_live_products))
     except Exception:
         pass  # Mongo unreachable — still serve the demo dataset SKUs
 
@@ -283,7 +285,9 @@ async def sku_history(sku_id: str, days: int = Query(default=60, ge=7, le=365)):
     from app.ml.preprocessor import DataPreprocessor
     prep = DataPreprocessor()
     try:
-        series = prep.build_sku_timeseries(sku_id)
+        # build_sku_timeseries() falls back to sync pymongo calls for live SKUs —
+        # offload to a thread so it doesn't block the event loop.
+        series = await asyncio.to_thread(prep.build_sku_timeseries, sku_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
 
