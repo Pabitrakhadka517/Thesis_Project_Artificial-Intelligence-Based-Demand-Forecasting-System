@@ -6,9 +6,11 @@ const Sale = require('../models/Sale')
 const Purchase = require('../models/Purchase')
 const StockMovement = require('../models/StockMovement')
 const Alert = require('../models/Alert')
+const AuditLog = require('../models/AuditLog')
 require('../models/User') // register User schema so StockMovement.populate('recordedBy') resolves
 const { success, created, error, paginated } = require('../utils/response')
 const getProductImage = require('../../utils/productImageMapper')
+const { OVERSTOCK_RATIO } = require('../utils/stockAlerts')
 
 const IMAGES_DIR = path.join(__dirname, '../../assets/product-images')
 
@@ -134,6 +136,14 @@ exports.createProduct = async (req, res) => {
     )
     Object.assign(existing, updates)
     const restored = await existing.save()
+
+    AuditLog.create({
+      user: req.user._id, userEmail: req.user.email,
+      action: 'PRODUCT_CREATED', resource: 'Product', resourceId: restored._id.toString(),
+      details: { sku: restored.sku, name: restored.name, restored: true },
+      status: 'success',
+    }).catch(() => {})
+
     return created(res, { product: restored }, 'Product restored successfully')
   }
 
@@ -152,6 +162,13 @@ exports.createProduct = async (req, res) => {
     sku: normalizedSku,
     image: getProductImage(name),
   })
+
+  AuditLog.create({
+    user: req.user._id, userEmail: req.user.email,
+    action: 'PRODUCT_CREATED', resource: 'Product', resourceId: product._id.toString(),
+    details: { sku: product.sku, name: product.name },
+    status: 'success',
+  }).catch(() => {})
 
   return created(res, { product }, 'Product created')
 }
@@ -175,6 +192,14 @@ exports.updateProduct = async (req, res) => {
   const product = await Product.findByIdAndUpdate(req.params.id, updates, { new: true, runValidators: true })
     .populate('category supplier')
   if (!product) return error(res, 'Product not found', 404)
+
+  AuditLog.create({
+    user: req.user._id, userEmail: req.user.email,
+    action: 'PRODUCT_UPDATED', resource: 'Product', resourceId: product._id.toString(),
+    details: { changed: Object.keys(updates), sku: product.sku },
+    status: 'success',
+  }).catch(() => {})
+
   return success(res, { product }, 'Product updated')
 }
 
@@ -235,6 +260,13 @@ exports.deleteProduct = async (req, res) => {
   // products otherwise permanently block re-use of the same barcode on new products.
   product.barcode = null
   await product.save()
+
+  AuditLog.create({
+    user: req.user._id, userEmail: req.user.email,
+    action: 'PRODUCT_DELETED', resource: 'Product', resourceId: product._id.toString(),
+    details: { sku: product.sku, name: product.name },
+    status: 'success',
+  }).catch(() => {})
 
   return success(res, {}, 'Product deleted')
 }
@@ -407,10 +439,27 @@ exports.getProductDetail = async (req, res) => {
 exports.getProductStats = async (req, res) => {
   const [total, lowStock, outOfStock, overstock, totalValue] = await Promise.all([
     Product.countDocuments({ isActive: true }),
-    Product.countDocuments({ $expr: { $and: [{ $gt: ['$currentStock', 0] }, { $lte: ['$currentStock', '$reorderLevel'] }] } }),
-    Product.countDocuments({ currentStock: { $lte: 0 } }),
-    Product.countDocuments({ $expr: { $gte: ['$currentStock', { $multiply: ['$maxStock', 0.9] }] } }),
-    Product.aggregate([{ $group: { _id: null, total: { $sum: { $multiply: ['$currentStock', '$buyingPrice'] } } } }]),
+    Product.countDocuments({
+      isActive: true,
+      $expr: { $and: [{ $gt: ['$currentStock', 0] }, { $lte: ['$currentStock', '$reorderLevel'] }] },
+    }),
+    Product.countDocuments({ isActive: true, currentStock: { $lte: 0 } }),
+    Product.countDocuments({
+      isActive: true,
+      // maxStock === 0 means "unlimited / not configured" (see isOverstocked in
+      // utils/stockAlerts.js) — must never count as overstocked, otherwise every
+      // unlimited-max product is flagged since currentStock >= 0 is always true.
+      $expr: {
+        $and: [
+          { $gt: ['$maxStock', 0] },
+          { $gte: ['$currentStock', { $multiply: ['$maxStock', OVERSTOCK_RATIO] }] },
+        ],
+      },
+    }),
+    Product.aggregate([
+      { $match: { isActive: true } },
+      { $group: { _id: null, total: { $sum: { $multiply: ['$currentStock', '$buyingPrice'] } } } },
+    ]),
   ])
 
   return success(res, {
