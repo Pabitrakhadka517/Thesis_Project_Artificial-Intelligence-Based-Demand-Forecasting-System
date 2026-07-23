@@ -1,7 +1,8 @@
 const Alert = require('../models/Alert')
 const Product = require('../models/Product')
+const AuditLog = require('../models/AuditLog')
 const { success, error, paginated } = require('../utils/response')
-const { isOverstocked, buildOverstockAlert } = require('../utils/stockAlerts')
+const { isOverstocked, buildOverstockAlert, queueUpsert } = require('../utils/stockAlerts')
 
 exports.getAlerts = async (req, res) => {
   const { page: _page = 1, limit: _limit = 20, isRead, priority, type, status } = req.query
@@ -45,6 +46,14 @@ exports.acknowledge = async (req, res) => {
     { new: true }
   )
   if (!alert) return error(res, 'Alert not found', 404)
+
+  AuditLog.create({
+    user: req.user._id, userEmail: req.user.email,
+    action: 'ALERT_ACKNOWLEDGED', resource: 'Alert', resourceId: alert._id.toString(),
+    details: { type: alert.type, priority: alert.priority, product: alert.productName },
+    status: 'success',
+  }).catch(() => {})
+
   return success(res, { alert })
 }
 
@@ -55,12 +64,28 @@ exports.resolve = async (req, res) => {
     { new: true }
   )
   if (!alert) return error(res, 'Alert not found', 404)
+
+  AuditLog.create({
+    user: req.user._id, userEmail: req.user.email,
+    action: 'ALERT_RESOLVED', resource: 'Alert', resourceId: alert._id.toString(),
+    details: { type: alert.type, priority: alert.priority, product: alert.productName },
+    status: 'success',
+  }).catch(() => {})
+
   return success(res, { alert })
 }
 
 exports.deleteAlert = async (req, res) => {
   const alert = await Alert.findByIdAndDelete(req.params.id)
   if (!alert) return error(res, 'Alert not found', 404)
+
+  AuditLog.create({
+    user: req.user._id, userEmail: req.user.email,
+    action: 'ALERT_DELETED', resource: 'Alert', resourceId: alert._id.toString(),
+    details: { type: alert.type, priority: alert.priority, product: alert.productName },
+    status: 'success',
+  }).catch(() => {})
+
   return success(res, {}, 'Alert deleted')
 }
 
@@ -77,24 +102,6 @@ exports.getUnreadCount = async (req, res) => {
 // "expiring soon" alert; already-past-date products get a critical "expired" alert.
 const EXPIRY_WARNING_DAYS = 7
 const MS_PER_DAY = 24 * 60 * 60 * 1000
-
-// Alerts are written as upserts keyed on (product, type, isAcknowledged:false) —
-// enforced unique by the partial index on Alert (see models/Alert.js) — rather
-// than a plain insert-if-none-open check. This means a product that stays in a
-// bad state across scans gets its ALERT CONTENT refreshed (priority/message)
-// instead of being frozen at whatever it looked like when first flagged, which
-// previously let e.g. an "expiring soon" (medium) alert block a later "expired"
-// (critical) alert from ever appearing for the same product.
-function queueUpsert(bulkOps, alert) {
-  const { product, type, ...content } = alert
-  bulkOps.push({
-    updateOne: {
-      filter: { product, type, isAcknowledged: false },
-      update: { $set: content, $setOnInsert: { product, type } },
-      upsert: true,
-    },
-  })
-}
 
 // Auto-generate stock alerts
 exports.generateStockAlerts = async (req, res) => {

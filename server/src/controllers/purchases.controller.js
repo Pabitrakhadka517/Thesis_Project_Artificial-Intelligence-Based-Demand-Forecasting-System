@@ -7,7 +7,7 @@ const Alert = require('../models/Alert')
 const AuditLog = require('../models/AuditLog')
 require('../models/User') // register User schema so Purchase.populate('recordedBy') resolves
 const { success, created, error, paginated } = require('../utils/response')
-const { isOverstocked, buildOverstockAlert } = require('../utils/stockAlerts')
+const { isOverstocked, buildOverstockAlert, queueUpsert } = require('../utils/stockAlerts')
 
 const SORTABLE_FIELDS = {
   purchaseDate: 'purchaseDate', grandTotal: 'grandTotal', purchaseNumber: 'purchaseNumber',
@@ -247,16 +247,8 @@ exports.receivePurchase = async (req, res) => {
     // false) — the unique partial index on Alert makes this race-safe against
     // a concurrent "Scan Inventory" run touching the same product.
     if (overstockCandidates.length) {
-      const bulkOps = overstockCandidates.map((c) => {
-        const { product, type, ...content } = buildOverstockAlert(c)
-        return {
-          updateOne: {
-            filter: { product, type, isAcknowledged: false },
-            update: { $set: content, $setOnInsert: { product, type } },
-            upsert: true,
-          },
-        }
-      })
+      const bulkOps = []
+      overstockCandidates.forEach((c) => queueUpsert(bulkOps, buildOverstockAlert(c)))
       Alert.bulkWrite(bulkOps, { ordered: false })
         .catch((e) => console.warn('[Purchases] Overstock alert creation failed:', e.message))
     }

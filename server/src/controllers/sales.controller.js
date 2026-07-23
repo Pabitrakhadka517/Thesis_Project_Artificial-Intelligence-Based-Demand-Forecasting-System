@@ -6,7 +6,7 @@ const Alert = require('../models/Alert')
 const AuditLog = require('../models/AuditLog')
 require('../models/User') // register User schema so Sale.populate('recordedBy') resolves
 const { success, created, error, paginated } = require('../utils/response')
-const { isOverstocked } = require('../utils/stockAlerts')
+const { isOverstocked, queueUpsert } = require('../utils/stockAlerts')
 
 const SALES_SORTABLE_FIELDS = { saleDate: 'saleDate', grandTotal: 'grandTotal', invoiceNumber: 'invoiceNumber' }
 
@@ -247,29 +247,25 @@ async function _executeSaleOperation(enriched, opts) {
 }
 
 async function _createStockAlertIfNeeded(product, currentStock) {
+  const bulkOps = []
   if (currentStock <= 0) {
-    const exists = await Alert.findOne({ product: product._id, type: 'out_of_stock', isAcknowledged: false })
-    if (!exists) {
-      await Alert.create({
-        type: 'out_of_stock', priority: 'critical',
-        title:   `Out of Stock: ${product.name}`,
-        message: `${product.name} (${product.sku}) is out of stock. Immediate restocking required.`,
-        product: product._id, productName: product.name,
-      })
-    }
+    queueUpsert(bulkOps, {
+      type: 'out_of_stock', priority: 'critical',
+      title:   `Out of Stock: ${product.name}`,
+      message: `${product.name} (${product.sku}) is out of stock. Immediate restocking required.`,
+      product: product._id, productName: product.name,
+    })
   } else if (currentStock <= product.reorderLevel) {
-    const exists = await Alert.findOne({ product: product._id, type: 'low_stock', isAcknowledged: false })
-    if (!exists) {
-      await Alert.create({
-        type:     'low_stock',
-        priority: currentStock <= product.reorderLevel * 0.5 ? 'high' : 'medium',
-        title:    `Low Stock: ${product.name}`,
-        message:  `${product.name} has only ${currentStock} units left. Reorder level is ${product.reorderLevel}.`,
-        product:  product._id, productName: product.name,
-        metadata: { currentStock, reorderLevel: product.reorderLevel },
-      })
-    }
+    queueUpsert(bulkOps, {
+      type:     'low_stock',
+      priority: currentStock <= product.reorderLevel * 0.5 ? 'high' : 'medium',
+      title:    `Low Stock: ${product.name}`,
+      message:  `${product.name} has only ${currentStock} units left. Reorder level is ${product.reorderLevel}.`,
+      product:  product._id, productName: product.name,
+      metadata: { currentStock, reorderLevel: product.reorderLevel },
+    })
   }
+  if (bulkOps.length) await Alert.bulkWrite(bulkOps, { ordered: false })
 
   // A sale reduces stock — if that pulled the product back below the overstock
   // threshold, the earlier overstock alert (created on restock) is now stale.
