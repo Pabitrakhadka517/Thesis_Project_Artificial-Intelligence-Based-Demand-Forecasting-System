@@ -4,8 +4,9 @@ const { protect } = require('../middleware/auth')
 const { managerOrAdmin } = require('../middleware/authorize')
 
 const AI_BASE = process.env.AI_SERVICE_URL || 'http://localhost:8000'
+const AI_SERVICE_API_KEY = process.env.AI_SERVICE_API_KEY || ''
 
-const AI_PREFIXES = ['prophet', 'rf', 'lstm', 'recommendations', 'optimization', 'forecasting', 'models', 'skus']
+const AI_PREFIXES = ['prophet', 'rf', 'lstm', 'recommendations', 'models', 'skus']
 
 // ── Generic proxy (existing prefixes) ────────────────────────────────────────
 // req.path is the portion after the mount point, e.g. /predict/SYN-PF-001
@@ -25,9 +26,10 @@ router.all('*', async (req, res) => {
       params:  req.query,
       data:    req.body,
       headers: {
-        'Content-Type': 'application/json',
-        'X-User-Id':    req.user?._id?.toString() || '',
-        'X-User-Role':  req.user?.role || '',
+        'Content-Type':       'application/json',
+        'X-Internal-Api-Key': AI_SERVICE_API_KEY,
+        'X-User-Id':          req.user?._id?.toString() || '',
+        'X-User-Role':        req.user?.role || '',
       },
       timeout: 30000,
     })
@@ -55,9 +57,10 @@ mlRouter.all('*', async (req, res) => {
       params:  req.query,
       data:    req.body,
       headers: {
-        'Content-Type': 'application/json',
-        'X-User-Id':    req.user?._id?.toString() || '',
-        'X-User-Role':  req.user?.role || '',
+        'Content-Type':       'application/json',
+        'X-Internal-Api-Key': AI_SERVICE_API_KEY,
+        'X-User-Id':          req.user?._id?.toString() || '',
+        'X-User-Role':        req.user?.role || '',
       },
       timeout: 600000,   // 10 min — LSTM training can be slow
     })
