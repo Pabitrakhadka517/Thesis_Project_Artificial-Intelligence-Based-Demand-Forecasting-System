@@ -14,9 +14,10 @@ All methods are async-safe and return a consistent BIResult dict.
 from __future__ import annotations
 
 import asyncio
-import math
 from datetime import datetime, timedelta
 from typing import Any
+
+from app.core import inventory_math as im
 
 
 # ── helpers ────────────────────────────────────────────────────────────────────
@@ -283,28 +284,35 @@ class RuleEngine:
         return int(current / daily_demand)
 
     @staticmethod
-    def safety_stock(daily_demand: float, lead_time: float,
-                     service_factor: float = 1.5) -> float:
-        return math.ceil(daily_demand * lead_time * service_factor)
+    def safety_stock(daily_demand: float, lead_time: float) -> float:
+        """
+        SS = Z x sigma_demand x sqrt(lead_time) — via the shared formula in
+        app/core/inventory_math.py, matching every other place in the app
+        that quotes this exact formula (see bi_engine's own "Safety stock
+        formula" line in the analytics response). This rule-based path only
+        runs when there's no stored AI prediction to read a real historical
+        std from (see `specific_product` below), so the std is estimated as
+        a fixed 30% coefficient of variation on demand — the same proxy
+        used as the no-data fallback in ml_forecast_service.py and
+        inventory_analysis.py, kept consistent across all three.
+        """
+        demand_std_estimate = daily_demand * im.DEMAND_STD_CV_FALLBACK
+        return im.safety_stock(demand_std_estimate, lead_time)
 
     @staticmethod
     def reorder_point(daily_demand: float, lead_time: float,
                       ss: float) -> float:
-        return math.ceil(daily_demand * lead_time + ss)
+        return im.reorder_point(daily_demand, lead_time, ss)
 
     @staticmethod
-    def eoq(annual_demand: float, order_cost: float = 500,
-             holding_pct: float = 0.25, unit_cost: float = 100) -> float:
-        holding = holding_pct * unit_cost
-        if holding <= 0 or annual_demand <= 0:
-            return 0
-        return math.ceil(math.sqrt((2 * annual_demand * order_cost) / holding))
+    def eoq(annual_demand: float, order_cost: float = im.ORDERING_COST,
+             holding_rate: float = im.HOLDING_RATE, unit_cost: float = 100) -> float:
+        return im.eoq(annual_demand, order_cost=order_cost, unit_cost=unit_cost, holding_rate=holding_rate)
 
     @staticmethod
-    def suggested_purchase(current: float, forecast_30d: float,
-                           ss: float) -> float:
-        needed = forecast_30d + ss - current
-        return max(0.0, math.ceil(needed))
+    def suggested_purchase(current: float, rop: float, eoq_qty: float) -> float:
+        """max(EOQ, ROP - current_stock) — see inventory_math.suggested_purchase_qty()."""
+        return im.suggested_purchase_qty(current, rop, eoq_qty)
 
     @staticmethod
     def health_score(products: list[dict]) -> int:
@@ -574,7 +582,7 @@ class ResponseGenerator:
 
         fc30   = _f(fc.get("forecast_30d") if fc else None) or (daily_demand * 30)
         trend  = (fc.get("trend", "stable") if fc else "stable")
-        sugg   = RuleEngine.suggested_purchase(cs, fc30, ss)
+        sugg   = RuleEngine.suggested_purchase(cs, rop, eoq_)
         cost   = sugg * bp
         status = RuleEngine.classify_stock(cs, rl, _f(product.get("minStock")), _f(product.get("maxStock")))
         days   = RuleEngine.days_of_stock(cs, daily_demand) if daily_demand > 0 else None
@@ -802,8 +810,10 @@ class BIEngine:
             lt         = _f(p.get("leadTimeDays"), 7)
 
             ss         = _f(mr.get("safety_stock")) or self.rules.safety_stock(dd, lt)
+            rop        = _f(mr.get("reorder_point")) or self.rules.reorder_point(dd, lt, ss)
+            eoq_       = _f(mr.get("eoq")) or self.rules.eoq(dd * 365, unit_cost=_f(p.get("buyingPrice")) or 100)
             fc30       = _f(fc.get("forecast_30d")) or (dd * 30)
-            sugg       = self.rules.suggested_purchase(_f(p.get("currentStock")), fc30, ss)
+            sugg       = self.rules.suggested_purchase(_f(p.get("currentStock")), rop, eoq_)
             cost       = sugg * _f(p.get("buyingPrice"))
             days_left  = self.rules.days_of_stock(_f(p.get("currentStock")), dd)
 
@@ -1274,8 +1284,9 @@ class BIEngine:
             dd   = daily_demand.get(str(p.get("_id", "")), 0)
             lt   = _f(p.get("leadTimeDays"), 7)
             ss   = _f(mr.get("safety_stock")) or self.rules.safety_stock(dd, lt)
-            fc30 = _f(fc.get("forecast_30d")) or (dd * 30)
-            sugg = self.rules.suggested_purchase(_f(p.get("currentStock")), fc30, ss)
+            rop  = _f(mr.get("reorder_point")) or self.rules.reorder_point(dd, lt, ss)
+            eoq_ = _f(mr.get("eoq")) or self.rules.eoq(dd * 365, unit_cost=_f(p.get("buyingPrice")) or 100)
+            sugg = self.rules.suggested_purchase(_f(p.get("currentStock")), rop, eoq_)
             if sugg > 0:
                 purchase_recs.append({
                     "name":               p.get("name", ""),

@@ -14,10 +14,11 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
+from app.core import inventory_math as im
 
 # ── constants ──────────────────────────────────────────────────────────────────
-ORDERING_COST   = 500.0   # NPR per purchase order
-Z_95            = 1.645   # z-score for 95% service level
+ORDERING_COST   = im.ORDERING_COST   # NPR per purchase order
+Z_95            = im.Z_95            # z-score for 95% service level
 CACHE_HOURS     = 6
 COLLECTION_NAME = "inventoryPredictions"
 
@@ -65,20 +66,31 @@ class InventoryAnalysisService:
         demands       = [p["demand"] for p in predictions]
         forecast_demand = sum(demands)
         daily_demand    = forecast_demand / horizon_days if horizon_days else 1.0
-        demand_std      = float(np.std(demands)) if len(demands) > 1 else daily_demand * 0.3
+        # Real historical demand variability from actual daily sales (`df`,
+        # loaded above) — not the Prophet forecast's own point predictions.
+        # See inventory_math.safety_stock()'s docstring for why that
+        # substitution would be wrong: a smoother forecast has lower
+        # self-variance, which would shrink the safety buffer exactly when
+        # a good fit makes you most confident to rely on one.
+        # `df` (real historical sales, loaded above) is populated regardless
+        # of whether Prophet succeeded — use it whenever there's more than a
+        # single data point, not just when `has_data`/Prophet's own path
+        # succeeded, so a Prophet exception on otherwise-good history
+        # doesn't fall back to the weaker demand-proportional estimate.
+        demand_std      = float(df["qty"].std(ddof=1)) if len(df) > 1 else daily_demand * im.DEMAND_STD_CV_FALLBACK
 
-        safety_stock    = max(1, round(Z_95 * demand_std * math.sqrt(lead_time)))
-        reorder_point   = round(daily_demand * lead_time + safety_stock)
+        # Safety Stock, Reorder Point, EOQ, Suggested Purchase — via the
+        # shared formulas in app/core/inventory_math.py (see that module for
+        # worked examples and why suggested_purchase must not double-count
+        # safety_stock or eoq on top of the reorder-point gap).
+        safety_stock    = im.safety_stock(demand_std, lead_time)
+        reorder_point   = im.reorder_point(daily_demand, lead_time, safety_stock)
 
         holding_cost    = max(1.0, buying_price * 0.20)
         annual_demand   = daily_demand * 365
-        eoq             = (round(math.sqrt((2 * annual_demand * ORDERING_COST) / holding_cost))
-                          if annual_demand > 0 else 0)
+        eoq             = im.eoq(annual_demand, order_cost=ORDERING_COST, holding_cost_per_unit=holding_cost)
 
-        if current_stock <= reorder_point:
-            suggested_purchase = max(eoq, round(reorder_point - current_stock + eoq))
-        else:
-            suggested_purchase = 0
+        suggested_purchase = im.suggested_purchase_qty(current_stock, reorder_point, eoq)
 
         days_of_stock = round(current_stock / daily_demand) if daily_demand > 0 else 999
 

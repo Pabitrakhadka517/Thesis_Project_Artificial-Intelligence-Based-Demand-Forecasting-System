@@ -35,11 +35,15 @@ import numpy as np
 from app.ml.model_trainer import ModelTrainer, load_metadata
 from app.ml.predictor import DemandPredictor
 from app.ml.preprocessor import DataPreprocessor
+from app.core import inventory_math as im
 
 # ── constants ──────────────────────────────────────────────────────────────────
-ORDERING_COST = 500.0    # NPR per purchase order (fixed across SKUs)
-Z_95          = 1.645    # 95 % service level
-HOLDING_RATE  = 0.20     # 20 % of buying price per year
+# Re-exported from the shared module so existing references to these names
+# elsewhere in this file (and their echo into the API response payload)
+# keep working without a wider rename.
+ORDERING_COST = im.ORDERING_COST
+Z_95          = im.Z_95
+HOLDING_RATE  = im.HOLDING_RATE
 
 # RF+XGBoost+LSTM training is CPU/memory heavy (2-5 min/SKU). With no auth in
 # front of this service (tracked separately), cap concurrent training jobs so
@@ -290,7 +294,13 @@ class MLForecastService:
         demands      = [p["predicted_qty"] for p in predictions]
         forecast_qty = float(sum(demands))
         daily_demand = forecast_qty / horizon_days
-        demand_std   = float(np.std(demands)) if len(demands) > 1 else daily_demand * 0.25
+        # Real historical demand variability, computed alongside the forecast
+        # in predictor.py (from actual past sales, not the forecast curve
+        # itself — see inventory_math.safety_stock()'s docstring). Falls back
+        # to a demand-proportional estimate only if that's ever unavailable
+        # (e.g. a stored forecast predating this field).
+        _hist_std    = forecast_result.get("historical_demand_std")
+        demand_std   = float(_hist_std) if _hist_std is not None else daily_demand * im.DEMAND_STD_CV_FALLBACK
         annual_demand = daily_demand * 365
 
         # ── product static ─────────────────────────────────────────────────────
@@ -299,22 +309,14 @@ class MLForecastService:
         selling_price = float(sku_meta.get("selling_price",  120.0))
         max_stock     = float(sku_meta.get("max_stock", 1000))
 
-        # ── Safety Stock ───────────────────────────────────────────────────────
-        # SS = Z × σ_demand × √(lead_time)
-        safety_stock = max(1, round(Z_95 * demand_std * math.sqrt(lead_time)))
-
-        # ── Reorder Point ──────────────────────────────────────────────────────
-        # ROP = (daily_demand × lead_time) + safety_stock
-        reorder_point = round(daily_demand * lead_time + safety_stock)
-
-        # ── EOQ ────────────────────────────────────────────────────────────────
-        # EOQ = √(2 × D × S / H)
+        # ── Safety Stock, Reorder Point, EOQ, Suggested Purchase ───────────────
+        # All four via the shared formulas in app/core/inventory_math.py — see
+        # that module for the worked examples and why suggested_purchase must
+        # not add safety_stock or eoq a second time on top of the ROP gap.
+        safety_stock  = im.safety_stock(demand_std, lead_time)
+        reorder_point = im.reorder_point(daily_demand, lead_time, safety_stock)
         holding_cost_per_unit = max(1.0, buying_price * HOLDING_RATE)
-        eoq = (
-            max(1, round(math.sqrt((2 * annual_demand * ORDERING_COST) / holding_cost_per_unit)))
-            if annual_demand > 0
-            else 0
-        )
+        eoq = im.eoq(annual_demand, order_cost=ORDERING_COST, holding_cost_per_unit=holding_cost_per_unit)
 
         # ── Average Inventory (EOQ model) ──────────────────────────────────────
         # Using the classic EOQ formula: avg_inventory = EOQ/2 + safety_stock
@@ -323,11 +325,7 @@ class MLForecastService:
         avg_inventory = max(1.0, eoq / 2 + safety_stock)
 
         # ── Suggested Purchase Quantity ────────────────────────────────────────
-        if current_stock <= reorder_point:
-            deficit = max(0, reorder_point - current_stock)
-            suggested_purchase = max(eoq, deficit + safety_stock)
-        else:
-            suggested_purchase = 0
+        suggested_purchase = im.suggested_purchase_qty(current_stock, reorder_point, eoq)
 
         # ── Days of Stock ──────────────────────────────────────────────────────
         days_of_stock = (

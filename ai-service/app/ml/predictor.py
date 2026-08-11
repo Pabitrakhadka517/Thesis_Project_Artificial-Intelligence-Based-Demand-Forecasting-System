@@ -126,6 +126,17 @@ class DemandPredictor:
         confidence_score = self._confidence_from_metrics(metrics)
         base_width       = self._base_interval_width(predictions, metrics)
 
+        # Real historical demand variability (NOT the forecast's own
+        # variance — see app/core/inventory_math.py's safety_stock()
+        # docstring for why that distinction matters). This is what safety
+        # stock should actually be sized against; RMSE is the fallback when
+        # there isn't enough history for a meaningful sample std.
+        historical_qty = sku_df["qty"].tail(180)
+        if len(historical_qty) > 1:
+            historical_demand_std = float(historical_qty.std(ddof=1))
+        else:
+            historical_demand_std = float(metrics.get("rmse") or 0.0)
+
         # Attach step-scaled confidence intervals.
         # Recursive forecasting compounds errors at each step: step t has
         # uncertainty that grows proportionally to √t (random-walk error model).
@@ -137,14 +148,15 @@ class DemandPredictor:
             row["confidence"]  = confidence_score
 
         return {
-            "sku_id":           sku_id,
-            "model":            chosen_model,
-            "best_model":       meta.get("best_model"),
-            "horizon_days":     horizon_days,
-            "confidence_score": confidence_score,
-            "predictions":      predictions,
-            "metrics":          metrics,
-            "trained_at":       meta.get("trained_at"),
+            "sku_id":                sku_id,
+            "model":                 chosen_model,
+            "best_model":            meta.get("best_model"),
+            "horizon_days":          horizon_days,
+            "confidence_score":      confidence_score,
+            "predictions":           predictions,
+            "metrics":               metrics,
+            "trained_at":            meta.get("trained_at"),
+            "historical_demand_std": round(historical_demand_std, 3),
         }
 
     def get_all_model_metrics(self, sku_id: str) -> Optional[dict]:
