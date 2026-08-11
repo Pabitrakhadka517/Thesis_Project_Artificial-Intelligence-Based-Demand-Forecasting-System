@@ -3,7 +3,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { motion } from 'framer-motion'
 import { Tag, Plus, Search, Edit2, Trash2, RefreshCw, ToggleLeft, ToggleRight } from 'lucide-react'
 import { Card, CardContent } from '@/components/common/Card'
 import { Button } from '@/components/common/Button'
@@ -13,6 +12,7 @@ import { SkeletonTable } from '@/components/common/Skeleton'
 import { EmptyState } from '@/components/common/EmptyState'
 import { ErrorState } from '@/components/common/ErrorState'
 import { Pagination } from '@/components/common/Pagination'
+import { PageHeader } from '@/components/common/PageHeader'
 import { useToast } from '@/hooks/useToast'
 import axiosInstance from '@/api/axiosInstance'
 
@@ -101,27 +101,18 @@ export default function CategoriesPage() {
 
   return (
     <div className="space-y-5 pb-6">
-      {/* Header */}
-      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
-        className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <Tag className="h-5 w-5" style={{ color: '#F59E0B' }} />
-            <h1 className="text-[22px] font-bold" style={{ color: 'var(--text-primary)' }}>Categories</h1>
-            <span className="text-[12px] font-semibold px-2 py-0.5 rounded-full"
-              style={{ background: 'rgba(245,158,11,.1)', color: '#F59E0B' }}>
-              {allCategories.length}
-            </span>
-          </div>
-          <p className="text-[13px]" style={{ color: 'var(--text-muted)' }}>
-            Organize products into categories
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="secondary" size="sm" icon={RefreshCw} onClick={refetch}>Refresh</Button>
-          <Button size="sm" icon={Plus} onClick={openCreate}>Add Category</Button>
-        </div>
-      </motion.div>
+      <PageHeader
+        icon={Tag}
+        eyebrow="Catalog"
+        title="Categories"
+        subtitle={`${allCategories.length} categories · Organize products into categories`}
+        actions={
+          <>
+            <Button variant="secondary" size="sm" icon={RefreshCw} onClick={refetch}>Refresh</Button>
+            <Button size="sm" icon={Plus} onClick={openCreate}>Add Category</Button>
+          </>
+        }
+      />
 
       {/* Search */}
       <Card>
@@ -161,8 +152,7 @@ export default function CategoriesPage() {
               </thead>
               <tbody>
                 {categories.map((cat) => (
-                  <motion.tr key={cat._id}
-                    initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                  <tr key={cat._id}
                     style={{ borderBottom: '1px solid var(--border-subtle)' }}
                     onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-muted)'}
                     onMouseLeave={e => e.currentTarget.style.background = ''}>
@@ -207,7 +197,7 @@ export default function CategoriesPage() {
                         </button>
                       </div>
                     </td>
-                  </motion.tr>
+                  </tr>
                 ))}
               </tbody>
             </table>

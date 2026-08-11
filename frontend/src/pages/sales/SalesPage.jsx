@@ -2,7 +2,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  ShoppingCart, Plus, Search, X, Trash2, Receipt,
+  ShoppingCart, Plus, Search, Trash2, Receipt,
   CheckCircle, Clock, XCircle, ChevronDown, ChevronUp,
   Minus, DollarSign, TrendingUp, BarChart2, Hash,
   Calendar, User, CreditCard, FileText,
@@ -10,12 +10,23 @@ import {
 import axiosInstance from '@/api/axiosInstance'
 import { useToast } from '@/hooks/useToast'
 import { useRole } from '@/hooks/useRole'
-import { formatDate, getProductImage, imgFallback, formatRs } from '@/utils'
+import { formatDate, getProductImage, imgFallback, formatRs, formatNumber } from '@/utils'
 import { ErrorState } from '@/components/common/ErrorState'
-import { ConfirmDialog } from '@/components/common/Modal'
+import { EmptyState } from '@/components/common/EmptyState'
+import { SkeletonTable } from '@/components/common/Skeleton'
+import { Modal, ConfirmDialog } from '@/components/common/Modal'
+import { Input } from '@/components/common/Input'
+import { Select } from '@/components/common/Select'
+import { Button } from '@/components/common/Button'
 import { Pagination } from '@/components/common/Pagination'
+import { PageHeader } from '@/components/common/PageHeader'
 import { useSortable } from '@/hooks/useSortable'
 import { SortableTH } from '@/components/common/SortableTH'
+import { useDebounce } from '@/hooks/useDebounce'
+
+// Loose phone check — accepts digits/spaces/+/- of plausible length; the
+// backend doesn't enforce a strict format, so this only catches obvious typos.
+const PHONE_RE = /^[0-9+\-\s]{7,20}$/
 
 // ── constants ─────────────────────────────────────────────────────────────────
 const PAYMENT_METHODS = ['cash', 'card', 'qr', 'credit']
@@ -72,11 +83,13 @@ function NewSaleModal({ onClose }) {
   const [paymentMethod, setPay]     = useState('cash')
   const [discount, setDiscount]     = useState(0)
   const [notes, setNotes]           = useState('')
+  const [submitted, setSubmitted]   = useState(false)
 
+  const debouncedProductSearch = useDebounce(productSearch, 300)
   const { data: prodData } = useQuery({
-    queryKey: ['products-search', productSearch],
-    queryFn:  () => axiosInstance.get(`/products?search=${encodeURIComponent(productSearch)}&limit=10`).then(r => r.data),
-    enabled:  productSearch.length > 0,
+    queryKey: ['products-search', debouncedProductSearch],
+    queryFn:  () => axiosInstance.get(`/products?search=${encodeURIComponent(debouncedProductSearch)}&limit=10`).then(r => r.data),
+    enabled:  debouncedProductSearch.length > 0,
     staleTime: 10_000,
   })
   const products = prodData?.data || []
@@ -103,6 +116,19 @@ function NewSaleModal({ onClose }) {
   const discountAmt = Math.min(discount, subtotal)
   const total       = subtotal - discountAmt
 
+  // Validation is advisory guardrails on top of the existing submit behavior —
+  // it never changes what gets sent (discountAmt is still clamped exactly as
+  // before), it only surfaces a clearer message before the request is made.
+  const fieldErrors = {
+    items: items.length === 0 ? 'Add at least one product to the cart.' : null,
+    customerPhone: customerPhone && !PHONE_RE.test(customerPhone) ? 'Enter a valid phone number.' : null,
+    discount: discount > subtotal ? `Discount can't exceed the subtotal — it will be capped at ${fmtFull(subtotal)}.` : null,
+  }
+  // Only disable the submit button once a first attempt has revealed a blocking
+  // error — otherwise the button would be permanently disabled while the cart
+  // is empty and the user could never trigger the validation messages below.
+  const hasBlockingError = submitted && (!!fieldErrors.items || !!fieldErrors.customerPhone)
+
   const mutation = useMutation({
     mutationFn: (d) => axiosInstance.post('/sales', d),
     onSuccess: (res) => {
@@ -115,7 +141,9 @@ function NewSaleModal({ onClose }) {
   })
 
   const handleSubmit = () => {
+    setSubmitted(true)
     if (!items.length) return toast({ title: 'Add at least one product', variant: 'warning' })
+    if (fieldErrors.customerPhone) return toast({ title: fieldErrors.customerPhone, variant: 'warning' })
     mutation.mutate({
       customerName: customerName || undefined,
       customerPhone: customerPhone || undefined,
@@ -127,75 +155,81 @@ function NewSaleModal({ onClose }) {
   }
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,.6)', backdropFilter: 'blur(4px)' }}
-      onClick={e => e.target === e.currentTarget && onClose()}>
-      <motion.div
-        initial={{ opacity: 0, scale: .95, y: 12 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: .95, y: 12 }}
-        className="w-full max-w-2xl rounded-2xl flex flex-col max-h-[90vh]"
-        style={{ background: 'var(--surface-card)', border: '1px solid var(--border)' }}>
-
-        <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: 'var(--border)' }}>
-          <div className="flex items-center gap-2">
-            <ShoppingCart className="h-5 w-5" style={{ color: '#3B82F6' }} />
-            <h3 className="text-[16px] font-bold" style={{ color: 'var(--text-primary)' }}>New Sale</h3>
+    <Modal
+      open
+      onClose={onClose}
+      width={672}
+      title={
+        <span className="inline-flex items-center gap-2">
+          <ShoppingCart className="h-5 w-5" style={{ color: '#3B82F6' }} />
+          New Sale
+        </span>
+      }
+      footer={
+        <Button
+          className="w-full"
+          onClick={handleSubmit}
+          disabled={mutation.isPending || hasBlockingError}
+          loading={mutation.isPending}
+        >
+          {mutation.isPending ? 'Recording…' : `Record Sale · ${fmtFull(total)}`}
+        </Button>
+      }
+    >
+      <div className="space-y-4">
+        {/* Product search */}
+        <div className="relative">
+          <label htmlFor="sale-product-search" className="block text-[11px] font-semibold uppercase tracking-widest mb-1.5" style={{ color: 'var(--text-muted)' }}>
+            Add Product
+          </label>
+          <div className="flex items-center gap-2 px-3 h-10 rounded-lg"
+            style={{ background: 'var(--surface-muted)', border: '1.5px solid var(--border)' }}>
+            <Search className="h-3.5 w-3.5 shrink-0" style={{ color: 'var(--text-muted)' }} />
+            <input id="sale-product-search" type="text" placeholder="Search by name or SKU…" value={productSearch}
+              role="combobox" aria-expanded={showProducts && products.length > 0} aria-controls="sale-product-results" aria-autocomplete="list"
+              onChange={e => { setSearch(e.target.value); setShowProd(true) }}
+              onFocus={() => setShowProd(true)}
+              className="flex-1 bg-transparent text-[13px] outline-none" style={{ color: 'var(--text-primary)' }} />
           </div>
-          <button onClick={onClose} className="h-7 w-7 rounded-md flex items-center justify-center"
-            style={{ color: 'var(--text-muted)', background: 'var(--surface-muted)' }}>
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        <div className="overflow-y-auto flex-1 px-6 py-4 space-y-4">
-          {/* Product search */}
-          <div className="relative">
-            <label className="block text-[11px] font-semibold uppercase tracking-widest mb-1.5" style={{ color: 'var(--text-muted)' }}>
-              Add Product
-            </label>
-            <div className="flex items-center gap-2 px-3 h-10 rounded-lg"
-              style={{ background: 'var(--surface-muted)', border: '1.5px solid var(--border)' }}>
-              <Search className="h-3.5 w-3.5 shrink-0" style={{ color: 'var(--text-muted)' }} />
-              <input type="text" placeholder="Search by name or SKU…" value={productSearch}
-                onChange={e => { setSearch(e.target.value); setShowProd(true) }}
-                onFocus={() => setShowProd(true)}
-                className="flex-1 bg-transparent text-[13px] outline-none" style={{ color: 'var(--text-primary)' }} />
-            </div>
-            {showProducts && products.length > 0 && (
-              <div className="absolute top-full left-0 right-0 z-10 mt-1 rounded-xl shadow-xl overflow-hidden"
-                style={{ background: 'var(--surface-card)', border: '1px solid var(--border)' }}>
-                {products.map(p => (
-                  <button key={p._id} onClick={() => addItem(p)}
-                    className="w-full flex items-center justify-between px-4 py-2.5 text-left"
-                    style={{ borderBottom: '1px solid var(--border)' }}
-                    onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-muted)'}
-                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="h-8 w-8 rounded-lg overflow-hidden shrink-0"
-                        style={{ background: 'var(--surface-muted)' }}>
-                        <img src={getProductImage(p)} alt={p.name}
-                          className="h-8 w-8 object-cover" onError={imgFallback} />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-[13px] font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{p.name}</p>
-                        <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-                          {p.sku} · {p.currentStock} {p.unit} available
-                          {p.currentStock === 0 && <span className="ml-1 text-red-500">OUT OF STOCK</span>}
-                        </p>
-                      </div>
+          {showProducts && products.length > 0 && (
+            <div id="sale-product-results" role="listbox" aria-label="Matching products"
+              className="absolute top-full left-0 right-0 z-10 mt-1 rounded-xl shadow-xl overflow-hidden"
+              style={{ background: 'var(--surface-card)', border: '1px solid var(--border)' }}>
+              {products.map(p => (
+                <button key={p._id} type="button" role="option" aria-selected="false" onClick={() => addItem(p)}
+                  className="w-full flex items-center justify-between px-4 py-2.5 text-left"
+                  style={{ borderBottom: '1px solid var(--border)' }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-muted)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="h-8 w-8 rounded-lg overflow-hidden shrink-0"
+                      style={{ background: 'var(--surface-muted)' }}>
+                      <img src={getProductImage(p)} alt="" aria-hidden="true" loading="lazy" decoding="async"
+                        className="h-8 w-8 object-cover" onError={imgFallback} />
                     </div>
-                    <span className="text-[13px] font-bold ml-4 shrink-0" style={{ color: '#3B82F6' }}>{fmtFull(p.sellingPrice)}</span>
-                  </button>
-                ))}
-              </div>
-            )}
+                    <div className="min-w-0">
+                      <p className="text-[13px] font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{p.name}</p>
+                      <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                        {p.sku} · {p.currentStock} {p.unit} available
+                        {p.currentStock === 0 && <span className="ml-1 text-red-500">OUT OF STOCK</span>}
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-[13px] font-bold ml-4 shrink-0" style={{ color: '#3B82F6' }}>{fmtFull(p.sellingPrice)}</span>
+                </button>
+              ))}
+            </div>
+          )}
           </div>
 
           {/* Cart */}
-          {items.length > 0 && (
+          {items.length === 0 ? (
+            <div className="rounded-xl px-4 py-6 text-center text-[12px]"
+              style={{ border: `1px dashed ${submitted && fieldErrors.items ? 'var(--brand-red)' : 'var(--border)'}`, color: submitted && fieldErrors.items ? 'var(--brand-red)' : 'var(--text-muted)' }}
+              role={submitted && fieldErrors.items ? 'alert' : undefined}>
+              {submitted && fieldErrors.items ? fieldErrors.items : 'Search for a product above to add it to this sale.'}
+            </div>
+          ) : (
             <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--border)' }}>
               <table className="w-full text-[13px]">
                 <thead>
@@ -214,7 +248,7 @@ function NewSaleModal({ onClose }) {
                         <div className="flex items-center gap-2.5">
                           <div className="h-8 w-8 rounded-lg overflow-hidden shrink-0"
                             style={{ background: 'var(--surface-muted)' }}>
-                            <img src={getProductImage(item)} alt={item.name}
+                            <img src={getProductImage(item)} alt={item.name} loading="lazy" decoding="async"
                               className="h-8 w-8 object-cover" onError={imgFallback} />
                           </div>
                           <div>
@@ -226,17 +260,20 @@ function NewSaleModal({ onClose }) {
                       <td className="px-3 py-2.5" style={{ color: 'var(--text-secondary)' }}>{fmtFull(item.price)}</td>
                       <td className="px-3 py-2.5">
                         <div className="flex items-center gap-1">
-                          <button onClick={() => updateQty(item.productId, item.quantity - 1)}
+                          <button type="button" onClick={() => updateQty(item.productId, item.quantity - 1)}
+                            aria-label={`Decrease quantity of ${item.name}`}
                             className="h-6 w-6 rounded flex items-center justify-center"
                             style={{ background: 'var(--surface-muted)' }}>
                             <Minus className="h-3 w-3" style={{ color: 'var(--text-muted)' }} />
                           </button>
                           <input type="number" min={1} max={item.maxQty} value={item.quantity}
+                            aria-label={`Quantity of ${item.name}`}
                             onChange={e => updateQty(item.productId, parseInt(e.target.value) || 1)}
                             className="w-12 text-center text-[13px] font-bold outline-none bg-transparent"
                             style={{ color: 'var(--text-primary)' }} />
-                          <button onClick={() => updateQty(item.productId, item.quantity + 1)}
+                          <button type="button" onClick={() => updateQty(item.productId, item.quantity + 1)}
                             disabled={item.quantity >= item.maxQty}
+                            aria-label={`Increase quantity of ${item.name}`}
                             className="h-6 w-6 rounded flex items-center justify-center disabled:opacity-40"
                             style={{ background: 'var(--surface-muted)' }}>
                             <Plus className="h-3 w-3" style={{ color: 'var(--text-muted)' }} />
@@ -247,7 +284,8 @@ function NewSaleModal({ onClose }) {
                         {fmtFull(item.price * item.quantity)}
                       </td>
                       <td className="px-3 py-2.5">
-                        <button onClick={() => setItems(p => p.filter(i => i.productId !== item.productId))}
+                        <button type="button" onClick={() => setItems(p => p.filter(i => i.productId !== item.productId))}
+                          aria-label={`Remove ${item.name} from cart`}
                           className="h-6 w-6 rounded flex items-center justify-center" style={{ color: '#EF4444' }}>
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
@@ -261,43 +299,18 @@ function NewSaleModal({ onClose }) {
 
           {/* Sale details */}
           <div className="grid grid-cols-2 gap-3">
-            {[
-              { label: 'Customer Name', value: customerName, set: setCustomer, placeholder: 'Walk-in customer', type: 'text' },
-              { label: 'Customer Phone', value: customerPhone, set: setPhone, placeholder: '+977-98xxxxxxxx', type: 'tel' },
-            ].map(f => (
-              <div key={f.label}>
-                <label className="block text-[11px] font-semibold uppercase tracking-widest mb-1.5"
-                  style={{ color: 'var(--text-muted)' }}>{f.label}</label>
-                <input type={f.type} placeholder={f.placeholder} value={f.value}
-                  onChange={e => f.set(e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-lg text-[13px] outline-none"
-                  style={{ background: 'var(--surface-muted)', border: '1.5px solid var(--border)', color: 'var(--text-primary)' }} />
-              </div>
-            ))}
-            <div>
-              <label className="block text-[11px] font-semibold uppercase tracking-widest mb-1.5"
-                style={{ color: 'var(--text-muted)' }}>Payment Method</label>
-              <select value={paymentMethod} onChange={e => setPay(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-lg text-[13px] outline-none"
-                style={{ background: 'var(--surface-muted)', border: '1.5px solid var(--border)', color: 'var(--text-primary)' }}>
-                {PAYMENT_METHODS.map(m => <option key={m} value={m}>{PAY_LABEL[m]}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-[11px] font-semibold uppercase tracking-widest mb-1.5"
-                style={{ color: 'var(--text-muted)' }}>Discount (Rs.)</label>
-              <input type="number" min={0} max={subtotal} value={discount}
-                onChange={e => setDiscount(Number(e.target.value) || 0)}
-                className="w-full px-3 py-2.5 rounded-lg text-[13px] outline-none"
-                style={{ background: 'var(--surface-muted)', border: '1.5px solid var(--border)', color: 'var(--text-primary)' }} />
-            </div>
-            <div className="col-span-2">
-              <label className="block text-[11px] font-semibold uppercase tracking-widest mb-1.5"
-                style={{ color: 'var(--text-muted)' }}>Notes</label>
-              <input type="text" placeholder="Optional notes…" value={notes} onChange={e => setNotes(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-lg text-[13px] outline-none"
-                style={{ background: 'var(--surface-muted)', border: '1.5px solid var(--border)', color: 'var(--text-primary)' }} />
-            </div>
+            <Input label="Customer Name" placeholder="Walk-in customer" value={customerName}
+              onChange={e => setCustomer(e.target.value)} />
+            <Input label="Customer Phone" type="tel" placeholder="+977-98xxxxxxxx" value={customerPhone}
+              onChange={e => setPhone(e.target.value)}
+              error={submitted ? fieldErrors.customerPhone : null} />
+            <Select label="Payment Method" value={paymentMethod} onChange={e => setPay(e.target.value)}
+              options={PAYMENT_METHODS.map(m => ({ value: m, label: PAY_LABEL[m] }))} />
+            <Input label="Discount (Rs.)" type="number" min={0} max={subtotal} value={discount}
+              onChange={e => setDiscount(Number(e.target.value) || 0)}
+              hint={fieldErrors.discount || undefined} />
+            <Input className="col-span-2" label="Notes" placeholder="Optional notes…" value={notes}
+              onChange={e => setNotes(e.target.value)} />
           </div>
 
           {/* Totals */}
@@ -317,16 +330,7 @@ function NewSaleModal({ onClose }) {
             </div>
           </div>
         </div>
-
-        <div className="px-6 py-4 border-t" style={{ borderColor: 'var(--border)' }}>
-          <button onClick={handleSubmit} disabled={mutation.isPending || !items.length}
-            className="w-full py-3 rounded-xl text-[14px] font-bold text-white disabled:opacity-50"
-            style={{ background: 'var(--brand-primary)' }}>
-            {mutation.isPending ? 'Recording…' : `Record Sale · ${fmtFull(total)}`}
-          </button>
-        </div>
-      </motion.div>
-    </motion.div>
+    </Modal>
   )
 }
 
@@ -417,6 +421,7 @@ export default function SalesPage() {
   const [expanded, setExpanded]   = useState(null)
   const [voidTarget, setVoidTarget] = useState(null)
   const sort = useSortable('saleDate', 'desc')
+  const debouncedSearch = useDebounce(search, 300)
 
   const { data: statsRaw } = useQuery({
     queryKey: ['sales-stats'],
@@ -426,11 +431,11 @@ export default function SalesPage() {
   const stats = statsRaw || {}
 
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ['sales', page, pageSize, search, status, startDate, endDate, sort.sortBy, sort.sortDir],
+    queryKey: ['sales', page, pageSize, debouncedSearch, status, startDate, endDate, sort.sortBy, sort.sortDir],
     queryFn:  () => {
       const qs = new URLSearchParams({
         page, limit: pageSize, sortBy: sort.sortBy, sortDir: sort.sortDir,
-        ...(search    && { search }),
+        ...(debouncedSearch && { search: debouncedSearch }),
         ...(status    && { status }),
         ...(startDate && { startDate }),
         ...(endDate   && { endDate }),
@@ -458,7 +463,7 @@ export default function SalesPage() {
   const kpis = [
     { title: "Today's Revenue",   value: fmtRs(stats.today?.revenue),  sub: `${stats.today?.count || 0} sales today`,          icon: DollarSign,  color: '#2563EB' },
     { title: "Monthly Revenue",   value: fmtRs(stats.month?.revenue),  sub: `${stats.month?.count || 0} sales this month`,     icon: TrendingUp,  color: '#10B981' },
-    { title: "Total Transactions",value: String(stats.total || 0),      sub: 'all time completed',                               icon: Hash,        color: '#8B5CF6' },
+    { title: "Total Transactions",value: formatNumber(stats.total || 0), sub: 'all time completed',                               icon: Hash,        color: '#8B5CF6' },
     { title: "Avg Order Value",   value: fmtRs(stats.month?.count > 0 ? stats.month?.revenue / stats.month?.count : 0),
                                                                          sub: 'this month',                                       icon: BarChart2,   color: '#F59E0B' },
   ]
@@ -468,20 +473,19 @@ export default function SalesPage() {
 
   return (
     <div className="space-y-5 pb-8">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-[22px] font-bold" style={{ color: 'var(--text-primary)' }}>Sales</h1>
-          <p className="text-[13px] mt-1" style={{ color: 'var(--text-muted)' }}>
-            {total.toLocaleString()} transactions recorded
-          </p>
-        </div>
-        <button onClick={() => setCreate(true)}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-[13px] font-bold text-white"
-          style={{ background: 'var(--brand-primary)', boxShadow: '0 4px 16px rgba(3,4,94,.4)' }}>
-          <Plus className="h-4 w-4" /> New Sale
-        </button>
-      </div>
+      <PageHeader
+        icon={ShoppingCart}
+        eyebrow="Transactions"
+        title="Sales"
+        subtitle={`${total.toLocaleString()} transactions recorded`}
+        actions={
+          <button onClick={() => setCreate(true)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-[13px] font-bold text-white"
+            style={{ background: 'var(--brand-primary)' }}>
+            <Plus className="h-4 w-4" /> New Sale
+          </button>
+        }
+      />
 
       {/* KPI cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -493,11 +497,12 @@ export default function SalesPage() {
         <div className="flex items-center gap-2 px-3 h-9 rounded-lg flex-1 min-w-48"
           style={{ background: 'var(--surface-card)', border: '1px solid var(--border)' }}>
           <Search className="h-3.5 w-3.5 shrink-0" style={{ color: 'var(--text-muted)' }} />
-          <input type="text" placeholder="Invoice or customer…" value={search}
+          <input type="text" placeholder="Invoice or customer…" aria-label="Search by invoice or customer" value={search}
             onChange={e => { setSearch(e.target.value); setPage(1) }}
             className="flex-1 bg-transparent text-[13px] outline-none" style={{ color: 'var(--text-primary)' }} />
         </div>
         <select value={status} onChange={e => { setStatus(e.target.value); setPage(1) }}
+          aria-label="Filter by status"
           className="h-9 px-3 rounded-lg text-[13px] outline-none"
           style={{ background: 'var(--surface-card)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}>
           <option value="">All Status</option>
@@ -506,9 +511,11 @@ export default function SalesPage() {
           <option value="void">Voided</option>
         </select>
         <input type="date" value={startDate} onChange={e => { setStartDate(e.target.value); setPage(1) }}
+          aria-label="Start date"
           className="h-9 px-3 rounded-lg text-[13px] outline-none"
           style={{ background: 'var(--surface-card)', border: '1px solid var(--border)', color: 'var(--text-primary)' }} />
         <input type="date" value={endDate} onChange={e => { setEndDate(e.target.value); setPage(1) }}
+          aria-label="End date"
           className="h-9 px-3 rounded-lg text-[13px] outline-none"
           style={{ background: 'var(--surface-card)', border: '1px solid var(--border)', color: 'var(--text-primary)' }} />
         {hasFilters && (
@@ -521,18 +528,23 @@ export default function SalesPage() {
 
       {/* Table */}
       {isLoading ? (
-        <div className="space-y-2">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="h-12 rounded-xl animate-pulse" style={{ background: 'var(--surface-card)' }} />
-          ))}
+        <div className="rounded-xl p-4" style={{ background: 'var(--surface-card)', border: '1px solid var(--border)' }}>
+          <SkeletonTable rows={8} cols={8} />
         </div>
       ) : isError ? (
         <ErrorState error={error} onRetry={refetch} />
       ) : sales.length === 0 ? (
-        <div className="text-center py-16">
-          <ShoppingCart className="h-12 w-12 mx-auto mb-3 opacity-20" style={{ color: 'var(--text-muted)' }} />
-          <p className="text-[14px]" style={{ color: 'var(--text-muted)' }}>No sales found</p>
-          {hasFilters && <button onClick={clearFilters} className="mt-3 text-[13px] underline" style={{ color: '#3B82F6' }}>Clear filters</button>}
+        <div className="rounded-xl" style={{ background: 'var(--surface-card)', border: '1px solid var(--border)' }}>
+          <EmptyState
+            icon={ShoppingCart}
+            title={hasFilters ? 'No matching sales' : 'No sales recorded yet'}
+            description={hasFilters ? 'Try a different search or clear the filters below.' : 'Record your first sale to see it here.'}
+            action={hasFilters ? (
+              <Button variant="secondary" size="sm" onClick={clearFilters}>Clear filters</Button>
+            ) : (
+              <Button size="sm" icon={Plus} onClick={() => setCreate(true)}>New Sale</Button>
+            )}
+          />
         </div>
       ) : (
         <div className="rounded-xl overflow-x-auto"
@@ -557,8 +569,7 @@ export default function SalesPage() {
             <tbody>
               {sales.map((s) => (
                 <Fragment key={s._id}>
-                  <motion.tr
-                    initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                  <tr
                     className="border-b cursor-pointer"
                     style={{ borderColor: 'var(--border)', background: expanded === s._id ? 'var(--surface-muted)' : 'transparent' }}
                     onClick={() => setExpanded(p => p === s._id ? null : s._id)}
@@ -571,7 +582,7 @@ export default function SalesPage() {
                       </div>
                     </td>
                     <td className="px-4 py-3" style={{ color: 'var(--text-secondary)' }}>{s.customerName || 'Walk-in'}</td>
-                    <td className="px-4 py-3" style={{ color: 'var(--text-secondary)' }}>{s.items?.length || 0} items</td>
+                    <td className="px-4 py-3" style={{ color: 'var(--text-secondary)' }}>{s.items?.length || 0} item{(s.items?.length || 0) === 1 ? '' : 's'}</td>
                     <td className="px-4 py-3 font-bold" style={{ color: 'var(--text-primary)' }}>{fmtFull(s.grandTotal)}</td>
                     <td className="px-4 py-3" style={{ color: 'var(--text-secondary)' }}>{PAY_LABEL[s.paymentMethod] || s.paymentMethod}</td>
                     <td className="px-4 py-3"><StatusBadge status={s.status} /></td>
@@ -582,6 +593,8 @@ export default function SalesPage() {
                       <div className="flex items-center gap-1.5">
                         <button
                           onClick={e => { e.stopPropagation(); setExpanded(p => p === s._id ? null : s._id) }}
+                          aria-label={expanded === s._id ? `Collapse details for ${s.invoiceNumber}` : `Expand details for ${s.invoiceNumber}`}
+                          aria-expanded={expanded === s._id}
                           className="h-6 w-6 rounded flex items-center justify-center"
                           style={{ color: 'var(--text-muted)' }}>
                           {expanded === s._id
@@ -591,6 +604,7 @@ export default function SalesPage() {
                         {s.status === 'completed' && can('admin') && (
                           <button
                             onClick={e => { e.stopPropagation(); setVoidTarget(s) }}
+                            aria-label={`Void sale ${s.invoiceNumber}`}
                             className="h-6 px-2 rounded text-[11px] font-semibold"
                             style={{ color: '#EF4444', background: 'rgba(239,68,68,.1)' }}>
                             Void
@@ -598,7 +612,7 @@ export default function SalesPage() {
                         )}
                       </div>
                     </td>
-                  </motion.tr>
+                  </tr>
                   {expanded === s._id && <SaleDetail sale={s} />}
                 </Fragment>
               ))}

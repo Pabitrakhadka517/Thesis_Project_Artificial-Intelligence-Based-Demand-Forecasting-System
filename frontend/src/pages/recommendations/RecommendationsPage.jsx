@@ -1,16 +1,18 @@
-import { useState } from 'react'
+import { useState, Fragment } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation } from '@tanstack/react-query'
-import { motion, AnimatePresence } from 'framer-motion'
 import {
   Package, AlertTriangle, CheckCircle2, TrendingUp,
   TrendingDown, Minus, RefreshCw, ShoppingCart, Brain, Sparkles,
+  ChevronRight, ChevronDown, Lightbulb,
 } from 'lucide-react'
 import { mlForecastService } from '@/services/mlForecastService'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/common/Card'
 import { SkeletonTable } from '@/components/common/Skeleton'
 import { EmptyState } from '@/components/common/EmptyState'
 import { Button } from '@/components/common/Button'
+import { AIExplainability } from '@/components/common/AIExplainability'
+import { PageHeader } from '@/components/common/PageHeader'
 import { useRole } from '@/hooks/useRole'
 
 // ── helpers ────────────────────────────────────────────────────────────────────
@@ -56,8 +58,7 @@ function ReorderBanner({ data }) {
   const [open, setOpen] = useState(true)
   if (!data?.length || !open) return null
   return (
-    <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
-      className="rounded-xl p-4 flex items-start gap-3"
+    <div className="rounded-xl p-4 flex items-start gap-3"
       style={{ background: 'rgba(239,68,68,.06)', border: '1px solid rgba(239,68,68,.2)' }}>
       <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5" style={{ color: '#EF4444' }} />
       <div className="flex-1">
@@ -70,7 +71,7 @@ function ReorderBanner({ data }) {
         </p>
       </div>
       <button onClick={() => setOpen(false)} className="text-[12px]" style={{ color: 'var(--text-muted)' }}>Dismiss</button>
-    </motion.div>
+    </div>
   )
 }
 
@@ -135,7 +136,7 @@ function InsightsPanel() {
             disabled={insightsMut.isPending}
             className="flex items-center gap-2 px-4 py-2 rounded-lg text-[12px] font-semibold transition-all"
             style={{
-              background:  insightsMut.isPending ? 'var(--surface-muted)' : 'linear-gradient(135deg,#7C3AED,#8B5CF6)',
+              background:  insightsMut.isPending ? 'var(--surface-muted)' : '#7C3AED',
               color:       insightsMut.isPending ? 'var(--text-muted)'    : '#fff',
               border:      '1px solid transparent',
               cursor:      insightsMut.isPending ? 'not-allowed' : 'pointer',
@@ -174,9 +175,8 @@ function InsightsPanel() {
         )}
 
         {/* result */}
-        <AnimatePresence>
-          {result && !insightsMut.isPending && (
-            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
+        {result && !insightsMut.isPending && (
+          <div className="space-y-4">
 
               {/* Data summary chips */}
               {Object.keys(summary).length > 0 && (
@@ -214,9 +214,8 @@ function InsightsPanel() {
               <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
                 AI insights are advisory only. Verify with your supplier lead times and current market conditions.
               </p>
-            </motion.div>
-          )}
-        </AnimatePresence>
+          </div>
+        )}
 
         {/* error */}
         {insightsMut.isError && (
@@ -235,6 +234,7 @@ function InsightsPanel() {
 // ── Main page ──────────────────────────────────────────────────────────────────
 export default function RecommendationsPage() {
   const [riskFilter, setRiskFilter] = useState(null)
+  const [expandedSku, setExpandedSku] = useState(null)
   const navigate = useNavigate()
   const { prefix, can } = useRole()
 
@@ -273,28 +273,22 @@ export default function RecommendationsPage() {
 
   return (
     <div className="space-y-5 pb-6 page-enter">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <Package className="h-5 w-5" style={{ color: '#8B5CF6' }} />
-            <h1 className="text-[22px] font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>
-              Inventory Recommendations
-            </h1>
-          </div>
-          <p className="text-[13px]" style={{ color: 'var(--text-muted)' }}>
-            AI-powered safety stock · reorder point · EOQ · purchase suggestions
-          </p>
-        </div>
-        <button
-          onClick={() => refetch()}
-          disabled={isFetching}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-semibold"
-          style={{ background: 'var(--surface-muted)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}>
-          <RefreshCw style={{ width: 13, height: 13 }} className={isFetching ? 'animate-spin' : ''} />
-          Refresh
-        </button>
-      </div>
+      <PageHeader
+        icon={Lightbulb}
+        eyebrow="Operations"
+        title="Inventory Recommendations"
+        subtitle="AI-powered safety stock · reorder point · EOQ · purchase suggestions"
+        actions={
+          <button
+            onClick={() => refetch()}
+            disabled={isFetching}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-semibold"
+            style={{ background: 'var(--surface-muted)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}>
+            <RefreshCw style={{ width: 13, height: 13 }} className={isFetching ? 'animate-spin' : ''} />
+            Refresh
+          </button>
+        }
+      />
 
       {/* Reorder alert banner */}
       <ReorderBanner data={alerts} />
@@ -354,6 +348,7 @@ export default function RecommendationsPage() {
               <table className="table-enterprise">
                 <thead>
                   <tr>
+                    <th></th>
                     <th>Product</th>
                     <th>Category</th>
                     <th className="text-right">Current Stock</th>
@@ -371,16 +366,29 @@ export default function RecommendationsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {items.map(row => (
-                    <tr key={row.sku_id}
+                  {items.map(row => {
+                    const isOpen = expandedSku === row.sku_id
+                    return (
+                    <Fragment key={row.sku_id}>
+                    <tr
                       style={row.needs_reorder ? { background: 'rgba(239,68,68,.03)' } : {}}>
+                      <td className="w-8">
+                        <button
+                          onClick={() => setExpandedSku(isOpen ? null : row.sku_id)}
+                          aria-label={isOpen ? 'Hide reasoning' : 'Show reasoning'}
+                          title={isOpen ? 'Hide reasoning' : 'Why this recommendation?'}
+                          className="icon-btn flex items-center justify-center"
+                          style={{ width: 22, height: 22, color: 'var(--text-muted)' }}>
+                          {isOpen ? <ChevronDown style={{ width: 14, height: 14 }} /> : <ChevronRight style={{ width: 14, height: 14 }} />}
+                        </button>
+                      </td>
                       <td>
-                        <div>
+                        <button onClick={() => setExpandedSku(isOpen ? null : row.sku_id)} className="text-left">
                           <p className="text-[13px] font-semibold" style={{ color: 'var(--text-primary)' }}>
                             {row.product_name || row.sku_id}
                           </p>
                           <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{row.sku_id}</p>
-                        </div>
+                        </button>
                       </td>
                       <td className="text-[12px]" style={{ color: 'var(--text-secondary)' }}>{row.category || '—'}</td>
                       <td className="num text-right">{row.current_stock?.toLocaleString() ?? '—'}</td>
@@ -432,7 +440,27 @@ export default function RecommendationsPage() {
                         </td>
                       )}
                     </tr>
-                  ))}
+                    {isOpen && (
+                      <tr>
+                        <td colSpan={can('inventory_manager') ? 13 : 12} style={{ background: 'var(--surface-muted)', padding: '10px 14px' }}>
+                          <AIExplainability
+                            currentStock={row.current_stock}
+                            forecastDemand={row.forecast_qty ?? (row.daily_demand != null ? row.daily_demand * 30 : null)}
+                            dailyDemand={row.daily_demand}
+                            leadTimeDays={row.lead_time_days}
+                            safetyStock={row.safety_stock}
+                            reorderPoint={row.reorder_point}
+                            eoq={row.eoq}
+                            suggestedPurchase={row.suggested_purchase}
+                            reasoning={row.explanation}
+                            hasHistoricalData={row.has_historical_data !== false}
+                          />
+                        </td>
+                      </tr>
+                    )}
+                    </Fragment>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>

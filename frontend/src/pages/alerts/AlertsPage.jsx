@@ -1,6 +1,5 @@
 ﻿import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { motion, AnimatePresence } from 'framer-motion'
 import {
   Bell, AlertTriangle, Package, TrendingDown, RefreshCw,
   CheckCircle, CheckCheck, Eye, Trash2, BellOff, Zap,
@@ -11,6 +10,7 @@ import { useRole } from '@/hooks/useRole'
 import { ErrorState } from '@/components/common/ErrorState'
 import { ConfirmDialog } from '@/components/common/Modal'
 import { Pagination } from '@/components/common/Pagination'
+import { PageHeader } from '@/components/common/PageHeader'
 
 const TYPE_CONFIG = {
   low_stock:       { label: 'Low Stock',       color: '#F59E0B', bg: 'rgba(245,158,11,.1)', Icon: Package },
@@ -35,11 +35,7 @@ function AlertCard({ alert, onAcknowledge, onResolve, onRead, onDelete }) {
   const { Icon } = typeCfg
 
   return (
-    <motion.div
-      layout
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, x: -20 }}
+    <div
       className="rounded-xl p-4"
       style={{
         background: 'var(--surface-card)',
@@ -124,7 +120,7 @@ function AlertCard({ alert, onAcknowledge, onResolve, onRead, onDelete }) {
           </button>
         </div>
       </div>
-    </motion.div>
+    </div>
   )
 }
 
@@ -201,34 +197,33 @@ export default function AlertsPage() {
 
   return (
     <div className="space-y-6 pb-8">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-[22px] font-bold" style={{ color: 'var(--text-primary)' }}>Alerts</h1>
-          <p className="text-[13px] mt-1" style={{ color: 'var(--text-muted)' }}>
-            {total} alerts · {unread} unread
-          </p>
-        </div>
-        <div className="flex gap-2">
-          {unread > 0 && (
-            <button onClick={() => markAllReadMutation.mutate()}
-              disabled={markAllReadMutation.isPending}
-              className="flex items-center gap-2 px-3 py-2 rounded-xl text-[12px] font-semibold"
-              style={{ background: 'var(--surface-card)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
-              <BellOff className="h-3.5 w-3.5" /> Mark all read
-            </button>
-          )}
-          {can('inventory_manager') && (
-            <button onClick={() => generateMutation.mutate()}
-              disabled={generateMutation.isPending}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-[13px] font-bold text-white"
-              style={{ background: 'var(--brand-primary)', boxShadow: '0 4px 16px rgba(3,4,94,.4)' }}>
-              <Zap className="h-4 w-4" />
-              {generateMutation.isPending ? 'Scanning…' : 'Scan Inventory'}
-            </button>
-          )}
-        </div>
-      </div>
+      <PageHeader
+        icon={Bell}
+        eyebrow="Intelligence"
+        title="Alerts"
+        subtitle={`${total} alerts · ${unread} unread`}
+        actions={
+          <>
+            {unread > 0 && (
+              <button onClick={() => markAllReadMutation.mutate()}
+                disabled={markAllReadMutation.isPending}
+                className="flex items-center gap-2 px-3 py-2 rounded-xl text-[12px] font-semibold"
+                style={{ background: 'var(--surface-card)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
+                <BellOff className="h-3.5 w-3.5" /> Mark all read
+              </button>
+            )}
+            {can('inventory_manager') && (
+              <button onClick={() => generateMutation.mutate()}
+                disabled={generateMutation.isPending}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-[13px] font-bold text-white"
+                style={{ background: 'var(--brand-primary)' }}>
+                <Zap className="h-4 w-4" />
+                {generateMutation.isPending ? 'Scanning…' : 'Scan Inventory'}
+              </button>
+            )}
+          </>
+        }
+      />
 
       {/* Filters */}
       <div className="flex gap-3 flex-wrap">
@@ -272,20 +267,18 @@ export default function AlertsPage() {
           )}
         </div>
       ) : (
-        <AnimatePresence mode="popLayout">
-          <div className="space-y-3">
-            {alerts.map((alert) => (
-              <AlertCard
-                key={alert._id}
-                alert={alert}
-                onRead={markReadMutation.mutate}
-                onAcknowledge={acknowledgeMutation.mutate}
-                onResolve={resolveMutation.mutate}
-                onDelete={setDeleteTarget}
-              />
-            ))}
-          </div>
-        </AnimatePresence>
+        <div className="space-y-3">
+          {alerts.map((alert) => (
+            <AlertCard
+              key={alert._id}
+              alert={alert}
+              onRead={markReadMutation.mutate}
+              onAcknowledge={acknowledgeMutation.mutate}
+              onResolve={resolveMutation.mutate}
+              onDelete={setDeleteTarget}
+            />
+          ))}
+        </div>
       )}
 
       {/* Pagination */}

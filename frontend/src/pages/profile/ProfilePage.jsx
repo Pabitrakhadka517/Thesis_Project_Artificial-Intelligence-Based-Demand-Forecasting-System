@@ -10,6 +10,7 @@ import { Button } from '@/components/common/Button'
 import { Input } from '@/components/common/Input'
 import { ImageUpload } from '@/components/common/ImageUpload'
 import { ChangePasswordForm } from '@/components/common/ChangePasswordForm'
+import { PageHeader } from '@/components/common/PageHeader'
 import { getInitials, formatDate } from '@/utils'
 import { useToast } from '@/hooks/useToast'
 import { LogOut, User, Lock, Shield, Camera } from 'lucide-react'
@@ -103,15 +104,12 @@ export default function ProfilePage() {
 
   return (
     <div className="space-y-5 pb-6 max-w-2xl">
-      {/* ── Header ── */}
-      <div>
-        <h1 className="text-[22px] font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>
-          Profile
-        </h1>
-        <p className="text-[13px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
-          Manage your account information and security settings
-        </p>
-      </div>
+      <PageHeader
+        icon={User}
+        eyebrow="Account"
+        title="Profile"
+        subtitle="Manage your account information and security settings"
+      />
 
       {/* ── Avatar card ── */}
       <Card>

@@ -1,6 +1,5 @@
 import { useState, useMemo, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { motion, AnimatePresence } from 'framer-motion'
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, LineChart, Line,
   ScatterChart, Scatter, ZAxis,
@@ -14,26 +13,45 @@ import {
   XCircle, ChevronUp, ChevronDown, Search, RotateCcw, Info, Zap,
   Brain, Sparkles, TrendingDown, Cpu,
 } from 'lucide-react'
-import * as XLSX from 'xlsx'
 import { reportService } from '@/services/reportService'
 import { analyticsService } from '@/services/analyticsService'
 import axiosInstance from '@/api/axiosInstance'
 import { formatCurrency, formatNumber, formatPercent, formatDate, exportCSV, getProductImage, imgFallback } from '@/utils'
+import { CHART_PALETTE, RISK_STYLES } from '@/constants/statusColors'
+import { PageHeader } from '@/components/common/PageHeader'
 
 // ── Palette ───────────────────────────────────────────────────────────────────
-const PIE_COLORS = ['#3B82F6','#10B981','#F59E0B','#6366F1','#EC4899','#EF4444','#06B6D4','#84CC16','#F97316','#8B5CF6']
+const PIE_COLORS = CHART_PALETTE
+
+// ── Period-over-period growth ────────────────────────────────────────────────
+// Derives a % change from a trend series already returned by the report API —
+// compares the average of the second half of the period against the first
+// half, so KPI cards can show a real trend indicator without any new backend
+// field. Returns null (no badge rendered) when there isn't enough data to
+// make the comparison meaningful.
+function periodGrowth(trend, key) {
+  if (!Array.isArray(trend) || trend.length < 4) return null
+  const mid = Math.floor(trend.length / 2)
+  const firstHalf  = trend.slice(0, mid)
+  const secondHalf = trend.slice(mid)
+  const avg = arr => arr.reduce((s, r) => s + (Number(r[key]) || 0), 0) / (arr.length || 1)
+  const before = avg(firstHalf)
+  const after   = avg(secondHalf)
+  if (before <= 0) return null
+  return Math.round(((after - before) / before) * 1000) / 10
+}
 
 // ── Tab definitions ───────────────────────────────────────────────────────────
 const TABS = [
-  { key: 'executive',   label: 'Executive',       Icon: LayoutDashboard, color: '#6366F1' },
-  { key: 'analytics',  label: 'Analytics',       Icon: BarChart3,       color: '#3B82F6' },
+  { key: 'executive',   label: 'Executive',       Icon: LayoutDashboard, color: 'var(--brand-indigo)' },
+  { key: 'analytics',  label: 'Analytics',       Icon: BarChart3,       color: 'var(--brand-blue)' },
   { key: 'sales',      label: 'Sales',           Icon: TrendingUp,      color: '#2563EB' },
-  { key: 'purchases',  label: 'Purchases',       Icon: ShoppingCart,    color: '#10B981' },
-  { key: 'inventory',  label: 'Inventory',       Icon: Package,         color: '#F59E0B' },
-  { key: 'profit',     label: 'Profit & Margin', Icon: DollarSign,      color: '#8B5CF6' },
+  { key: 'purchases',  label: 'Purchases',       Icon: ShoppingCart,    color: 'var(--color-success)' },
+  { key: 'inventory',  label: 'Inventory',       Icon: Package,         color: 'var(--brand-amber)' },
+  { key: 'profit',     label: 'Profit & Margin', Icon: DollarSign,      color: 'var(--brand-purple)' },
   { key: 'suppliers',  label: 'Suppliers',       Icon: Truck,           color: '#EC4899' },
-  { key: 'forecast',   label: 'Forecast',        Icon: Target,          color: '#06B6D4' },
-  { key: 'ai-insights',label: 'AI Insights',     Icon: Brain,           color: '#8B5CF6' },
+  { key: 'forecast',   label: 'Forecast',        Icon: Target,          color: 'var(--brand-cyan)' },
+  { key: 'ai-insights',label: 'AI Insights',     Icon: Brain,           color: 'var(--brand-purple)' },
 ]
 
 // ── Date presets ──────────────────────────────────────────────────────────────
@@ -113,7 +131,7 @@ function getExportRows(tab, data) {
     case 'suppliers': return (data.suppliers || []).map(s => ({
       Supplier: s.name, Contact: s.contactPerson, Phone: s.phone,
       District: s.district, 'Lead Time(d)': s.leadTimeDays,
-      Orders: s.totalOrders, Spend: s.totalSpend,
+      'Avg Delivery(d)': s.avgDeliveryDays, Orders: s.totalOrders, Spend: s.totalSpend,
       Pending: s.pendingOrders, Status: s.status, Rating: s.rating,
     }))
     case 'forecast': return (data.predictions || []).map(p => ({
@@ -130,11 +148,70 @@ function getExportRows(tab, data) {
   }
 }
 
-function downloadExcel(rows, filename) {
-  if (!rows?.length) return
-  const worksheet = XLSX.utils.json_to_sheet(rows)
-  const workbook  = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'Report')
+// Excel supports multiple worksheets in one workbook — unlike the single-table
+// CSV export above, this lets the file carry EVERYTHING a tab shows on screen
+// (KPIs, chart data, every breakdown table), not just the primary table. Each
+// tab returns a named list of {name, rows} sheets; empty sheets are skipped.
+function getExportSheets(tab, data) {
+  if (!data) return []
+  const sheets = []
+  const add = (name, rows) => { if (rows?.length) sheets.push({ name, rows }) }
+
+  switch (tab) {
+    case 'executive':
+      add('Summary', getExportRows('executive', data))
+      add('Top Products', (data.topProducts || []).map(p => ({ Product: p.name, Revenue: p.revenue })))
+      add('Top Suppliers', (data.topSuppliers || []).map(s => ({ Supplier: s.name, Spend: s.amount })))
+      break
+    case 'sales':
+      add('Top Products', getExportRows('sales', data))
+      add('By Category', (data.byCategory || []).map(c => ({ Category: c.name, Revenue: c.revenue, Quantity: c.qty, Orders: c.orders })))
+      add('By Payment Method', (data.byPaymentMethod || []).map(m => ({ Method: m.method, Amount: m.amount })))
+      add('Daily Trend', (data.trend || []).map(t => ({ Date: t.date, Revenue: t.revenue })))
+      break
+    case 'purchases':
+      add('Top Suppliers', getExportRows('purchases', data))
+      add('By Payment Status', (data.byPaymentStatus || []).map(s => ({ Status: s.status, Amount: s.amount, Orders: s.count })))
+      add('By Order Status', (data.byStatus || []).map(s => ({ Status: s.status, Amount: s.amount, Orders: s.count })))
+      add('Daily Trend', (data.trend || []).map(t => ({ Date: t.date, Amount: t.amount })))
+      break
+    case 'inventory':
+      add('Low Stock Products', getExportRows('inventory', data))
+      add('Value by Category', (data.byCategory || []).map(c => ({ Category: c.name, Value: c.value })))
+      add('Movement Summary', (data.movementSummary || []).map(m => ({ Type: m.type, Count: m.count, 'Total Units': m.totalUnits })))
+      break
+    case 'profit':
+      add('Top Margin Products', getExportRows('profit', data))
+      add('Daily Trend', (data.trend || []).map(t => ({ Date: t.date, Revenue: t.revenue, Profit: t.profit, COGS: t.cogs })))
+      break
+    case 'suppliers':
+      add('Supplier Details', getExportRows('suppliers', data))
+      break
+    case 'forecast':
+      add('Predictions', getExportRows('forecast', data))
+      add('Model Accuracy', (data.modelAccuracy || []).map(m => ({ Model: m.model, 'MAPE%': m.avg_mape, RMSE: m.avg_rmse, SKUs: m.sku_count })))
+      break
+    default:
+      add('Report', getExportRows(tab, data))
+  }
+  return sheets
+}
+
+// xlsx (SheetJS) is a large library (~250KB+) only needed when a user
+// actually clicks "Export to Excel" — dynamically imported here instead of
+// bundled into every visit to the Reports page.
+async function downloadExcel(sheets, filename) {
+  if (!sheets?.length) return
+  const XLSX = await import('xlsx')
+  const workbook = XLSX.utils.book_new()
+  for (const { name, rows } of sheets) {
+    if (!rows?.length) continue
+    const worksheet = XLSX.utils.json_to_sheet(rows)
+    // Sheet names are capped at 31 chars and can't contain []/\?*: by the XLSX format.
+    const safeName = name.replace(/[\[\]\\/?*:]/g, '').slice(0, 31) || 'Sheet'
+    XLSX.utils.book_append_sheet(workbook, worksheet, safeName)
+  }
+  if (!workbook.SheetNames.length) return
   XLSX.writeFile(workbook, `${filename}.xlsx`)
 }
 
@@ -216,7 +293,7 @@ function EmptyState({ message = 'No data for this period', hint = 'Try adjusting
 function ErrorState({ onRetry }) {
   return (
     <div className="flex flex-col items-center justify-center py-20 gap-4">
-      <XCircle className="w-12 h-12 opacity-40" style={{ color: '#EF4444' }} />
+      <XCircle className="w-12 h-12 opacity-40" style={{ color: 'var(--color-danger)' }} />
       <div className="text-center">
         <p className="font-semibold text-[15px]" style={{ color: 'var(--text-primary)' }}>Failed to load report</p>
         <p className="text-[13px] mt-1" style={{ color: 'var(--text-muted)' }}>Could not fetch data from the server.</p>
@@ -231,21 +308,21 @@ function ErrorState({ onRetry }) {
 }
 
 // ── Shared UI ─────────────────────────────────────────────────────────────────
-function KpiCard({ Icon, label, value, sub, color = '#6366F1', growth }) {
+function KpiCard({ Icon, label, value, sub, color = 'var(--brand-indigo)', growth }) {
   return (
     <div className="rounded-xl overflow-hidden"
       style={{ background: 'var(--surface-card)', border: '1px solid var(--border)' }}>
-      <div style={{ height: 3, background: `linear-gradient(90deg,${color},${color}44)` }} />
+      <div style={{ height: 3, background: color }} />
       <div className="p-5">
         <div className="flex items-center justify-between mb-3">
           <div className="w-9 h-9 rounded-lg flex items-center justify-center"
-            style={{ background: `${color}18` }}>
+            style={{ background: `color-mix(in srgb, ${color} 10%, transparent)` }}>
             <Icon className="w-4.5 h-4.5" style={{ color }} />
           </div>
           {growth != null && (
             <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-0.5"
               style={{
-                color:      growth > 0 ? '#10B981' : growth < 0 ? '#EF4444' : 'var(--text-muted)',
+                color:      growth > 0 ? 'var(--color-success)' : growth < 0 ? 'var(--color-danger)' : 'var(--text-muted)',
                 background: growth > 0 ? 'rgba(16,185,129,.12)' : growth < 0 ? 'rgba(239,68,68,.12)' : 'var(--surface-muted)',
               }}>
               {growth > 0 ? <ArrowUp className="w-2.5 h-2.5" />
@@ -264,21 +341,32 @@ function KpiCard({ Icon, label, value, sub, color = '#6366F1', growth }) {
   )
 }
 
+// Styling kept in lockstep with the shared components/charts/ChartTooltip.jsx
+// (same padding/radius/shadow/tabular-nums) even though this local variant
+// stays separate — it needs the `currency` shortcut the shared one doesn't
+// have, and rewiring all 18 call sites in this file onto formatY callbacks
+// isn't worth the risk for an identical visual result.
 const ChartTooltip = ({ active, payload, label, currency }) => {
   if (!active || !payload?.length) return null
   return (
-    <div className="rounded-xl p-3 shadow-xl text-[12px]"
-      style={{ background: 'var(--surface-card)', border: '1px solid var(--border)' }}>
+    <div className="text-[12px]" style={{
+      background: 'var(--surface-card)',
+      border: '1px solid var(--border)',
+      borderRadius: 'var(--r-md)',
+      padding: '10px 14px',
+      boxShadow: 'var(--shadow-lg)',
+      minWidth: '130px',
+    }}>
       {label != null && (
-        <p className="font-semibold mb-2 pb-1.5 border-b" style={{ color: 'var(--text-primary)', borderColor: 'var(--border)' }}>
+        <p className="mb-2 pb-1.5 border-b" style={{ color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600, borderColor: 'var(--border-subtle)' }}>
           {label}
         </p>
       )}
       {payload.map(p => (
-        <div key={p.name} className="flex items-center gap-2 mt-1">
-          <span className="w-2 h-2 rounded-full" style={{ background: p.color || p.stroke }} />
-          <span style={{ color: 'var(--text-muted)' }}>{p.name}:</span>
-          <span className="font-semibold ml-auto" style={{ color: 'var(--text-primary)' }}>
+        <div key={p.name} className="flex items-center gap-2 mt-1 first:mt-0">
+          <span className="w-2 h-2 rounded-full shrink-0" style={{ background: p.color || p.stroke }} />
+          <span style={{ color: 'var(--text-secondary)' }}>{p.name}</span>
+          <span className="ml-auto" style={{ color: 'var(--text-primary)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
             {currency ? formatCurrency(p.value) : formatNumber(p.value)}
           </span>
         </div>
@@ -444,17 +532,37 @@ function StatRow({ label, value, color }) {
   )
 }
 
-// ── Risk badge ────────────────────────────────────────────────────────────────
-const RISK_STYLE = {
-  high:   { color: '#EF4444', bg: 'rgba(239,68,68,.12)'  },
-  medium: { color: '#F59E0B', bg: 'rgba(245,158,11,.12)' },
-  low:    { color: '#10B981', bg: 'rgba(16,185,129,.12)' },
-}
+// ── Risk badge — sourced from the canonical map (shared with the dashboard,
+// alerts, and AI recommendation cards) instead of a local, drifting copy. ──────
+const RISK_STYLE = Object.fromEntries(
+  Object.entries(RISK_STYLES).map(([k, s]) => [k, { color: s.color, bg: s.tint }])
+)
 function RiskBadge({ v }) {
   const s = RISK_STYLE[v] || {}
   return (
     <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold uppercase"
       style={{ background: s.bg, color: s.color }}>{v || '—'}</span>
+  )
+}
+
+// ── Insight bar ───────────────────────────────────────────────────────────────
+// Every report tab computes 1-3 short, specific sentences from the same data
+// already powering its charts/tables — "what does this number mean" instead
+// of leaving the reader to work it out from a chart alone. No new data is
+// fetched; this is pure client-side interpretation of the existing response.
+function InsightBar({ items }) {
+  const list = (items || []).filter(Boolean)
+  if (!list.length) return null
+  return (
+    <div className="rounded-xl p-4 flex flex-col gap-2"
+      style={{ background: 'var(--tint-primary)', border: '1px solid var(--tint-primary-border)' }}>
+      {list.map((text, i) => (
+        <div key={i} className="flex items-start gap-2.5">
+          <Sparkles className="w-3.5 h-3.5 shrink-0 mt-0.5" style={{ color: 'var(--brand-blue)' }} />
+          <p className="text-[12.5px] leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{text}</p>
+        </div>
+      ))}
+    </div>
   )
 }
 
@@ -495,13 +603,29 @@ function ExecutiveReport({ data }) {
     topProducts=[], topSuppliers=[] } = data
 
   const kpis = [
-    { Icon: TrendingUp,   label: 'Total Revenue',    value: formatCurrency(revenue),        sub: `${formatNumber(orders)} orders`,          color: '#3B82F6', growth: revenueGrowth },
-    { Icon: DollarSign,   label: 'Gross Profit',     value: formatCurrency(profit),          sub: `${formatPercent(margin)} margin`,          color: '#10B981', growth: profitGrowth  },
-    { Icon: ShoppingCart, label: 'Purchase Spend',   value: formatCurrency(spend),           sub: undefined,                                  color: '#F59E0B', growth: spendGrowth   },
-    { Icon: Package,      label: 'Inventory Value',  value: formatCurrency(inventoryValue),  sub: `${formatNumber(totalProducts)} products`,  color: '#6366F1' },
+    { Icon: TrendingUp,   label: 'Total Revenue',    value: formatCurrency(revenue),        sub: `${formatNumber(orders)} orders`,          color: 'var(--brand-blue)', growth: revenueGrowth },
+    { Icon: DollarSign,   label: 'Gross Profit',     value: formatCurrency(profit),          sub: `${formatPercent(margin)} margin`,          color: 'var(--color-success)', growth: profitGrowth  },
+    { Icon: ShoppingCart, label: 'Purchase Spend',   value: formatCurrency(spend),           sub: undefined,                                  color: 'var(--brand-amber)', growth: spendGrowth   },
+    { Icon: Package,      label: 'Inventory Value',  value: formatCurrency(inventoryValue),  sub: `${formatNumber(totalProducts)} products`,  color: 'var(--brand-indigo)' },
   ]
+
+  const topProduct  = topProducts[0]
+  const topSupplier = topSuppliers[0]
+  const insights = [
+    revenueGrowth != null && (
+      revenueGrowth >= 0
+        ? `Revenue is up ${formatPercent(Math.abs(revenueGrowth))} vs the previous period.`
+        : `Revenue is down ${formatPercent(Math.abs(revenueGrowth))} vs the previous period — worth a closer look at what changed.`
+    ),
+    topProduct && `${topProduct.name} is your top-selling product this period, generating ${formatCurrency(topProduct.revenue)}.`,
+    topSupplier && `${topSupplier.name} is your largest supplier by spend at ${formatCurrency(topSupplier.amount)}.`,
+    (outOfStock > 0) && `${formatNumber(outOfStock)} product${outOfStock === 1 ? ' is' : 's are'} completely out of stock and losing potential sales right now.`,
+  ]
+
   return (
     <div className="space-y-5">
+      <InsightBar items={insights} />
+
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {kpis.map(k => <KpiCard key={k.label} {...k} />)}
       </div>
@@ -509,14 +633,14 @@ function ExecutiveReport({ data }) {
       {/* Stock alert mini-cards */}
       <div className="grid grid-cols-3 gap-4">
         {[
-          { Icon: CheckCircle,  label: 'Total Products', value: formatNumber(totalProducts), color: '#10B981' },
-          { Icon: AlertTriangle,label: 'Low Stock',      value: formatNumber(lowStock),      color: '#F59E0B' },
-          { Icon: XCircle,      label: 'Out of Stock',   value: formatNumber(outOfStock),    color: '#EF4444' },
+          { Icon: CheckCircle,  label: 'Total Products', value: formatNumber(totalProducts), color: 'var(--color-success)' },
+          { Icon: AlertTriangle,label: 'Low Stock',      value: formatNumber(lowStock),      color: 'var(--brand-amber)' },
+          { Icon: XCircle,      label: 'Out of Stock',   value: formatNumber(outOfStock),    color: 'var(--color-danger)' },
         ].map(({ Icon, label, value, color }) => (
           <div key={label} className="rounded-xl p-4 flex items-center gap-3"
             style={{ background: 'var(--surface-card)', border: '1px solid var(--border)' }}>
             <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
-              style={{ background: `${color}18` }}>
+              style={{ background: `color-mix(in srgb, ${color} 10%, transparent)` }}>
               <Icon className="w-4.5 h-4.5" style={{ color }} />
             </div>
             <div>
@@ -532,11 +656,11 @@ function ExecutiveReport({ data }) {
           {topProducts.length === 0 ? <EmptyState message="No sales data" hint="" /> : (
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={topProducts} layout="vertical" margin={{ left: 0, right: 20 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" horizontal={false} />
                 <XAxis type="number" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} tickFormatter={v => `${(v/1000).toFixed(0)}k`} />
                 <YAxis type="category" dataKey="name" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} width={100} />
                 <Tooltip content={<ChartTooltip currency />} />
-                <Bar dataKey="revenue" name="Revenue" fill="#3B82F6" radius={[0, 4, 4, 0]} />
+                <Bar dataKey="revenue" name="Revenue" fill="var(--brand-blue)" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -545,11 +669,11 @@ function ExecutiveReport({ data }) {
           {topSuppliers.length === 0 ? <EmptyState message="No purchase data" hint="" /> : (
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={topSuppliers} layout="vertical" margin={{ left: 0, right: 20 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" horizontal={false} />
                 <XAxis type="number" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} tickFormatter={v => `${(v/1000).toFixed(0)}k`} />
                 <YAxis type="category" dataKey="name" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} width={100} />
                 <Tooltip content={<ChartTooltip currency />} />
-                <Bar dataKey="amount" name="Spend" fill="#10B981" radius={[0, 4, 4, 0]} />
+                <Bar dataKey="amount" name="Spend" fill="var(--color-success)" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -567,13 +691,31 @@ function SalesReport({ data }) {
 
   const PM_LABELS = { cash: 'Cash', card: 'Card', qr: 'QR Pay', credit: 'Credit' }
 
+  const revGrowth  = periodGrowth(trend, 'revenue')
+  const topProduct  = topProducts[0]
+  const topCategory = [...byCategory].sort((a, b) => (b.revenue||0) - (a.revenue||0))[0]
+  const topPayment   = [...byPaymentMethod].sort((a, b) => (b.amount||0) - (a.amount||0))[0]
+  const productSharePct = topProduct && totalRevenue > 0 ? Math.round((topProduct.revenue / totalRevenue) * 100) : null
+  const insights = [
+    revGrowth != null && (
+      revGrowth >= 0
+        ? `Sales revenue trended up ${formatPercent(Math.abs(revGrowth))} across this period.`
+        : `Sales revenue trended down ${formatPercent(Math.abs(revGrowth))} across this period.`
+    ),
+    topProduct && productSharePct != null && `${topProduct.name} alone accounts for ${productSharePct}% of total revenue this period.`,
+    topCategory && `${topCategory.name} was the best-performing category, bringing in ${formatCurrency(topCategory.revenue)}.`,
+    topPayment && byPaymentMethod.length > 1 && `${PM_LABELS[topPayment.method] || topPayment.method} is the most-used payment method, covering ${formatCurrency(topPayment.amount)} of sales.`,
+  ]
+
   return (
     <div className="space-y-5">
+      <InsightBar items={insights} />
+
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard Icon={TrendingUp}   label="Total Revenue"    value={formatCurrency(totalRevenue)}  color="#3B82F6" />
-        <KpiCard Icon={ShoppingCart} label="Total Orders"     value={formatNumber(totalOrders)}     color="#10B981" />
-        <KpiCard Icon={DollarSign}   label="Avg Order Value"  value={formatCurrency(avgOrderValue)} color="#F59E0B" />
-        <KpiCard Icon={Package}      label="Items Sold"       value={formatNumber(totalItemsSold)}  color="#6366F1"
+        <KpiCard Icon={TrendingUp}   label="Total Revenue"    value={formatCurrency(totalRevenue)}  color="var(--brand-blue)" growth={revGrowth} />
+        <KpiCard Icon={ShoppingCart} label="Total Orders"     value={formatNumber(totalOrders)}     color="var(--color-success)" />
+        <KpiCard Icon={DollarSign}   label="Avg Order Value"  value={formatCurrency(avgOrderValue)} color="var(--brand-amber)" />
+        <KpiCard Icon={Package}      label="Items Sold"       value={formatNumber(totalItemsSold)}  color="var(--brand-indigo)"
           sub={totalDiscount > 0 ? `${formatCurrency(totalDiscount)} discounts` : undefined} />
       </div>
 
@@ -583,16 +725,16 @@ function SalesReport({ data }) {
             <AreaChart data={trend} margin={{ top: 5, right: 20, bottom: 0, left: 10 }}>
               <defs>
                 <linearGradient id="salesGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor="#3B82F6" stopOpacity={0.25} />
-                  <stop offset="95%" stopColor="#3B82F6" stopOpacity={0}    />
+                  <stop offset="5%"  stopColor="var(--brand-blue)" stopOpacity={0.25} />
+                  <stop offset="95%" stopColor="var(--brand-blue)" stopOpacity={0}    />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
               <XAxis dataKey="date" tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
                 tickFormatter={d => d?.slice(5)} />
               <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 11 }} tickFormatter={v => formatCurrency(v)} />
               <Tooltip content={<ChartTooltip currency />} />
-              <Area dataKey="revenue" name="Revenue" stroke="#3B82F6" strokeWidth={2} fill="url(#salesGrad)" />
+              <Area dataKey="revenue" name="Revenue" stroke="var(--brand-blue)" strokeWidth={2} fill="url(#salesGrad)" />
             </AreaChart>
           </ResponsiveContainer>
         )}
@@ -629,12 +771,12 @@ function SalesReport({ data }) {
       </div>
 
       {/* Category Performance */}
-      {byCategory.length > 0 && (
-        <SectionCard title="Category Performance" subtitle="Revenue contribution by product category">
+      <SectionCard title="Category Performance" subtitle="Revenue contribution by product category">
+        {byCategory.length === 0 ? <EmptyState message="No category data for this period" /> : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={byCategory.slice(0, 8)} layout="vertical" margin={{ left: 0, right: 20 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" horizontal={false} />
                 <XAxis type="number" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} tickFormatter={v => `${(v/1000).toFixed(0)}k`} />
                 <YAxis type="category" dataKey="name" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} width={90} />
                 <Tooltip content={<ChartTooltip currency />} />
@@ -653,8 +795,8 @@ function SalesReport({ data }) {
               rows={byCategory}
             />
           </div>
-        </SectionCard>
-      )}
+        )}
+      </SectionCard>
     </div>
   )
 }
@@ -666,12 +808,29 @@ function PurchasesReport({ data }) {
     receivedOrders=0, pendingOrders=0,
     trend=[], topSuppliers=[], byPaymentStatus=[], byStatus=[] } = data
 
+  const spendGrowth = periodGrowth(trend, 'amount')
+  const topSupplier  = topSuppliers[0]
+  const supplierSharePct = topSupplier && totalSpent > 0 ? Math.round((topSupplier.amount / totalSpent) * 100) : null
+  const pendingPayment = byPaymentStatus.find(s => s.status === 'pending')
+  const insights = [
+    spendGrowth != null && (
+      spendGrowth >= 0
+        ? `Purchase spend trended up ${formatPercent(Math.abs(spendGrowth))} across this period.`
+        : `Purchase spend trended down ${formatPercent(Math.abs(spendGrowth))} across this period.`
+    ),
+    topSupplier && supplierSharePct != null && `${topSupplier.name} received ${supplierSharePct}% of total purchase spend this period.`,
+    pendingOrders > 0 && `${formatNumber(pendingOrders)} order${pendingOrders === 1 ? ' is' : 's are'} still pending delivery — follow up to avoid stock gaps.`,
+    pendingPayment && pendingPayment.amount > 0 && `${formatCurrency(pendingPayment.amount)} in purchases is still unpaid across ${formatNumber(pendingPayment.count)} order${pendingPayment.count === 1 ? '' : 's'}.`,
+  ]
+
   return (
     <div className="space-y-5">
+      <InsightBar items={insights} />
+
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard Icon={DollarSign}   label="Total Spent"     value={formatCurrency(totalSpent)}    color="#10B981" />
-        <KpiCard Icon={ShoppingCart} label="Total Orders"    value={formatNumber(totalOrders)}     color="#3B82F6" />
-        <KpiCard Icon={BarChart2}    label="Avg Order Value" value={formatCurrency(avgOrderValue)} color="#F59E0B" />
+        <KpiCard Icon={DollarSign}   label="Total Spent"     value={formatCurrency(totalSpent)}    color="var(--color-success)" growth={spendGrowth} />
+        <KpiCard Icon={ShoppingCart} label="Total Orders"    value={formatNumber(totalOrders)}     color="var(--brand-blue)" />
+        <KpiCard Icon={BarChart2}    label="Avg Order Value" value={formatCurrency(avgOrderValue)} color="var(--brand-amber)" />
         <KpiCard Icon={Clock}        label="Pending Orders"  value={formatNumber(pendingOrders)}   color="#F97316"
           sub={receivedOrders > 0 ? `${formatNumber(receivedOrders)} received` : undefined} />
       </div>
@@ -682,15 +841,15 @@ function PurchasesReport({ data }) {
             <AreaChart data={trend} margin={{ top: 5, right: 20, bottom: 0, left: 10 }}>
               <defs>
                 <linearGradient id="purchGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor="#10B981" stopOpacity={0.25} />
-                  <stop offset="95%" stopColor="#10B981" stopOpacity={0}    />
+                  <stop offset="5%"  stopColor="var(--color-success)" stopOpacity={0.25} />
+                  <stop offset="95%" stopColor="var(--color-success)" stopOpacity={0}    />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
               <XAxis dataKey="date" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} tickFormatter={d => d?.slice(5)} />
               <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 11 }} tickFormatter={v => formatCurrency(v)} />
               <Tooltip content={<ChartTooltip currency />} />
-              <Area dataKey="amount" name="Purchases" stroke="#10B981" strokeWidth={2} fill="url(#purchGrad)" />
+              <Area dataKey="amount" name="Purchases" stroke="var(--color-success)" strokeWidth={2} fill="url(#purchGrad)" />
             </AreaChart>
           </ResponsiveContainer>
         )}
@@ -716,7 +875,7 @@ function PurchasesReport({ data }) {
                 <StatRow key={s.status}
                   label={s.status ? s.status.charAt(0).toUpperCase() + s.status.slice(1) : '—'}
                   value={`${formatCurrency(s.amount)} (${formatNumber(s.count)})`}
-                  color={s.status === 'paid' ? '#10B981' : s.status === 'pending' ? '#EF4444' : '#F59E0B'}
+                  color={s.status === 'paid' ? 'var(--color-success)' : s.status === 'pending' ? 'var(--color-danger)' : 'var(--brand-amber)'}
                 />
               ))}
               {byPaymentStatus.length === 0 && <p className="text-[12px]" style={{ color: 'var(--text-muted)' }}>No data</p>}
@@ -729,7 +888,7 @@ function PurchasesReport({ data }) {
                 <StatRow key={s.status}
                   label={s.status ? s.status.charAt(0).toUpperCase() + s.status.slice(1) : '—'}
                   value={`${formatCurrency(s.amount)} (${formatNumber(s.count)})`}
-                  color={s.status === 'received' ? '#10B981' : s.status === 'cancelled' ? '#EF4444' : '#F59E0B'}
+                  color={s.status === 'received' ? 'var(--color-success)' : s.status === 'cancelled' ? 'var(--color-danger)' : 'var(--brand-amber)'}
                 />
               ))}
               {byStatus.length === 0 && <p className="text-[12px]" style={{ color: 'var(--text-muted)' }}>No data</p>}
@@ -748,23 +907,39 @@ function InventoryReport({ data }) {
     byCategory=[], bySupplier=[], lowStockProducts=[], movementSummary=[], inventoryTurnover } = data
 
   const statusData = [
-    { name: 'Healthy',      value: healthy,   color: '#10B981' },
-    { name: 'Critical',     value: critical,  color: '#F59E0B' },
-    { name: 'Out of Stock', value: outOfStock,color: '#EF4444' },
-    { name: 'Overstock',    value: overstock, color: '#6366F1' },
+    { name: 'Healthy',      value: healthy,   color: 'var(--color-success)' },
+    { name: 'Critical',     value: critical,  color: 'var(--brand-amber)' },
+    { name: 'Out of Stock', value: outOfStock,color: 'var(--color-danger)' },
+    { name: 'Overstock',    value: overstock, color: 'var(--brand-indigo)' },
   ].filter(s => s.value > 0)
+
+  const topCategory = [...byCategory].sort((a, b) => (b.value||0) - (a.value||0))[0]
+  const atRiskPct = totalProducts > 0 ? Math.round(((critical + outOfStock) / totalProducts) * 100) : null
+  const insights = [
+    outOfStock > 0 && `${formatNumber(outOfStock)} product${outOfStock === 1 ? ' is' : 's are'} completely out of stock right now — these are lost sales until reordered.`,
+    critical > 0 && `${formatNumber(critical)} more product${critical === 1 ? ' is' : 's are'} at critical stock levels and will run out soon without action.`,
+    atRiskPct != null && atRiskPct > 0 && `${atRiskPct}% of your catalog is currently critical or out of stock.`,
+    topCategory && `${topCategory.name} holds the largest share of inventory value at ${formatCurrency(topCategory.value)}.`,
+    inventoryTurnover != null && (
+      inventoryTurnover >= 4
+        ? `Inventory is turning over ${formatNumber(inventoryTurnover, 1)}× — stock is moving quickly, which is healthy for a grocery wholesaler.`
+        : `Inventory is turning over only ${formatNumber(inventoryTurnover, 1)}× — consider whether slow-moving stock is tying up cash.`
+    ),
+  ]
 
   return (
     <div className="space-y-5">
+      <InsightBar items={insights} />
+
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard Icon={Package}       label="Total Products"   value={formatNumber(totalProducts)} color="#6366F1" />
-        <KpiCard Icon={DollarSign}    label="Inventory Value"  value={formatCurrency(totalValue)}  color="#3B82F6" />
-        <KpiCard Icon={AlertTriangle} label="Critical Stock"   value={formatNumber(critical)}      color="#F59E0B"
+        <KpiCard Icon={Package}       label="Total Products"   value={formatNumber(totalProducts)} color="var(--brand-indigo)" />
+        <KpiCard Icon={DollarSign}    label="Inventory Value"  value={formatCurrency(totalValue)}  color="var(--brand-blue)" />
+        <KpiCard Icon={AlertTriangle} label="Critical Stock"   value={formatNumber(critical)}      color="var(--brand-amber)"
           sub={`${formatNumber(outOfStock)} out of stock`} />
         <KpiCard Icon={Activity}      label="Turnover Rate"
           value={inventoryTurnover != null ? formatNumber(inventoryTurnover, 2) + '×' : '—'}
           sub="COGS / Inventory Value"
-          color="#10B981" />
+          color="var(--color-success)" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
@@ -788,7 +963,7 @@ function InventoryReport({ data }) {
           {byCategory.length === 0 ? <EmptyState message="No category data" hint="" /> : (
             <ResponsiveContainer width="100%" height={240}>
               <BarChart data={byCategory.slice(0, 8)} layout="vertical" margin={{ left: 0, right: 20 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" horizontal={false} />
                 <XAxis type="number" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} tickFormatter={v => `${(v/1000).toFixed(0)}k`} />
                 <YAxis type="category" dataKey="name" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} width={90} />
                 <Tooltip content={<ChartTooltip currency />} />
@@ -807,11 +982,11 @@ function InventoryReport({ data }) {
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
             {movementSummary.map(m => {
               const TYPE_CFG = {
-                purchase:   { color: '#10B981', Icon: Package },
-                sale:       { color: '#3B82F6', Icon: TrendingUp },
-                adjustment: { color: '#F59E0B', Icon: BarChart2 },
-                return:     { color: '#6366F1', Icon: RotateCcw },
-                waste:      { color: '#EF4444', Icon: XCircle },
+                purchase:   { color: 'var(--color-success)', Icon: Package },
+                sale:       { color: 'var(--brand-blue)', Icon: TrendingUp },
+                adjustment: { color: 'var(--brand-amber)', Icon: BarChart2 },
+                return:     { color: 'var(--brand-indigo)', Icon: RotateCcw },
+                waste:      { color: 'var(--color-danger)', Icon: XCircle },
                 transfer:   { color: '#EC4899', Icon: Truck },
               }
               const cfg = TYPE_CFG[m.type] || { color: '#6B7280', Icon: Info }
@@ -839,7 +1014,7 @@ function InventoryReport({ data }) {
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <div style={{ width: 28, height: 28, borderRadius: 6, overflow: 'hidden', flexShrink: 0,
                   background: 'var(--surface-muted)' }}>
-                  <img src={getProductImage(r)} alt={v}
+                  <img src={getProductImage(r)} alt={v} loading="lazy" decoding="async"
                     style={{ width: 28, height: 28, objectFit: 'cover' }} onError={imgFallback} />
                 </div>
                 <span>{v}</span>
@@ -866,13 +1041,29 @@ function ProfitReport({ data }) {
   if (!data) return <EmptyState />
   const { revenue=0, cogs=0, profit=0, margin=0, trend=[], topMarginProducts=[] } = data
 
+  const profitGrowth = periodGrowth(trend, 'profit')
+  const topMargin = [...topMarginProducts].sort((a, b) => (b.margin||0) - (a.margin||0))[0]
+  const lowMargin = topMarginProducts.length > 1 ? [...topMarginProducts].sort((a, b) => (a.margin||0) - (b.margin||0))[0] : null
+  const insights = [
+    profit < 0 && `The business is operating at a loss this period — costs (${formatCurrency(cogs)}) exceeded revenue (${formatCurrency(revenue)}).`,
+    profit >= 0 && profitGrowth != null && (
+      profitGrowth >= 0
+        ? `Profit trended up ${formatPercent(Math.abs(profitGrowth))} across this period.`
+        : `Profit trended down ${formatPercent(Math.abs(profitGrowth))} across this period, even though the business stayed profitable overall.`
+    ),
+    topMargin && topMargin.margin >= 0 && `${topMargin.name} has the highest margin at ${formatPercent(topMargin.margin)} — a good candidate to promote or stock more of.`,
+    lowMargin && lowMargin.margin < 15 && lowMargin.name !== topMargin?.name && `${lowMargin.name} is running a thin ${formatPercent(lowMargin.margin)} margin — check pricing or supplier cost.`,
+  ]
+
   return (
     <div className="space-y-5">
+      <InsightBar items={insights} />
+
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard Icon={DollarSign}   label="Gross Profit"  value={formatCurrency(profit)}   color="#10B981" sub={`${formatPercent(margin)} margin`} />
-        <KpiCard Icon={TrendingUp}   label="Revenue"       value={formatCurrency(revenue)}  color="#3B82F6" />
-        <KpiCard Icon={ShoppingCart} label="COGS"          value={formatCurrency(cogs)}     color="#F59E0B" />
-        <KpiCard Icon={BarChart2}    label="Margin %"      value={formatPercent(margin)}    color="#8B5CF6"
+        <KpiCard Icon={DollarSign}   label="Gross Profit"  value={formatCurrency(profit)}   color="var(--color-success)" sub={`${formatPercent(margin)} margin`} growth={profitGrowth} />
+        <KpiCard Icon={TrendingUp}   label="Revenue"       value={formatCurrency(revenue)}  color="var(--brand-blue)" />
+        <KpiCard Icon={ShoppingCart} label="COGS"          value={formatCurrency(cogs)}     color="var(--brand-amber)" />
+        <KpiCard Icon={BarChart2}    label="Margin %"      value={formatPercent(margin)}    color="var(--brand-purple)"
           sub={profit < 0 ? 'Operating at loss' : profit === 0 ? 'Break-even' : undefined} />
       </div>
 
@@ -880,14 +1071,14 @@ function ProfitReport({ data }) {
         {trend.length === 0 ? <EmptyState message="No data for this period" hint="Try a wider date range." /> : (
           <ResponsiveContainer width="100%" height={240}>
             <LineChart data={trend} margin={{ top: 5, right: 20, bottom: 0, left: 10 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
               <XAxis dataKey="date" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} tickFormatter={d => d?.slice(5)} />
               <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 11 }} tickFormatter={v => formatCurrency(v)} />
               <Tooltip content={<ChartTooltip currency />} />
               <Legend />
-              <Line type="monotone" dataKey="revenue" name="Revenue" stroke="#3B82F6" strokeWidth={2} dot={false} />
-              <Line type="monotone" dataKey="profit"  name="Profit"  stroke="#10B981" strokeWidth={2} dot={false} />
-              <Line type="monotone" dataKey="cogs"    name="COGS"    stroke="#F59E0B" strokeWidth={1.5} strokeDasharray="4 2" dot={false} />
+              <Line type="monotone" dataKey="revenue" name="Revenue" stroke="var(--brand-blue)" strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="profit"  name="Profit"  stroke="var(--color-success)" strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="cogs"    name="COGS"    stroke="var(--brand-amber)" strokeWidth={1.5} strokeDasharray="4 2" dot={false} />
             </LineChart>
           </ResponsiveContainer>
         )}
@@ -901,7 +1092,7 @@ function ProfitReport({ data }) {
             { key: 'cogs',    label: 'COGS',    render: v => formatCurrency(v), noWrap: true, muted: true },
             { key: 'profit',  label: 'Profit',  render: v => formatCurrency(v), noWrap: true },
             { key: 'margin',  label: 'Margin %', render: v => (
-              <span className="font-semibold" style={{ color: v >= 30 ? '#10B981' : v >= 15 ? '#F59E0B' : '#EF4444' }}>
+              <span className="font-semibold" style={{ color: v >= 30 ? 'var(--color-success)' : v >= 15 ? 'var(--brand-amber)' : 'var(--color-danger)' }}>
                 {formatPercent(v)}
               </span>
             ), noWrap: true },
@@ -922,21 +1113,31 @@ function SuppliersReport({ data }) {
   const { totalSpend = 0, activeCount = 0, avgLeadTime = 0 } = data.summary || {}
 
   const chartData = [...suppliers].sort((a, b) => b.totalSpend - a.totalSpend).slice(0, 8)
+  const topSupplier = chartData[0]
+  const inactiveCount = suppliers.filter(s => s.status !== 'active').length
+  const slowest = suppliers.length > 1 ? [...suppliers].sort((a, b) => (b.avgDeliveryDays||0) - (a.avgDeliveryDays||0))[0] : null
+  const insights = [
+    topSupplier && totalSpend > 0 && `${topSupplier.name} is your largest supplier, accounting for ${Math.round((topSupplier.totalSpend/totalSpend)*100)}% of total spend.`,
+    inactiveCount > 0 && `${formatNumber(inactiveCount)} supplier${inactiveCount === 1 ? ' is' : 's are'} marked inactive — orders can't be placed with them until reactivated.`,
+    slowest && slowest.avgDeliveryDays > (slowest.leadTimeDays || 0) && `${slowest.name} is averaging ${Math.round(slowest.avgDeliveryDays)} days to deliver, longer than its stated ${slowest.leadTimeDays}-day lead time — factor this into reorder timing.`,
+  ]
 
   return (
     <div className="space-y-5">
+      <InsightBar items={insights} />
+
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard Icon={Truck}        label="Total Suppliers" value={formatNumber(suppliers.length)} color="#EC4899" />
-        <KpiCard Icon={DollarSign}   label="Total Spend"     value={formatCurrency(totalSpend)}     color="#3B82F6" />
-        <KpiCard Icon={CheckCircle}  label="Active"          value={formatNumber(activeCount)}      color="#10B981" />
-        <KpiCard Icon={Clock}        label="Avg Lead Time"   value={`${avgLeadTime}d`}              color="#F59E0B" />
+        <KpiCard Icon={DollarSign}   label="Total Spend"     value={formatCurrency(totalSpend)}     color="var(--brand-blue)" />
+        <KpiCard Icon={CheckCircle}  label="Active"          value={formatNumber(activeCount)}      color="var(--color-success)" />
+        <KpiCard Icon={Clock}        label="Avg Lead Time"   value={`${avgLeadTime}d`}              color="var(--brand-amber)" />
       </div>
 
       <SectionCard title="Spend by Supplier">
         {chartData.length === 0 ? <EmptyState message="No purchase data in this period" hint="" /> : (
           <ResponsiveContainer width="100%" height={240}>
             <BarChart data={chartData} layout="vertical" margin={{ left: 0, right: 20 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" horizontal={false} />
               <XAxis type="number" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} tickFormatter={v => `${(v/1000).toFixed(0)}k`} />
               <YAxis type="category" dataKey="name" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} width={100} />
               <Tooltip content={<ChartTooltip currency />} />
@@ -965,7 +1166,7 @@ function SuppliersReport({ data }) {
             { key: 'status',        label: 'Status',      render: v => (
               <span className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold uppercase"
                 style={{ background: v === 'active' ? 'rgba(16,185,129,.15)' : 'rgba(239,68,68,.15)',
-                         color: v === 'active' ? '#10B981' : '#EF4444' }}>
+                         color: v === 'active' ? 'var(--color-success)' : 'var(--color-danger)' }}>
                 {v}
               </span>
             ), noWrap: true },
@@ -983,20 +1184,32 @@ function ForecastReport({ data }) {
   if (!data) return <EmptyState />
   const { predictions = [], summary = {}, riskDistribution = [], modelAccuracy = [], hasAiData, hasMlData } = data
 
-  const RISK_COLOR = { high: '#EF4444', medium: '#F59E0B', low: '#10B981' }
+  const RISK_COLOR = { high: 'var(--color-danger)', medium: 'var(--brand-amber)', low: 'var(--color-success)' }
+
+  const highRiskItems = predictions.filter(p => p.inventoryRisk === 'high')
+  const bestModel = [...modelAccuracy].sort((a, b) => (a.avg_mape ?? 999) - (b.avg_mape ?? 999))[0]
+  const insights = [
+    hasAiData && summary.highRisk > 0 && `${formatNumber(summary.highRisk)} product${summary.highRisk === 1 ? '' : 's'} are at high stockout risk — reorder soon to avoid running out.`,
+    hasAiData && summary.totalSuggestedBuy > 0 && `The AI engine currently recommends purchasing ${formatNumber(summary.totalSuggestedBuy)} units in total across all at-risk products.`,
+    hasMlData && bestModel?.model && bestModel.avg_mape != null && `${bestModel.model} is currently the most accurate model at ${bestModel.avg_mape}% MAPE — lower error than the alternatives.`,
+    highRiskItems[0] && `${highRiskItems[0].product?.name || 'A product'} has the tightest runway — only ${highRiskItems[0].daysOfStock != null ? Math.round(highRiskItems[0].daysOfStock) : '?'} days of stock left.`,
+    !hasAiData && 'No AI predictions are available yet — run the forecasting pipeline to unlock demand-driven purchase suggestions.',
+  ]
 
   return (
     <div className="space-y-5">
+      <InsightBar items={insights} />
+
       {/* KPI Strip */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard Icon={Target}        label="SKUs Forecasted"   value={formatNumber(summary.total)}             color="#06B6D4" />
-        <KpiCard Icon={AlertTriangle} label="High Risk Items"   value={formatNumber(summary.highRisk)}          color="#EF4444"
+        <KpiCard Icon={Target}        label="SKUs Forecasted"   value={formatNumber(summary.total)}             color="var(--brand-cyan)" />
+        <KpiCard Icon={AlertTriangle} label="High Risk Items"   value={formatNumber(summary.highRisk)}          color="var(--color-danger)"
           sub={`${formatNumber(summary.mediumRisk)} medium risk`} />
-        <KpiCard Icon={ShoppingCart}  label="Total Suggested Buy" value={formatNumber(summary.totalSuggestedBuy)} color="#10B981" />
+        <KpiCard Icon={ShoppingCart}  label="Total Suggested Buy" value={formatNumber(summary.totalSuggestedBuy)} color="var(--color-success)" />
         <KpiCard Icon={Activity}      label="Avg MAPE"
           value={summary.avgMape != null ? `${summary.avgMape}%` : '—'}
           sub={summary.avgConfidence != null ? `${summary.avgConfidence}% confidence` : undefined}
-          color="#8B5CF6" />
+          color="var(--brand-purple)" />
       </div>
 
       {/* Risk distribution + ML model accuracy */}
@@ -1028,7 +1241,7 @@ function ForecastReport({ data }) {
               columns={[
                 { key: 'model',     label: 'Model',     render: v => <span className="font-mono text-[11px]">{v}</span> },
                 { key: 'avg_mape',  label: 'MAPE %',    render: v => v != null ? (
-                  <span className="font-semibold" style={{ color: v < 15 ? '#10B981' : v < 30 ? '#F59E0B' : '#EF4444' }}>{v}%</span>
+                  <span className="font-semibold" style={{ color: v < 15 ? 'var(--color-success)' : v < 30 ? 'var(--brand-amber)' : 'var(--color-danger)' }}>{v}%</span>
                 ) : '—', noWrap: true },
                 { key: 'avg_rmse',  label: 'RMSE',      render: v => v != null ? formatNumber(v, 2) : '—', muted: true, noWrap: true },
                 { key: 'sku_count', label: 'SKUs',      render: v => formatNumber(v), muted: true, noWrap: true },
@@ -1061,12 +1274,12 @@ function ForecastReport({ data }) {
               ), noWrap: true },
               { key: 'inventoryRisk', label: 'Risk', render: v => (
                 <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold uppercase"
-                  style={{ background: `${RISK_COLOR[v] || '#94A3B8'}20`, color: RISK_COLOR[v] || '#94A3B8' }}>
+                  style={{ background: `color-mix(in srgb, ${RISK_COLOR[v] || '#94A3B8'} 14%, transparent)`, color: RISK_COLOR[v] || '#94A3B8' }}>
                   {v || '—'}
                 </span>
               ), noWrap: true },
               { key: 'suggestedPurchase', label: 'Buy Qty', render: v => (
-                <span className="font-semibold" style={{ color: '#10B981' }}>{v != null ? formatNumber(v) : '—'}</span>
+                <span className="font-semibold" style={{ color: 'var(--color-success)' }}>{v != null ? formatNumber(v) : '—'}</span>
               ), noWrap: true },
               { key: 'daysOfStock',      label: 'Days Left',  render: v => v != null ? `${Math.round(v)}d` : '—', muted: true, noWrap: true },
               { key: 'confidenceScore',  label: 'Confidence', render: v => v != null ? `${v.toFixed(1)}%` : '—', muted: true, noWrap: true },
@@ -1093,12 +1306,12 @@ function AIInsightsTab() {
   const isOffline = data?.offline === true
 
   const INSIGHT_CONFIG = {
-    alert:          { color: '#EF4444', bg: 'rgba(239,68,68,.1)',    border: 'rgba(239,68,68,.25)',    Icon: AlertTriangle },
-    recommendation: { color: '#10B981', bg: 'rgba(16,185,129,.1)',   border: 'rgba(16,185,129,.25)',   Icon: CheckCircle   },
-    forecast:       { color: '#06B6D4', bg: 'rgba(6,182,212,.1)',    border: 'rgba(6,182,212,.25)',    Icon: Target        },
-    trend:          { color: '#3B82F6', bg: 'rgba(59,130,246,.1)',   border: 'rgba(59,130,246,.25)',   Icon: TrendingUp    },
-    warning:        { color: '#F59E0B', bg: 'rgba(245,158,11,.1)',   border: 'rgba(245,158,11,.25)',   Icon: AlertTriangle },
-    info:           { color: '#8B5CF6', bg: 'rgba(139,92,246,.1)',   border: 'rgba(139,92,246,.25)',   Icon: Info          },
+    alert:          { color: 'var(--color-danger)', bg: 'rgba(239,68,68,.1)',    border: 'rgba(239,68,68,.25)',    Icon: AlertTriangle },
+    recommendation: { color: 'var(--color-success)', bg: 'rgba(16,185,129,.1)',   border: 'rgba(16,185,129,.25)',   Icon: CheckCircle   },
+    forecast:       { color: 'var(--brand-cyan)', bg: 'rgba(6,182,212,.1)',    border: 'rgba(6,182,212,.25)',    Icon: Target        },
+    trend:          { color: 'var(--brand-blue)', bg: 'rgba(59,130,246,.1)',   border: 'rgba(59,130,246,.25)',   Icon: TrendingUp    },
+    warning:        { color: 'var(--brand-amber)', bg: 'rgba(245,158,11,.1)',   border: 'rgba(245,158,11,.25)',   Icon: AlertTriangle },
+    info:           { color: 'var(--brand-purple)', bg: 'rgba(139,92,246,.1)',   border: 'rgba(139,92,246,.25)',   Icon: Info          },
   }
 
   if (isLoading) {
@@ -1150,7 +1363,7 @@ function AIInsightsTab() {
       {/* Header strip */}
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
-          <Brain className="w-5 h-5" style={{ color: '#8B5CF6' }} />
+          <Brain className="w-5 h-5" style={{ color: 'var(--brand-purple)' }} />
           <span className="font-semibold text-[15px]" style={{ color: 'var(--text-primary)' }}>
             {insights.length} AI-Generated Insights
           </span>
@@ -1172,7 +1385,7 @@ function AIInsightsTab() {
             style={{ background: cfg.bg, border: `1px solid ${cfg.border}` }}>
             <div className="flex items-start gap-4">
               <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-                style={{ background: `${cfg.color}20` }}>
+                style={{ background: `color-mix(in srgb, ${cfg.color} 13%, transparent)` }}>
                 <IIcon className="w-5 h-5" style={{ color: cfg.color }} />
               </div>
               <div className="flex-1 min-w-0">
@@ -1184,13 +1397,13 @@ function AIInsightsTab() {
                     <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-full"
                       style={{
                         background: priority === 'high' ? 'rgba(239,68,68,.15)' : priority === 'medium' ? 'rgba(245,158,11,.15)' : 'rgba(16,185,129,.15)',
-                        color:      priority === 'high' ? '#EF4444'             : priority === 'medium' ? '#F59E0B'             : '#10B981',
+                        color:      priority === 'high' ? 'var(--color-danger)'             : priority === 'medium' ? 'var(--brand-amber)'             : 'var(--color-success)',
                       }}>
                       {priority}
                     </span>
                   )}
                   <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded-full ml-auto"
-                    style={{ background: `${cfg.color}15`, color: cfg.color }}>
+                    style={{ background: `color-mix(in srgb, ${cfg.color} 10%, transparent)`, color: cfg.color }}>
                     {type}
                   </span>
                 </div>
@@ -1219,7 +1432,7 @@ function AIInsightsTab() {
 
 // ── Analytics (deep-dive, uses analyticsService → Express /analytics/*) ──────
 const SCATTER_STATUS_COLOR = {
-  healthy: '#10B981', low: '#F59E0B', critical: '#EF4444', out_of_stock: '#DC2626', overstock: '#6366F1',
+  healthy: 'var(--color-success)', low: 'var(--brand-amber)', critical: 'var(--color-danger)', out_of_stock: '#DC2626', overstock: 'var(--brand-indigo)',
 }
 
 function ScatterTip({ active, payload }) {
@@ -1230,8 +1443,8 @@ function ScatterTip({ active, payload }) {
       style={{ background: 'var(--surface-card)', border: '1px solid var(--border)' }}>
       <p className="font-semibold mb-1.5" style={{ color: 'var(--text-primary)' }}>{d.name || `SKU ${d.sku_id}`}</p>
       {d.category && <p className="mb-1" style={{ color: 'var(--text-muted)' }}>{d.category}</p>}
-      <p style={{ color: '#EF4444' }}>Stockout risk: {((d.x || 0)*100).toFixed(1)}%</p>
-      <p style={{ color: '#6366F1' }}>Overstock risk: {((d.y || 0)*100).toFixed(1)}%</p>
+      <p style={{ color: 'var(--color-danger)' }}>Stockout risk: {((d.x || 0)*100).toFixed(1)}%</p>
+      <p style={{ color: 'var(--brand-indigo)' }}>Overstock risk: {((d.y || 0)*100).toFixed(1)}%</p>
       <p className="mt-1 font-semibold capitalize"
         style={{ color: SCATTER_STATUS_COLOR[d.status] || '#94A3B8' }}>
         {d.status?.replace('_', ' ')}
@@ -1265,11 +1478,11 @@ function AnalyticsTab({ days }) {
     <div className="space-y-5">
       {/* KPI strip */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard Icon={TrendingUp}   label="Revenue (Period)"  value={fmtK(summary?.revenue_30d)}          color="#3B82F6"
+        <KpiCard Icon={TrendingUp}   label="Revenue (Period)"  value={fmtK(summary?.revenue_30d)}          color="var(--brand-blue)"
           growth={gr != null ? +gr.toFixed(1) : undefined} />
-        <KpiCard Icon={ShoppingCart} label="Transactions"      value={formatNumber(summary?.total_transactions_30d)} color="#10B981" />
-        <KpiCard Icon={DollarSign}   label="Avg Order Value"   value={fmtK(summary?.avg_order_value_30d)}  color="#F59E0B" />
-        <KpiCard Icon={AlertTriangle} label="Unread Alerts"    value={formatNumber(summary?.unread_alerts)} color="#EF4444" />
+        <KpiCard Icon={ShoppingCart} label="Transactions"      value={formatNumber(summary?.total_transactions_30d)} color="var(--color-success)" />
+        <KpiCard Icon={DollarSign}   label="Avg Order Value"   value={fmtK(summary?.avg_order_value_30d)}  color="var(--brand-amber)" />
+        <KpiCard Icon={AlertTriangle} label="Unread Alerts"    value={formatNumber(summary?.unread_alerts)} color="var(--color-danger)" />
       </div>
 
       {/* Revenue trend + Category pie */}
@@ -1281,21 +1494,21 @@ function AnalyticsTab({ days }) {
                 <AreaChart data={trend} margin={{ top: 5, right: 10, bottom: 0, left: 5 }}>
                   <defs>
                     <linearGradient id="ag1" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%"  stopColor="#3B82F6" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#3B82F6" stopOpacity={0}   />
+                      <stop offset="5%"  stopColor="var(--brand-blue)" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="var(--brand-blue)" stopOpacity={0}   />
                     </linearGradient>
                     <linearGradient id="ag2" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%"  stopColor="#10B981" stopOpacity={0.2} />
-                      <stop offset="95%" stopColor="#10B981" stopOpacity={0}   />
+                      <stop offset="5%"  stopColor="var(--color-success)" stopOpacity={0.2} />
+                      <stop offset="95%" stopColor="var(--color-success)" stopOpacity={0}   />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
                   <XAxis dataKey="date" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} tickFormatter={d => d?.slice(5)} />
                   <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 11 }} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(0)}k` : v} />
                   <Tooltip content={<ChartTooltip currency />} />
                   <Legend />
-                  <Area dataKey="revenue" name="Revenue" stroke="#3B82F6" strokeWidth={2} fill="url(#ag1)" />
-                  <Area dataKey="orders"  name="Orders"  stroke="#10B981" strokeWidth={1.5} fill="url(#ag2)" />
+                  <Area dataKey="revenue" name="Revenue" stroke="var(--brand-blue)" strokeWidth={2} fill="url(#ag1)" />
+                  <Area dataKey="orders"  name="Orders"  stroke="var(--color-success)" strokeWidth={1.5} fill="url(#ag2)" />
                 </AreaChart>
               </ResponsiveContainer>
             )}
@@ -1325,14 +1538,14 @@ function AnalyticsTab({ days }) {
         {moL ? <Sk h="h-[220px]" rounded="rounded-lg" /> : !(monthly?.length) ? <EmptyState message="No monthly data" hint="" /> : (
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={monthly} margin={{ top: 5, right: 20, bottom: 0, left: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
               <XAxis dataKey="label" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} />
               <YAxis yAxisId="l" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(0)}k` : v} />
               <YAxis yAxisId="r" orientation="right" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} />
               <Tooltip content={<ChartTooltip currency />} />
               <Legend />
-              <Bar yAxisId="l" dataKey="revenue"  name="Revenue"  fill="#3B82F6" radius={[3,3,0,0]} />
-              <Bar yAxisId="r" dataKey="quantity" name="Quantity" fill="#10B981" radius={[3,3,0,0]} />
+              <Bar yAxisId="l" dataKey="revenue"  name="Revenue"  fill="var(--brand-blue)" radius={[3,3,0,0]} />
+              <Bar yAxisId="r" dataKey="quantity" name="Quantity" fill="var(--color-success)" radius={[3,3,0,0]} />
             </BarChart>
           </ResponsiveContainer>
         )}
@@ -1344,7 +1557,7 @@ function AnalyticsTab({ days }) {
           {velL ? <Sk h="h-[240px]" rounded="rounded-lg" /> : !(velocity?.length) ? <EmptyState message="No velocity data" hint="" /> : (
             <ResponsiveContainer width="100%" height={240}>
               <BarChart data={velocity.slice(0, 10)} layout="vertical" margin={{ left: 0, right: 20 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" horizontal={false} />
                 <XAxis type="number" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} />
                 <YAxis type="category" dataKey="name"
                   tickFormatter={v => v?.length > 18 ? v.slice(0, 18) + '…' : (v || '')}
@@ -1362,13 +1575,13 @@ function AnalyticsTab({ days }) {
           {pcL ? <Sk h="h-[240px]" rounded="rounded-lg" /> : !(periodComp?.length) ? <EmptyState message="No comparison data" hint="" /> : (
             <ResponsiveContainer width="100%" height={240}>
               <BarChart data={periodComp.slice(0, 8)} margin={{ top: 5, right: 20, bottom: 5, left: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
                 <XAxis dataKey="name" tick={{ fill: 'var(--text-muted)', fontSize: 10 }}
                   tickFormatter={v => v?.length > 10 ? v.slice(0, 10) + '…' : (v || '')} />
                 <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 11 }} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(0)}k` : v} />
                 <Tooltip content={<ChartTooltip currency />} />
                 <Legend />
-                <Bar dataKey="current_revenue"  name={`Current ${days}d`}  fill="#3B82F6" radius={[3,3,0,0]} />
+                <Bar dataKey="current_revenue"  name={`Current ${days}d`}  fill="var(--brand-blue)" radius={[3,3,0,0]} />
                 <Bar dataKey="previous_revenue" name={`Previous ${days}d`} fill="#94A3B8" radius={[3,3,0,0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -1388,7 +1601,7 @@ function AnalyticsTab({ days }) {
               { key: 'revenue_pct',   label: 'Share %',      render: (v, r) => (
                 <div className="flex items-center gap-2">
                   <div className="w-16 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--surface-muted)' }}>
-                    <div className="h-full rounded-full" style={{ width: `${v || 0}%`, background: '#3B82F6' }} />
+                    <div className="h-full rounded-full" style={{ width: `${v || 0}%`, background: 'var(--brand-blue)' }} />
                   </div>
                   <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{(v || 0).toFixed(1)}%</span>
                 </div>
@@ -1404,7 +1617,7 @@ function AnalyticsTab({ days }) {
         {toL ? <Sk h="h-[220px]" rounded="rounded-lg" /> : !(turnover?.length) ? <EmptyState message="No turnover data" hint="" /> : (
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={turnover.slice(0, 10)} layout="vertical" margin={{ left: 0, right: 30 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" horizontal={false} />
               <XAxis type="number" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} label={{ value: 'Turns/yr', position: 'insideRight', offset: -5, fontSize: 10, fill: '#94A3B8' }} />
               <YAxis type="category" dataKey="name"
                 tickFormatter={v => v?.length > 18 ? v.slice(0, 18) + '…' : (v || '')}
@@ -1431,7 +1644,7 @@ function AnalyticsTab({ days }) {
         {scL ? <Sk h="h-[300px]" rounded="rounded-lg" /> : !(scatter?.length) ? <EmptyState message="No scatter data" hint="" /> : (
           <ResponsiveContainer width="100%" height={300}>
             <ScatterChart margin={{ top: 10, right: 20, bottom: 25, left: 10 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" strokeOpacity={0.5} />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
               <XAxis type="number" dataKey="x" domain={[0, 1]} name="Stockout Risk"
                 tickFormatter={v => `${(v*100).toFixed(0)}%`}
                 tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false}
@@ -1537,14 +1750,18 @@ export default function ReportsPage() {
   })
 
   const activeTab  = TABS.find(t => t.key === tab)
-  const exportRows = useMemo(() => getExportRows(tab, reportData), [tab, reportData])
+  const exportRows   = useMemo(() => getExportRows(tab, reportData), [tab, reportData])
+  const exportSheets = useMemo(() => getExportSheets(tab, reportData), [tab, reportData])
 
   function handleCSV() {
     if (!exportRows.length) return
     exportCSV(exportRows, `${tab}-report-${new Date().toISOString().slice(0,10)}.csv`)
   }
   function handleExcel() {
-    downloadExcel(exportRows, `${tab}-report-${new Date().toISOString().slice(0,10)}`)
+    // Excel gets every table/breakdown the tab shows on screen, across
+    // multiple worksheets — not just the primary table CSV is limited to.
+    downloadExcel(exportSheets, `${tab}-report-${new Date().toISOString().slice(0,10)}`)
+      .catch(err => console.error('Excel export failed:', err))
   }
   function handlePrint() {
     let el = document.getElementById('report-print-style')
@@ -1565,43 +1782,44 @@ export default function ReportsPage() {
 
       {/* ── Page header ─────────────────────────────────────────────────────── */}
       <div className="px-6 pt-6 pb-3 no-print">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h1 className="text-[22px] font-bold" style={{ color: 'var(--text-primary)' }}>Reports</h1>
-            <p className="text-[13px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
-              Business intelligence & analytics
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            {!isSelfManagedTab && (
-              <button onClick={() => refetch()}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium transition-opacity hover:opacity-80"
-                style={{ background: 'var(--surface-card)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>
-                <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} />
-                Refresh
-              </button>
-            )}
-            {!isSelfManagedTab && (
-              <>
-                <button onClick={handleCSV} disabled={!exportRows.length}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium transition-opacity hover:opacity-80 disabled:opacity-40"
+        <PageHeader
+          className="mb-4"
+          icon={FileText}
+          eyebrow="Analytics"
+          title="Reports"
+          subtitle="Business intelligence & analytics"
+          actions={
+            <>
+              {!isSelfManagedTab && (
+                <button onClick={() => refetch()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium transition-opacity hover:opacity-80"
                   style={{ background: 'var(--surface-card)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>
-                  <FileText className="w-3.5 h-3.5" /> CSV
+                  <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} />
+                  Refresh
                 </button>
-                <button onClick={handleExcel} disabled={!exportRows.length}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium transition-opacity hover:opacity-80 disabled:opacity-40"
-                  style={{ background: 'var(--surface-card)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>
-                  <FileSpreadsheet className="w-3.5 h-3.5" /> Excel
-                </button>
-                <button onClick={handlePrint}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-medium transition-opacity hover:opacity-80"
-                  style={{ background: activeTab?.color || '#6366F1', color: '#fff', border: 'none' }}>
-                  <Printer className="w-3.5 h-3.5" /> Print
-                </button>
-              </>
-            )}
-          </div>
-        </div>
+              )}
+              {!isSelfManagedTab && (
+                <>
+                  <button onClick={handleCSV} disabled={!exportRows.length}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium transition-opacity hover:opacity-80 disabled:opacity-40"
+                    style={{ background: 'var(--surface-card)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>
+                    <FileText className="w-3.5 h-3.5" /> CSV
+                  </button>
+                  <button onClick={handleExcel} disabled={!exportSheets.length}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium transition-opacity hover:opacity-80 disabled:opacity-40"
+                    style={{ background: 'var(--surface-card)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>
+                    <FileSpreadsheet className="w-3.5 h-3.5" /> Excel
+                  </button>
+                  <button onClick={handlePrint}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-medium transition-opacity hover:opacity-80"
+                    style={{ background: activeTab?.color || 'var(--brand-indigo)', color: '#fff', border: 'none' }}>
+                    <Printer className="w-3.5 h-3.5" /> Print
+                  </button>
+                </>
+              )}
+            </>
+          }
+        />
 
         {/* ── Tab navigation ───────────────────────────────────────────────── */}
         <div className="flex gap-1 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
@@ -1611,9 +1829,9 @@ export default function ReportsPage() {
               <button key={t.key} onClick={() => setTab(t.key)}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium whitespace-nowrap shrink-0 transition-all"
                 style={{
-                  background: active ? `${t.color}20` : 'transparent',
+                  background: active ? `color-mix(in srgb, ${t.color} 13%, transparent)` : 'transparent',
                   color:      active ? t.color : 'var(--text-muted)',
-                  border:     active ? `1px solid ${t.color}40` : '1px solid transparent',
+                  border:     active ? `1px solid color-mix(in srgb, ${t.color} 25%, transparent)` : '1px solid transparent',
                 }}>
                 <t.Icon className="w-3.5 h-3.5" />
                 {t.label}
@@ -1668,7 +1886,7 @@ export default function ReportsPage() {
                 <button
                   onClick={() => { setCategory(''); setSupplier('') }}
                   className="flex items-center gap-1 text-[11px] px-2 py-1 rounded-lg"
-                  style={{ color: '#EF4444', background: 'rgba(239,68,68,.1)', border: '1px solid rgba(239,68,68,.25)' }}>
+                  style={{ color: 'var(--color-danger)', background: 'rgba(239,68,68,.1)', border: '1px solid rgba(239,68,68,.25)' }}>
                   <XCircle className="w-3 h-3" /> Clear filters
                 </button>
               )}
@@ -1676,13 +1894,13 @@ export default function ReportsPage() {
           )}
           {isAnalyticsTab && (
             <span className="flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-lg"
-              style={{ background: 'rgba(59,130,246,.1)', color: '#3B82F6', border: '1px solid rgba(59,130,246,.25)' }}>
+              style={{ background: 'rgba(59,130,246,.1)', color: 'var(--brand-blue)', border: '1px solid rgba(59,130,246,.25)' }}>
               <Zap className="w-3 h-3" /> Showing aggregated analytics data
             </span>
           )}
           {isAiInsightsTab && (
             <span className="flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-lg"
-              style={{ background: 'rgba(139,92,246,.1)', color: '#8B5CF6', border: '1px solid rgba(139,92,246,.25)' }}>
+              style={{ background: 'rgba(139,92,246,.1)', color: 'var(--brand-purple)', border: '1px solid rgba(139,92,246,.25)' }}>
               <Brain className="w-3 h-3" /> AI-generated insights from inventory & sales
             </span>
           )}
@@ -1693,47 +1911,25 @@ export default function ReportsPage() {
       <div id="report-print-area" className="px-6 py-4 flex-1" ref={printRef}>
         <PrintHeader company={settings} tabLabel={activeTab?.label} preset={preset} />
 
-        <AnimatePresence mode="wait">
-          {isAnalyticsTab ? (
-            <motion.div key="analytics"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.18 }}>
-              <AnalyticsTab days={presetToDays(preset)} />
-            </motion.div>
-          ) : isAiInsightsTab ? (
-            <motion.div key="ai-insights"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.18 }}>
-              <AIInsightsTab />
-            </motion.div>
-          ) : isLoading ? (
-            <motion.div key="skeleton" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-              <ReportSkeleton />
-            </motion.div>
-          ) : isError ? (
-            <motion.div key="error" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-              <ErrorState onRetry={refetch} />
-            </motion.div>
-          ) : (
-            <motion.div key={tab}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.18 }}>
-              {tab === 'executive'  && <ExecutiveReport  data={reportData} />}
-              {tab === 'sales'      && <SalesReport      data={reportData} />}
-              {tab === 'purchases'  && <PurchasesReport  data={reportData} />}
-              {tab === 'inventory'  && <InventoryReport  data={reportData} />}
-              {tab === 'profit'     && <ProfitReport     data={reportData} />}
-              {tab === 'suppliers'  && <SuppliersReport  data={reportData} />}
-              {tab === 'forecast'   && <ForecastReport   data={reportData} />}
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {isAnalyticsTab ? (
+          <AnalyticsTab days={presetToDays(preset)} />
+        ) : isAiInsightsTab ? (
+          <AIInsightsTab />
+        ) : isLoading ? (
+          <ReportSkeleton />
+        ) : isError ? (
+          <ErrorState onRetry={refetch} />
+        ) : (
+          <>
+            {tab === 'executive'  && <ExecutiveReport  data={reportData} />}
+            {tab === 'sales'      && <SalesReport      data={reportData} />}
+            {tab === 'purchases'  && <PurchasesReport  data={reportData} />}
+            {tab === 'inventory'  && <InventoryReport  data={reportData} />}
+            {tab === 'profit'     && <ProfitReport     data={reportData} />}
+            {tab === 'suppliers'  && <SuppliersReport  data={reportData} />}
+            {tab === 'forecast'   && <ForecastReport   data={reportData} />}
+          </>
+        )}
       </div>
     </div>
   )

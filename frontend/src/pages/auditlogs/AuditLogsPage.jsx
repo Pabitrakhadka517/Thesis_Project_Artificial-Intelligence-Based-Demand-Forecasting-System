@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { motion } from 'framer-motion'
 import { ClipboardList, RefreshCw, Filter } from 'lucide-react'
 import { adminService } from '@/services/adminService'
 import { Card, CardContent } from '@/components/common/Card'
@@ -9,6 +8,7 @@ import { SkeletonTable } from '@/components/common/Skeleton'
 import { EmptyState } from '@/components/common/EmptyState'
 import { ErrorState } from '@/components/common/ErrorState'
 import { Pagination } from '@/components/common/Pagination'
+import { PageHeader } from '@/components/common/PageHeader'
 import { formatNumber } from '@/utils'
 
 // Turns a raw details payload into a short human-readable line instead of a
@@ -101,21 +101,14 @@ export default function AuditLogsPage() {
   if (error) return <ErrorState error={error} onRetry={refetch} />
 
   return (
-    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}
-      className="space-y-5 pb-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <ClipboardList className="h-5 w-5" style={{ color: '#64748B' }} />
-            <h1 className="text-[22px] font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>Audit Logs</h1>
-            <span className="text-[12px] font-semibold px-2 py-0.5 rounded-full" style={{ background: 'rgba(100,116,139,.1)', color: '#64748B' }}>
-              {formatNumber(total)} events
-            </span>
-          </div>
-          <p className="text-[13px]" style={{ color: 'var(--text-muted)' }}>Complete audit trail of all system activities · Auto-refreshes every 30s</p>
-        </div>
-        <Button variant="outline" size="sm" icon={RefreshCw} onClick={refetch}>Refresh</Button>
-      </div>
+    <div className="space-y-5 pb-6">
+      <PageHeader
+        icon={ClipboardList}
+        eyebrow="Administration"
+        title="Audit Logs"
+        subtitle={`${formatNumber(total)} events · Complete audit trail of all system activities · Auto-refreshes every 30s`}
+        actions={<Button variant="outline" size="sm" icon={RefreshCw} onClick={refetch}>Refresh</Button>}
+      />
 
       {/* Filters */}
       <Card>
@@ -220,6 +213,6 @@ export default function AuditLogsPage() {
           )}
         </CardContent>
       </Card>
-    </motion.div>
+    </div>
   )
 }

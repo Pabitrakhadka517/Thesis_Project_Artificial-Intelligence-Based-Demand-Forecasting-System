@@ -1,13 +1,14 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { motion } from 'framer-motion'
 import {
   Activity, ArrowUpCircle, ArrowDownCircle, RefreshCw,
-  ShoppingCart, ShoppingBag, Search, AlertTriangle,
+  ShoppingCart, ShoppingBag, Search, AlertTriangle, History,
 } from 'lucide-react'
 import axiosInstance from '@/api/axiosInstance'
 import { ErrorState } from '@/components/common/ErrorState'
 import { Pagination } from '@/components/common/Pagination'
+import { PageHeader } from '@/components/common/PageHeader'
+import { useDebounce } from '@/hooks/useDebounce'
 
 const TYPE_CONFIG = {
   purchase:   { label: 'Purchase',   color: '#10B981', bg: 'rgba(16,185,129,.1)',  Icon: ArrowUpCircle,   sign: '+' },
@@ -23,11 +24,12 @@ export default function StockMovementsPage() {
   const [typeFilter, setType]   = useState('')
   const [page, setPage]         = useState(1)
   const [pageSize, setPageSize] = useState(20)
+  const debouncedSearch = useDebounce(search, 300)
 
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ['stock-movements', page, pageSize, typeFilter, search],
+    queryKey: ['stock-movements', page, pageSize, typeFilter, debouncedSearch],
     queryFn: () => axiosInstance
-      .get(`/inventory/movements?page=${page}&limit=${pageSize}&type=${typeFilter}&search=${encodeURIComponent(search)}`)
+      .get(`/inventory/movements?page=${page}&limit=${pageSize}&type=${typeFilter}&search=${encodeURIComponent(debouncedSearch)}`)
       .then(r => r.data),
     staleTime: 30_000,
   })
@@ -39,13 +41,12 @@ export default function StockMovementsPage() {
 
   return (
     <div className="space-y-6 pb-8">
-      {/* Header */}
-      <div>
-        <h1 className="text-[22px] font-bold" style={{ color: 'var(--text-primary)' }}>Stock Movements</h1>
-        <p className="text-[13px] mt-1" style={{ color: 'var(--text-muted)' }}>
-          Full audit trail of every inventory change · {total} records
-        </p>
-      </div>
+      <PageHeader
+        icon={History}
+        eyebrow="Transactions"
+        title="Stock Movements"
+        subtitle={`Full audit trail of every inventory change · ${total} records`}
+      />
 
       {/* Filters */}
       <div className="flex gap-3 flex-wrap">
@@ -94,13 +95,12 @@ export default function StockMovementsPage() {
               </tr>
             </thead>
             <tbody>
-              {movements.map((m, idx) => {
+              {movements.map((m) => {
                 const cfg = TYPE_CONFIG[m.type] || TYPE_CONFIG.adjustment
                 const Icon = cfg.Icon
                 const qty  = m.quantity || 0
                 return (
-                  <motion.tr key={m._id}
-                    initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: idx * 0.02 }}
+                  <tr key={m._id}
                     className="border-b last:border-b-0"
                     style={{ borderColor: 'var(--border)' }}
                     onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-muted)'}
@@ -149,7 +149,7 @@ export default function StockMovementsPage() {
                         {new Date(m.date || m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </span>
                     </td>
-                  </motion.tr>
+                  </tr>
                 )
               })}
             </tbody>

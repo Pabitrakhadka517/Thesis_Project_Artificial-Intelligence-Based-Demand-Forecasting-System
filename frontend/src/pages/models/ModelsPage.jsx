@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { motion } from 'framer-motion'
 import {
   Cpu, Play, RefreshCw, AlertCircle, CheckCircle2,
   Clock, Brain, Zap, BarChart2, Table2, ChevronUp, ChevronDown,
@@ -11,6 +10,7 @@ import { Button } from '@/components/common/Button'
 import { SkeletonCard, SkeletonTable } from '@/components/common/Skeleton'
 import { EmptyState } from '@/components/common/EmptyState'
 import { TrainingProgress } from '@/components/common/TrainingProgress'
+import { PageHeader } from '@/components/common/PageHeader'
 import { useToast } from '@/hooks/useToast'
 
 // ── model definitions (the 3 models actually implemented) ─────────────────────
@@ -50,9 +50,7 @@ function ModelCard({ model, trainedMeta, onTrain, isTraining }) {
   const hasMetrics= m.mape != null
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
+    <div
       className="rounded-xl p-5"
       style={{
         background: 'var(--surface-card)',
@@ -109,7 +107,7 @@ function ModelCard({ model, trainedMeta, onTrain, isTraining }) {
         className="w-full justify-center">
         {hasMetrics ? 'Retrain' : 'Train Model'}
       </Button>
-    </motion.div>
+    </div>
   )
 }
 
@@ -326,27 +324,21 @@ export default function ModelsPage() {
 
   return (
     <div className="space-y-5 pb-6 page-enter">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <Cpu className="h-5 w-5" style={{ color: '#8B5CF6' }} />
-            <h1 className="text-[22px] font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>
-              Forecasting Models
-            </h1>
-          </div>
-          <p className="text-[13px]" style={{ color: 'var(--text-muted)' }}>
-            Train and monitor Random Forest · XGBoost · LSTM · 39-feature set · auto best-model selection
-          </p>
-        </div>
-        <Button
-          icon={trainAllMut.isPending ? RefreshCw : Play}
-          loading={trainAllMut.isPending}
-          onClick={handleTrainAll}
-          style={{ background: 'linear-gradient(135deg,#6D28D9,#8B5CF6)' }}>
-          {selectedSku ? 'Train Selected SKU' : 'Train All SKUs (Background)'}
-        </Button>
-      </div>
+      <PageHeader
+        icon={Cpu}
+        eyebrow="Analytics"
+        title="Forecasting Models"
+        subtitle="Train and monitor Random Forest · XGBoost · LSTM · 39-feature set · auto best-model selection"
+        actions={
+          <Button
+            icon={trainAllMut.isPending ? RefreshCw : Play}
+            loading={trainAllMut.isPending}
+            onClick={handleTrainAll}
+            style={{ background: '#7C3AED' }}>
+            {selectedSku ? 'Train Selected SKU' : 'Train All SKUs (Background)'}
+          </Button>
+        }
+      />
 
       {/* SKU selector */}
       <Card>
@@ -372,7 +364,7 @@ export default function ModelsPage() {
 
           {/* Show trained metadata for selected SKU */}
           {selectedSku && skuMeta && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+            <div
               className="mt-3 flex flex-wrap items-center gap-3 text-[12px]"
               style={{ color: 'var(--text-muted)' }}>
               <CheckCircle2 className="h-3.5 w-3.5" style={{ color: '#22C55E' }} />
@@ -381,7 +373,7 @@ export default function ModelsPage() {
               <span>Best model: <strong style={{ color: 'var(--text-primary)' }}>{skuMeta.best_model?.replace('_', ' ')}</strong></span>
               <span>·</span>
               <span>MAPE: <strong style={{ color: '#2563EB' }}>{skuMeta.metrics?.[skuMeta.best_model]?.mape?.toFixed(1)}%</strong></span>
-            </motion.div>
+            </div>
           )}
         </CardContent>
       </Card>

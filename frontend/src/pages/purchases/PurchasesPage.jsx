@@ -2,8 +2,9 @@ import { useState, useEffect, Fragment } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
+import { MOTION } from '@/constants'
 import {
-  ShoppingBag, Plus, Search, X, Trash2, CheckCircle,
+  ShoppingBag, Plus, Search, Trash2, CheckCircle,
   Clock, XCircle, Package, Truck, Minus,
   ChevronDown, ChevronUp, AlertCircle, DollarSign,
   BarChart2, TrendingUp, Calendar, CreditCard, FileText,
@@ -12,12 +13,20 @@ import {
 import axiosInstance from '@/api/axiosInstance'
 import { useToast } from '@/hooks/useToast'
 import { useRole } from '@/hooks/useRole'
-import { formatDate, getProductImage, imgFallback, formatRs } from '@/utils'
+import { formatDate, getProductImage, imgFallback, formatRs, formatNumber } from '@/utils'
 import { ErrorState } from '@/components/common/ErrorState'
-import { ConfirmDialog } from '@/components/common/Modal'
+import { EmptyState } from '@/components/common/EmptyState'
+import { SkeletonTable } from '@/components/common/Skeleton'
+import { Modal, ConfirmDialog } from '@/components/common/Modal'
+import { Input } from '@/components/common/Input'
+import { Select } from '@/components/common/Select'
+import { Textarea } from '@/components/common/Textarea'
+import { Button } from '@/components/common/Button'
 import { Pagination } from '@/components/common/Pagination'
+import { PageHeader } from '@/components/common/PageHeader'
 import { useSortable } from '@/hooks/useSortable'
 import { SortableTH } from '@/components/common/SortableTH'
+import { useDebounce } from '@/hooks/useDebounce'
 
 // ── constants ─────────────────────────────────────────────────────────────────
 const PAY_STATUS_CFG = {
@@ -86,11 +95,13 @@ function NewPurchaseModal({ onClose, preset }) {
   const [supplierId, setSupplier]  = useState('')
   const [expectedDate, setExpDate] = useState('')
   const [notes, setNotes]          = useState('')
+  const [submitted, setSubmitted]  = useState(false)
 
+  const debouncedProductSearch = useDebounce(productSearch, 300)
   const { data: prodData } = useQuery({
-    queryKey: ['products-po', productSearch],
-    queryFn: () => axiosInstance.get(`/products?search=${encodeURIComponent(productSearch)}&limit=10`).then(r => r.data),
-    enabled: productSearch.length > 0,
+    queryKey: ['products-po', debouncedProductSearch],
+    queryFn: () => axiosInstance.get(`/products?search=${encodeURIComponent(debouncedProductSearch)}&limit=10`).then(r => r.data),
+    enabled: debouncedProductSearch.length > 0,
     staleTime: 10_000,
   })
   const { data: suppData } = useQuery({
@@ -136,7 +147,13 @@ function NewPurchaseModal({ onClose, preset }) {
     onError: (e) => toast({ title: e.response?.data?.message || 'Failed to create PO', variant: 'error' }),
   })
 
+  const fieldErrors = {
+    items: items.length === 0 ? 'Add at least one product to this order.' : null,
+    supplier: !supplierId ? 'Select a supplier before creating the order.' : null,
+  }
+
   const handleSubmit = () => {
+    setSubmitted(true)
     if (!items.length) return toast({ title: 'Add at least one product', variant: 'warning' })
     if (!supplierId)   return toast({ title: 'Select a supplier', variant: 'warning' })
     mutation.mutate({
@@ -148,67 +165,64 @@ function NewPurchaseModal({ onClose, preset }) {
   }
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,.6)', backdropFilter: 'blur(4px)' }}
-      onClick={e => e.target === e.currentTarget && onClose()}>
-      <motion.div
-        initial={{ opacity: 0, scale: .95, y: 12 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: .95, y: 12 }}
-        className="w-full max-w-2xl rounded-2xl flex flex-col max-h-[90vh]"
-        style={{ background: 'var(--surface-card)', border: '1px solid var(--border)' }}>
-
-        <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: 'var(--border)' }}>
-          <div className="flex items-center gap-2">
-            <ShoppingBag className="h-5 w-5" style={{ color: '#10B981' }} />
-            <h3 className="text-[16px] font-bold" style={{ color: 'var(--text-primary)' }}>New Purchase Order</h3>
-          </div>
-          <button onClick={onClose} className="h-7 w-7 rounded-md flex items-center justify-center"
-            style={{ color: 'var(--text-muted)', background: 'var(--surface-muted)' }}>
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        <div className="overflow-y-auto flex-1 px-6 py-4 space-y-4">
+    <Modal
+      open
+      onClose={onClose}
+      width={672}
+      title={
+        <span className="inline-flex items-center gap-2">
+          <ShoppingBag className="h-5 w-5" style={{ color: '#10B981' }} />
+          New Purchase Order
+        </span>
+      }
+      footer={
+        <Button
+          className="w-full"
+          onClick={handleSubmit}
+          disabled={mutation.isPending || !!(submitted && (fieldErrors.items || fieldErrors.supplier))}
+          loading={mutation.isPending}
+        >
+          {mutation.isPending ? 'Creating…' : `Create Purchase Order · ${fmtFull(total)}`}
+        </Button>
+      }
+    >
+      <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-[11px] font-semibold uppercase tracking-widest mb-1.5"
-                style={{ color: 'var(--text-muted)' }}>Supplier *</label>
-              <select value={supplierId} onChange={e => setSupplier(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-lg text-[13px] outline-none"
-                style={{ background: 'var(--surface-muted)', border: '1.5px solid var(--border)', color: 'var(--text-primary)' }}>
-                <option value="">-- Select Supplier --</option>
-                {suppliers.map(s => <option key={s._id} value={s._id}>{s.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-[11px] font-semibold uppercase tracking-widest mb-1.5"
-                style={{ color: 'var(--text-muted)' }}>Expected Delivery</label>
-              <input type="date" value={expectedDate} onChange={e => setExpDate(e.target.value)}
-                min={new Date().toISOString().split('T')[0]}
-                className="w-full px-3 py-2.5 rounded-lg text-[13px] outline-none"
-                style={{ background: 'var(--surface-muted)', border: '1.5px solid var(--border)', color: 'var(--text-primary)' }} />
-            </div>
+            <Select
+              label="Supplier *"
+              value={supplierId}
+              onChange={e => setSupplier(e.target.value)}
+              placeholder="-- Select Supplier --"
+              options={suppliers.map(s => ({ value: s._id, label: s.name }))}
+              error={submitted ? fieldErrors.supplier : null}
+            />
+            <Input
+              label="Expected Delivery"
+              type="date"
+              value={expectedDate}
+              onChange={e => setExpDate(e.target.value)}
+              min={new Date().toISOString().split('T')[0]}
+            />
           </div>
 
           <div className="relative">
-            <label className="block text-[11px] font-semibold uppercase tracking-widest mb-1.5"
+            <label htmlFor="po-product-search" className="block text-[11px] font-semibold uppercase tracking-widest mb-1.5"
               style={{ color: 'var(--text-muted)' }}>Add Products</label>
             <div className="flex items-center gap-2 px-3 h-10 rounded-lg"
               style={{ background: 'var(--surface-muted)', border: '1.5px solid var(--border)' }}>
               <Search className="h-3.5 w-3.5 shrink-0" style={{ color: 'var(--text-muted)' }} />
-              <input type="text" placeholder="Search by name or SKU…" value={productSearch}
+              <input id="po-product-search" type="text" placeholder="Search by name or SKU…" value={productSearch}
+                role="combobox" aria-expanded={showProds && products.length > 0} aria-controls="po-product-results" aria-autocomplete="list"
                 onChange={e => { setSearch(e.target.value); setShowProds(true) }}
                 onFocus={() => setShowProds(true)}
                 className="flex-1 bg-transparent text-[13px] outline-none" style={{ color: 'var(--text-primary)' }} />
             </div>
             {showProds && products.length > 0 && (
-              <div className="absolute top-full left-0 right-0 z-10 mt-1 rounded-xl shadow-xl overflow-hidden"
+              <div id="po-product-results" role="listbox" aria-label="Matching products"
+                className="absolute top-full left-0 right-0 z-10 mt-1 rounded-xl shadow-xl overflow-hidden"
                 style={{ background: 'var(--surface-card)', border: '1px solid var(--border)' }}>
                 {products.map(p => (
-                  <button key={p._id} onClick={() => addItem(p)}
+                  <button key={p._id} type="button" role="option" aria-selected="false" onClick={() => addItem(p)}
                     className="w-full flex items-center justify-between px-4 py-2.5 text-left"
                     style={{ borderBottom: '1px solid var(--border)' }}
                     onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-muted)'}
@@ -216,7 +230,7 @@ function NewPurchaseModal({ onClose, preset }) {
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="h-8 w-8 rounded-lg overflow-hidden shrink-0"
                         style={{ background: 'var(--surface-muted)' }}>
-                        <img src={getProductImage(p)} alt={p.name}
+                        <img src={getProductImage(p)} alt="" aria-hidden="true" loading="lazy" decoding="async"
                           className="h-8 w-8 object-cover" onError={imgFallback} />
                       </div>
                       <div className="min-w-0">
@@ -231,7 +245,13 @@ function NewPurchaseModal({ onClose, preset }) {
             )}
           </div>
 
-          {items.length > 0 && (
+          {items.length === 0 ? (
+            <div className="rounded-xl px-4 py-6 text-center text-[12px]"
+              style={{ border: `1px dashed ${submitted && fieldErrors.items ? 'var(--brand-red)' : 'var(--border)'}`, color: submitted && fieldErrors.items ? 'var(--brand-red)' : 'var(--text-muted)' }}
+              role={submitted && fieldErrors.items ? 'alert' : undefined}>
+              {submitted && fieldErrors.items ? fieldErrors.items : 'Search for a product above to add it to this order.'}
+            </div>
+          ) : (
             <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--border)' }}>
               <table className="w-full text-[13px]">
                 <thead>
@@ -249,7 +269,7 @@ function NewPurchaseModal({ onClose, preset }) {
                         <div className="flex items-center gap-2.5">
                           <div className="h-8 w-8 rounded-lg overflow-hidden shrink-0"
                             style={{ background: 'var(--surface-muted)' }}>
-                            <img src={getProductImage(item)} alt={item.name}
+                            <img src={getProductImage(item)} alt={item.name} loading="lazy" decoding="async"
                               className="h-8 w-8 object-cover" onError={imgFallback} />
                           </div>
                           <div>
@@ -260,22 +280,26 @@ function NewPurchaseModal({ onClose, preset }) {
                       </td>
                       <td className="px-3 py-2.5">
                         <input type="number" min={0} step="0.01" value={item.unitPrice}
+                          aria-label={`Unit price for ${item.name}`}
                           onChange={e => updatePrice(item.productId, parseFloat(e.target.value) || 0)}
                           className="w-24 px-2 py-1 rounded text-[12px] outline-none"
                           style={{ background: 'var(--surface-muted)', border: '1px solid var(--border)', color: 'var(--text-primary)' }} />
                       </td>
                       <td className="px-3 py-2.5">
                         <div className="flex items-center gap-1">
-                          <button onClick={() => updateQty(item.productId, item.quantity - 1)}
+                          <button type="button" onClick={() => updateQty(item.productId, item.quantity - 1)}
+                            aria-label={`Decrease quantity of ${item.name}`}
                             className="h-6 w-6 rounded flex items-center justify-center"
                             style={{ background: 'var(--surface-muted)' }}>
                             <Minus className="h-3 w-3" style={{ color: 'var(--text-muted)' }} />
                           </button>
                           <input type="number" min={1} value={item.quantity}
+                            aria-label={`Quantity of ${item.name}`}
                             onChange={e => updateQty(item.productId, parseInt(e.target.value) || 1)}
                             className="w-12 text-center text-[13px] font-bold outline-none bg-transparent"
                             style={{ color: 'var(--text-primary)' }} />
-                          <button onClick={() => updateQty(item.productId, item.quantity + 1)}
+                          <button type="button" onClick={() => updateQty(item.productId, item.quantity + 1)}
+                            aria-label={`Increase quantity of ${item.name}`}
                             className="h-6 w-6 rounded flex items-center justify-center"
                             style={{ background: 'var(--surface-muted)' }}>
                             <Plus className="h-3 w-3" style={{ color: 'var(--text-muted)' }} />
@@ -286,7 +310,8 @@ function NewPurchaseModal({ onClose, preset }) {
                         {fmtFull(item.unitPrice * item.quantity)}
                       </td>
                       <td className="px-3 py-2.5">
-                        <button onClick={() => removeItem(item.productId)}
+                        <button type="button" onClick={() => removeItem(item.productId)}
+                          aria-label={`Remove ${item.name} from order`}
                           className="h-6 w-6 rounded flex items-center justify-center" style={{ color: '#EF4444' }}>
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
@@ -298,14 +323,8 @@ function NewPurchaseModal({ onClose, preset }) {
             </div>
           )}
 
-          <div>
-            <label className="block text-[11px] font-semibold uppercase tracking-widest mb-1.5"
-              style={{ color: 'var(--text-muted)' }}>Notes</label>
-            <textarea rows={2} value={notes} onChange={e => setNotes(e.target.value)}
-              placeholder="Optional notes…"
-              className="w-full px-3 py-2.5 rounded-lg text-[13px] outline-none resize-none"
-              style={{ background: 'var(--surface-muted)', border: '1.5px solid var(--border)', color: 'var(--text-primary)' }} />
-          </div>
+          <Textarea label="Notes" rows={2} value={notes} onChange={e => setNotes(e.target.value)}
+            placeholder="Optional notes…" />
 
           {items.length > 0 && (
             <div className="rounded-xl p-4" style={{ background: 'var(--surface-muted)' }}>
@@ -315,17 +334,8 @@ function NewPurchaseModal({ onClose, preset }) {
               </div>
             </div>
           )}
-        </div>
-
-        <div className="px-6 py-4 border-t" style={{ borderColor: 'var(--border)' }}>
-          <button onClick={handleSubmit} disabled={mutation.isPending || !items.length || !supplierId}
-            className="w-full py-3 rounded-xl text-[14px] font-bold text-white disabled:opacity-50"
-            style={{ background: 'linear-gradient(135deg,#059669,#10B981)' }}>
-            {mutation.isPending ? 'Creating…' : `Create Purchase Order · ${fmtFull(total)}`}
-          </button>
-        </div>
-      </motion.div>
-    </motion.div>
+      </div>
+    </Modal>
   )
 }
 
@@ -347,64 +357,48 @@ function ReceiveModal({ purchase, onClose }) {
   })
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,.6)', backdropFilter: 'blur(4px)' }}
-      onClick={e => e.target === e.currentTarget && onClose()}>
-      <motion.div
-        initial={{ opacity: 0, scale: .95, y: 12 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: .95, y: 12 }}
-        className="w-full max-w-md rounded-2xl p-6"
-        style={{ background: 'var(--surface-card)', border: '1px solid var(--border)' }}>
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h3 className="text-[16px] font-bold" style={{ color: 'var(--text-primary)' }}>Receive Goods</h3>
-            <p className="text-[12px]" style={{ color: 'var(--text-muted)' }}>{purchase.purchaseNumber}</p>
-          </div>
-          <button onClick={onClose} className="h-7 w-7 rounded-md flex items-center justify-center"
-            style={{ color: 'var(--text-muted)', background: 'var(--surface-muted)' }}>
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        <div className="rounded-xl overflow-hidden mb-4" style={{ border: '1px solid var(--border)' }}>
-          {purchase.items?.map((item) => (
-            <div key={item._id} className="flex items-center justify-between px-4 py-3 border-b last:border-b-0"
-              style={{ borderColor: 'var(--border)' }}>
-              <div>
-                <p className="text-[13px] font-semibold" style={{ color: 'var(--text-primary)' }}>
-                  {item.product?.name || item.productName}
-                </p>
-                <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-                  {item.quantity} {item.product?.unit} × {fmtFull(item.unitPrice || item.buyingPrice)}
-                </p>
-              </div>
-              <p className="text-[13px] font-bold" style={{ color: 'var(--text-primary)' }}>
-                {fmtFull(item.quantity * (item.unitPrice || item.buyingPrice))}
+    <Modal
+      open
+      onClose={onClose}
+      width={420}
+      title={
+        <span>
+          Receive Goods
+          <span className="block text-[12px] font-normal mt-0.5" style={{ color: 'var(--text-muted)' }}>{purchase.purchaseNumber}</span>
+        </span>
+      }
+      footer={
+        <>
+          <Button variant="secondary" className="flex-1" onClick={onClose}>Cancel</Button>
+          <Button className="flex-1" onClick={() => mutation.mutate()} loading={mutation.isPending}>
+            {mutation.isPending ? 'Processing…' : 'Confirm Receipt'}
+          </Button>
+        </>
+      }
+    >
+      <div className="rounded-xl overflow-hidden mb-4" style={{ border: '1px solid var(--border)' }}>
+        {purchase.items?.map((item) => (
+          <div key={item._id} className="flex items-center justify-between px-4 py-3 border-b last:border-b-0"
+            style={{ borderColor: 'var(--border)' }}>
+            <div>
+              <p className="text-[13px] font-semibold" style={{ color: 'var(--text-primary)' }}>
+                {item.product?.name || item.productName}
+              </p>
+              <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                {item.quantity} {item.product?.unit} × {fmtFull(item.unitPrice || item.buyingPrice)}
               </p>
             </div>
-          ))}
-        </div>
+            <p className="text-[13px] font-bold" style={{ color: 'var(--text-primary)' }}>
+              {fmtFull(item.quantity * (item.unitPrice || item.buyingPrice))}
+            </p>
+          </div>
+        ))}
+      </div>
 
-        <div className="p-3 rounded-xl mb-4 text-[12px]" style={{ background: 'rgba(16,185,129,.1)' }}>
-          <p style={{ color: '#10B981' }}>Confirming receipt will add all quantities to inventory and mark this PO as received.</p>
-        </div>
-
-        <div className="flex gap-3">
-          <button onClick={onClose} className="flex-1 py-2.5 rounded-xl text-[14px] font-bold"
-            style={{ background: 'var(--surface-muted)', color: 'var(--text-secondary)' }}>
-            Cancel
-          </button>
-          <button onClick={() => mutation.mutate()} disabled={mutation.isPending}
-            className="flex-1 py-2.5 rounded-xl text-[14px] font-bold text-white disabled:opacity-70"
-            style={{ background: 'linear-gradient(135deg,#059669,#10B981)' }}>
-            {mutation.isPending ? 'Processing…' : 'Confirm Receipt'}
-          </button>
-        </div>
-      </motion.div>
-    </motion.div>
+      <div className="p-3 rounded-xl text-[12px]" style={{ background: 'rgba(16,185,129,.1)' }}>
+        <p style={{ color: '#10B981' }}>Confirming receipt will add all quantities to inventory and mark this PO as received.</p>
+      </div>
+    </Modal>
   )
 }
 
@@ -413,6 +407,7 @@ function PaymentUpdateBtn({ purchase }) {
   const qc = useQueryClient()
   const { toast } = useToast()
   const [open, setOpen] = useState(false)
+  const [confirmStatus, setConfirmStatus] = useState(null)
 
   const mutation = useMutation({
     mutationFn: ({ paymentStatus }) => axiosInstance.patch(`/purchases/${purchase._id}/payment`, { paymentStatus }),
@@ -421,15 +416,25 @@ function PaymentUpdateBtn({ purchase }) {
       qc.invalidateQueries({ queryKey: ['purchase-stats'] })
       toast({ title: 'Payment status updated', variant: 'success' })
       setOpen(false)
+      setConfirmStatus(null)
     },
     onError: (e) => toast({ title: e.response?.data?.message || 'Failed', variant: 'error' }),
   })
 
   const current = PAY_STATUS_CFG[purchase.paymentStatus] || PAY_STATUS_CFG.pending
 
+  // Marking a PO "Paid" is a financial record — confirm before committing it.
+  // Switching between pending/partial stays a single click since it's easily reversible.
+  const chooseStatus = (k) => {
+    if (k === 'paid') setConfirmStatus(k)
+    else mutation.mutate({ paymentStatus: k })
+  }
+
   return (
     <div className="relative">
       <button onClick={e => { e.stopPropagation(); setOpen(o => !o) }}
+        aria-haspopup="true" aria-expanded={open}
+        aria-label={`Payment status: ${current.label}. Click to change.`}
         className="flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full"
         style={{ background: current.bg, color: current.color }}>
         {current.label}
@@ -441,13 +446,15 @@ function PaymentUpdateBtn({ purchase }) {
             initial={{ opacity: 0, y: -4, scale: .95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -4, scale: .95 }}
+            transition={{ duration: MOTION.fast, ease: MOTION.ease }}
+            role="menu"
             className="absolute top-full left-0 mt-1 z-20 rounded-xl shadow-xl overflow-hidden w-28"
             style={{ background: 'var(--surface-card)', border: '1px solid var(--border)' }}
             onClick={e => e.stopPropagation()}>
             {Object.entries(PAY_STATUS_CFG).map(([k, v]) => (
-              <button key={k}
+              <button key={k} role="menuitem"
                 disabled={k === purchase.paymentStatus || mutation.isPending}
-                onClick={() => mutation.mutate({ paymentStatus: k })}
+                onClick={() => chooseStatus(k)}
                 className="w-full text-left px-3 py-2 text-[12px] font-semibold disabled:opacity-40"
                 style={{ color: v.color, borderBottom: '1px solid var(--border)' }}
                 onMouseEnter={e => e.currentTarget.style.background = v.bg}
@@ -458,6 +465,16 @@ function PaymentUpdateBtn({ purchase }) {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <ConfirmDialog
+        open={!!confirmStatus}
+        onClose={() => setConfirmStatus(null)}
+        onConfirm={() => mutation.mutate({ paymentStatus: confirmStatus })}
+        title="Mark this order as paid?"
+        description={`This records PO ${purchase.purchaseNumber} (${fmtFull(purchase.grandTotal)}) as fully paid to ${purchase.supplier?.name || 'the supplier'}.`}
+        confirmLabel="Mark as Paid"
+        loading={mutation.isPending}
+      />
     </div>
   )
 }
@@ -567,6 +584,7 @@ export default function PurchasesPage() {
   const [expanded, setExpanded]     = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const sort = useSortable('purchaseDate', 'desc')
+  const debouncedSearch = useDebounce(search, 300)
 
   const { data: statsRaw } = useQuery({
     queryKey: ['purchase-stats'],
@@ -583,11 +601,11 @@ export default function PurchasesPage() {
   const suppliersList = suppData?.data || []
 
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ['purchases', page, pageSize, search, status, supplierFilter, startDate, endDate, sort.sortBy, sort.sortDir],
+    queryKey: ['purchases', page, pageSize, debouncedSearch, status, supplierFilter, startDate, endDate, sort.sortBy, sort.sortDir],
     queryFn: () => {
       const qs = new URLSearchParams({
         page, limit: pageSize, sortBy: sort.sortBy, sortDir: sort.sortDir,
-        ...(search         && { search }),
+        ...(debouncedSearch && { search: debouncedSearch }),
         ...(status         && { status }),
         ...(supplierFilter && { supplier: supplierFilter }),
         ...(startDate      && { startDate }),
@@ -614,7 +632,7 @@ export default function PurchasesPage() {
   })
 
   const kpis = [
-    { title: 'Pending Orders',   value: String(stats.pendingOrders || 0),  sub: 'awaiting receipt',          icon: Clock,      color: '#F59E0B' },
+    { title: 'Pending Orders',   value: formatNumber(stats.pendingOrders || 0),  sub: 'awaiting receipt',          icon: Clock,      color: '#F59E0B' },
     { title: 'Monthly Spend',    value: fmtRs(stats.month?.total),          sub: `${stats.month?.count || 0} POs this month`, icon: TrendingUp, color: '#10B981' },
     { title: 'Outstanding',      value: fmtRs(stats.outstanding?.total),    sub: `${stats.outstanding?.count || 0} unpaid POs`, icon: AlertCircle,color: '#EF4444' },
     { title: 'Avg Order Value',  value: fmtRs(stats.avgOrder),              sub: 'all time',                  icon: BarChart2,  color: '#8B5CF6' },
@@ -625,22 +643,19 @@ export default function PurchasesPage() {
 
   return (
     <div className="space-y-5 pb-8">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-[22px] font-bold" style={{ color: 'var(--text-primary)' }}>Purchases</h1>
-          <p className="text-[13px] mt-1" style={{ color: 'var(--text-muted)' }}>
-            {total.toLocaleString()} purchase orders
-          </p>
-        </div>
-        {can('inventory_manager') && (
+      <PageHeader
+        icon={ShoppingBag}
+        eyebrow="Transactions"
+        title="Purchases"
+        subtitle={`${total.toLocaleString()} purchase orders`}
+        actions={can('inventory_manager') && (
           <button onClick={() => setCreate(true)}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-[13px] font-bold text-white"
-            style={{ background: 'linear-gradient(135deg,#059669,#10B981)', boxShadow: '0 4px 16px rgba(16,185,129,.35)' }}>
+            style={{ background: 'var(--brand-primary)' }}>
             <Plus className="h-4 w-4" /> New Purchase Order
           </button>
         )}
-      </div>
+      />
 
       {/* KPI cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -652,11 +667,12 @@ export default function PurchasesPage() {
         <div className="flex items-center gap-2 px-3 h-9 rounded-lg flex-1 min-w-48"
           style={{ background: 'var(--surface-card)', border: '1px solid var(--border)' }}>
           <Search className="h-3.5 w-3.5 shrink-0" style={{ color: 'var(--text-muted)' }} />
-          <input type="text" placeholder="Search PO number or supplier…" value={search}
+          <input type="text" placeholder="Search PO number or supplier…" aria-label="Search by PO number or supplier" value={search}
             onChange={e => { setSearch(e.target.value); setPage(1) }}
             className="flex-1 bg-transparent text-[13px] outline-none" style={{ color: 'var(--text-primary)' }} />
         </div>
         <select value={status} onChange={e => { setStatus(e.target.value); setPage(1) }}
+          aria-label="Filter by status"
           className="h-9 px-3 rounded-lg text-[13px] outline-none"
           style={{ background: 'var(--surface-card)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}>
           <option value="">All Status</option>
@@ -666,15 +682,18 @@ export default function PurchasesPage() {
           <option value="partial">Partial</option>
         </select>
         <select value={supplierFilter} onChange={e => { setSupFil(e.target.value); setPage(1) }}
+          aria-label="Filter by supplier"
           className="h-9 px-3 rounded-lg text-[13px] outline-none"
           style={{ background: 'var(--surface-card)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}>
           <option value="">All Suppliers</option>
           {suppliersList.map(s => <option key={s._id} value={s._id}>{s.name}</option>)}
         </select>
         <input type="date" value={startDate} onChange={e => { setStartDate(e.target.value); setPage(1) }}
+          aria-label="Start date"
           className="h-9 px-3 rounded-lg text-[13px] outline-none"
           style={{ background: 'var(--surface-card)', border: '1px solid var(--border)', color: 'var(--text-primary)' }} />
         <input type="date" value={endDate} onChange={e => { setEndDate(e.target.value); setPage(1) }}
+          aria-label="End date"
           className="h-9 px-3 rounded-lg text-[13px] outline-none"
           style={{ background: 'var(--surface-card)', border: '1px solid var(--border)', color: 'var(--text-primary)' }} />
         {hasFilters && (
@@ -687,18 +706,23 @@ export default function PurchasesPage() {
 
       {/* Table */}
       {isLoading ? (
-        <div className="space-y-2">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="h-12 rounded-xl animate-pulse" style={{ background: 'var(--surface-card)' }} />
-          ))}
+        <div className="rounded-xl p-4" style={{ background: 'var(--surface-card)', border: '1px solid var(--border)' }}>
+          <SkeletonTable rows={8} cols={9} />
         </div>
       ) : isError ? (
         <ErrorState error={error} onRetry={refetch} />
       ) : purchases.length === 0 ? (
-        <div className="text-center py-16">
-          <ShoppingBag className="h-12 w-12 mx-auto mb-3 opacity-20" style={{ color: 'var(--text-muted)' }} />
-          <p className="text-[14px]" style={{ color: 'var(--text-muted)' }}>No purchase orders found</p>
-          {hasFilters && <button onClick={clearFilters} className="mt-3 text-[13px] underline" style={{ color: '#10B981' }}>Clear filters</button>}
+        <div className="rounded-xl" style={{ background: 'var(--surface-card)', border: '1px solid var(--border)' }}>
+          <EmptyState
+            icon={ShoppingBag}
+            title={hasFilters ? 'No matching purchase orders' : 'No purchase orders yet'}
+            description={hasFilters ? 'Try a different search or clear the filters below.' : 'Create your first purchase order to restock inventory.'}
+            action={hasFilters ? (
+              <Button variant="secondary" size="sm" onClick={clearFilters}>Clear filters</Button>
+            ) : can('inventory_manager') ? (
+              <Button size="sm" icon={Plus} onClick={() => setCreate(true)}>New Purchase Order</Button>
+            ) : undefined}
+          />
         </div>
       ) : (
         <div className="rounded-xl overflow-x-auto"
@@ -726,8 +750,7 @@ export default function PurchasesPage() {
             <tbody>
               {purchases.map((p) => (
                 <Fragment key={p._id}>
-                  <motion.tr
-                    initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                  <tr
                     className="border-b cursor-pointer"
                     style={{ borderColor: 'var(--border)', background: expanded === p._id ? 'var(--surface-muted)' : 'transparent' }}
                     onClick={() => setExpanded(prev => prev === p._id ? null : p._id)}
@@ -745,7 +768,7 @@ export default function PurchasesPage() {
                         <span style={{ color: 'var(--text-secondary)' }}>{p.supplier?.name || '—'}</span>
                       </div>
                     </td>
-                    <td className="px-4 py-3" style={{ color: 'var(--text-secondary)' }}>{p.items?.length || 0} items</td>
+                    <td className="px-4 py-3" style={{ color: 'var(--text-secondary)' }}>{p.items?.length || 0} item{(p.items?.length || 0) === 1 ? '' : 's'}</td>
                     <td className="px-4 py-3 font-bold" style={{ color: 'var(--text-primary)' }}>{fmtFull(p.grandTotal)}</td>
                     <td className="px-4 py-3"><StatusBadge status={p.status} /></td>
                     <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
@@ -761,6 +784,7 @@ export default function PurchasesPage() {
                         <div className="flex gap-1.5 items-center">
                           {p.status === 'ordered' && (
                             <button onClick={() => setReceive(p)}
+                              aria-label={`Receive goods for ${p.purchaseNumber}`}
                               className="h-7 px-2 rounded-md flex items-center gap-1 text-[11px] font-semibold"
                               style={{ background: 'rgba(16,185,129,.1)', color: '#10B981' }}
                               onMouseEnter={e => e.currentTarget.style.background = 'rgba(16,185,129,.2)'}
@@ -771,6 +795,7 @@ export default function PurchasesPage() {
                           {p.status === 'ordered' && can('admin') && (
                             <button
                               onClick={() => setDeleteTarget(p)}
+                              aria-label={`Delete purchase order ${p.purchaseNumber}`}
                               className="h-7 w-7 rounded-md flex items-center justify-center"
                               style={{ color: '#EF4444' }}
                               onMouseEnter={e => e.currentTarget.style.background = 'rgba(239,68,68,.1)'}
@@ -783,12 +808,14 @@ export default function PurchasesPage() {
                     </td>
                     <td className="px-4 py-3">
                       <button onClick={e => { e.stopPropagation(); setExpanded(prev => prev === p._id ? null : p._id) }}
+                        aria-label={expanded === p._id ? `Collapse details for ${p.purchaseNumber}` : `Expand details for ${p.purchaseNumber}`}
+                        aria-expanded={expanded === p._id}
                         className="h-6 w-6 rounded flex items-center justify-center"
                         style={{ color: 'var(--text-muted)' }}>
                         {expanded === p._id ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
                       </button>
                     </td>
-                  </motion.tr>
+                  </tr>
                   {expanded === p._id && <PODetail purchase={p} />}
                 </Fragment>
               ))}

@@ -1,4 +1,4 @@
-﻿import { useState, useMemo, useRef } from 'react'
+﻿import { useState, useMemo, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -22,8 +22,18 @@ import { useRole } from '@/hooks/useRole'
 import { formatDate, formatRelativeTime, formatRs } from '@/utils'
 import { ImageUpload } from '@/components/common/ImageUpload'
 import { ErrorState } from '@/components/common/ErrorState'
-import { ConfirmDialog } from '@/components/common/Modal'
+import { EmptyState } from '@/components/common/EmptyState'
+import { Modal, ConfirmDialog } from '@/components/common/Modal'
+import { PageHeader } from '@/components/common/PageHeader'
+import { Input } from '@/components/common/Input'
+import { Select } from '@/components/common/Select'
+import { Textarea } from '@/components/common/Textarea'
+import { Button } from '@/components/common/Button'
 import { Pagination } from '@/components/common/Pagination'
+import { ChartTooltip, PieChartTooltip } from '@/components/charts/ChartTooltip'
+import { ChartEmptyState } from '@/components/charts/ChartEmptyState'
+import { CHART_PALETTE } from '@/constants/statusColors'
+import { useDebounce } from '@/hooks/useDebounce'
 
 // ── constants ─────────────────────────────────────────────────────────────────
 const PAYMENT_TERMS = [
@@ -33,17 +43,16 @@ const PAYMENT_TERMS = [
   { value: 'credit_60', label: 'Credit 60 Days'   },
 ]
 const PAYMENT_LABEL = { cash: 'Cash', credit_15: '15d', credit_30: '30d', credit_60: '60d' }
-const PIE_COLORS    = ['#2563EB', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#06B6D4']
-const BAR_COLORS    = ['#2563EB', '#8B5CF6', '#10B981', '#F59E0B', '#F97316']
+// Canonical chart palette (constants/statusColors.js) — previously two local
+// arrays here with drifting hex values against the rest of the app's charts.
+const PIE_COLORS    = CHART_PALETTE
+const BAR_COLORS    = CHART_PALETTE
 const MONTHS        = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 const fmtRs = formatRs
 function fmtN(v) { return v == null ? '—' : Number(v).toLocaleString() }
 function monthLabel({ year, month }) { return `${MONTHS[month]} '${String(year).slice(2)}` }
-
-const fadeUp  = { initial: { opacity: 0, y: 8 }, animate: { opacity: 1, y: 0, transition: { duration: .22 } } }
-const stagger = { animate: { transition: { staggerChildren: .05 } } }
 
 // ── form schema ───────────────────────────────────────────────────────────────
 const schema = z.object({
@@ -60,38 +69,6 @@ const schema = z.object({
 })
 
 // ── reusable small components ─────────────────────────────────────────────────
-function Field({ label, error, children }) {
-  return (
-    <div>
-      <label className="block text-[11px] font-semibold uppercase tracking-widest mb-1.5"
-        style={{ color: 'var(--text-muted)' }}>{label}</label>
-      {children}
-      {error && <p className="text-[11px] mt-1" style={{ color: 'var(--error)' }}>{error}</p>}
-    </div>
-  )
-}
-function FInput({ error, ...props }) {
-  return (
-    <input
-      className="w-full px-3 py-2.5 rounded-lg text-[13px] outline-none"
-      style={{
-        background:  'var(--surface-muted)',
-        border:      `1.5px solid ${error ? 'var(--error)' : 'var(--border)'}`,
-        color:       'var(--text-primary)',
-      }}
-      onFocus={e => { if (!error) e.target.style.borderColor = 'var(--brand)' }}
-      onBlur={e  => { if (!error) e.target.style.borderColor = 'var(--border)' }}
-      {...props}
-    />
-  )
-}
-function FSelect(props) {
-  return (
-    <select className="w-full px-3 py-2.5 rounded-lg text-[13px] outline-none"
-      style={{ background: 'var(--surface-muted)', border: '1.5px solid var(--border)', color: 'var(--text-primary)' }}
-      {...props} />
-  )
-}
 function StarRating({ value = 3, size = 'sm' }) {
   const sz = size === 'lg' ? 'h-4 w-4' : 'h-3 w-3'
   return (
@@ -106,7 +83,7 @@ function StarRating({ value = 3, size = 'sm' }) {
 
 function KpiCard({ title, value, sub, icon: Icon, color, loading }) {
   return (
-    <motion.div variants={fadeUp} className="rounded-xl p-4 relative overflow-hidden"
+    <div className="rounded-xl p-4 relative overflow-hidden"
       style={{ background: 'var(--surface-card)', border: '1px solid var(--border)' }}>
       <div className="absolute top-0 left-0 right-0 h-0.5" style={{ background: color }} />
       <div className="flex items-start justify-between mb-3">
@@ -121,7 +98,7 @@ function KpiCard({ title, value, sub, icon: Icon, color, loading }) {
         : <p className="text-[22px] font-bold leading-tight" style={{ color: 'var(--text-primary)' }}>{value}</p>
       }
       {sub && <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>{sub}</p>}
-    </motion.div>
+    </div>
   )
 }
 
@@ -165,35 +142,6 @@ function OnTimeChip({ rate }) {
 }
 
 // ─── CRUD MODAL ───────────────────────────────────────────────────────────────
-function Modal({ title, onClose, children }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,.6)', backdropFilter: 'blur(4px)' }}
-      onClick={e => e.target === e.currentTarget && onClose()}
-    >
-      <motion.div
-        initial={{ opacity: 0, scale: .95, y: 12 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: .95, y: 12 }}
-        className="w-full max-w-lg rounded-2xl p-6 overflow-y-auto max-h-[90vh]"
-        style={{ background: 'var(--surface-card)', border: '1px solid var(--border)' }}
-      >
-        <div className="flex items-center justify-between mb-5">
-          <h3 className="text-[16px] font-bold" style={{ color: 'var(--text-primary)' }}>{title}</h3>
-          <button onClick={onClose}
-            className="h-7 w-7 rounded-md flex items-center justify-center"
-            style={{ color: 'var(--text-muted)', background: 'var(--surface-muted)' }}>
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-        {children}
-      </motion.div>
-    </motion.div>
-  )
-}
-
 function SupplierForm({ defaultValues, onSubmit, isPending, submitLabel, onLogoSelect, onLogoRemove, currentLogo, logoUploading }) {
   const { register, handleSubmit, formState: { errors } } = useForm({
     resolver: zodResolver(schema),
@@ -221,47 +169,20 @@ function SupplierForm({ defaultValues, onSubmit, isPending, submitLabel, onLogoS
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Company Name *" error={errors.name?.message}>
-          <FInput placeholder="Himalayan Traders" error={!!errors.name} {...register('name')} />
-        </Field>
-        <Field label="Contact Person">
-          <FInput placeholder="Rajesh Shrestha" {...register('contactPerson')} />
-        </Field>
-        <Field label="Phone">
-          <FInput placeholder="+977-01-..." {...register('phone')} />
-        </Field>
-        <Field label="Email">
-          <FInput type="email" placeholder="supplier@email.com" {...register('email')} />
-        </Field>
-        <Field label="Address">
-          <FInput placeholder="Kalimati, Kathmandu" {...register('address')} />
-        </Field>
-        <Field label="District">
-          <FInput placeholder="Kathmandu" {...register('district')} />
-        </Field>
-        <Field label="Lead Time (days)">
-          <FInput type="number" min={0} {...register('leadTimeDays')} />
-        </Field>
-        <Field label="Rating (1-5)">
-          <FInput type="number" min={1} max={5} {...register('rating')} />
-        </Field>
+        <Input label="Company Name *" placeholder="Himalayan Traders" error={errors.name?.message} {...register('name')} />
+        <Input label="Contact Person" placeholder="Rajesh Shrestha" {...register('contactPerson')} />
+        <Input label="Phone" placeholder="+977-01-..." error={errors.phone?.message} {...register('phone')} />
+        <Input label="Email" type="email" placeholder="supplier@email.com" error={errors.email?.message} {...register('email')} />
+        <Input label="Address" placeholder="Kalimati, Kathmandu" {...register('address')} />
+        <Input label="District" placeholder="Kathmandu" {...register('district')} />
+        <Input label="Lead Time (days)" type="number" min={0} error={errors.leadTimeDays?.message} {...register('leadTimeDays')} />
+        <Input label="Rating (1-5)" type="number" min={1} max={5} error={errors.rating?.message} {...register('rating')} />
       </div>
-      <Field label="Payment Terms">
-        <FSelect {...register('paymentTerms')}>
-          {PAYMENT_TERMS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-        </FSelect>
-      </Field>
-      <Field label="Notes">
-        <textarea rows={2} placeholder="Additional notes…"
-          className="w-full px-3 py-2.5 rounded-lg text-[13px] outline-none resize-none"
-          style={{ background: 'var(--surface-muted)', border: '1.5px solid var(--border)', color: 'var(--text-primary)' }}
-          {...register('notes')} />
-      </Field>
-      <button type="submit" disabled={isPending}
-        className="w-full py-2.5 rounded-xl text-[14px] font-bold text-white"
-        style={{ background: 'var(--brand-primary)', opacity: isPending ? .7 : 1 }}>
+      <Select label="Payment Terms" options={PAYMENT_TERMS} {...register('paymentTerms')} />
+      <Textarea label="Notes" rows={2} placeholder="Additional notes…" {...register('notes')} />
+      <Button type="submit" className="w-full" disabled={isPending} loading={isPending}>
         {isPending ? 'Saving…' : submitLabel}
-      </button>
+      </Button>
     </form>
   )
 }
@@ -291,12 +212,20 @@ function DetailPanel({ supplierId, onClose, onEdit }) {
     { label: 'Active Products',   value: fmtN(p.activeProducts),  color: '#F97316', icon: Package     },
   ]
 
+  // Escape closes the drawer, matching the shared Modal's keyboard behavior.
+  useEffect(() => {
+    const handler = (e) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [onClose])
+
   return (
     <motion.div
       initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
       transition={{ type: 'spring', stiffness: 320, damping: 32 }}
+      role="dialog" aria-modal="true" aria-label={s.name ? `${s.name} details` : 'Supplier details'}
       className="fixed right-0 top-0 bottom-0 z-40 w-130 max-w-[95vw] overflow-y-auto"
-      style={{ background: 'var(--surface-card)', borderLeft: '1px solid var(--border)', boxShadow: '-8px 0 32px rgba(0,0,0,.18)' }}
+      style={{ background: 'var(--surface-card)', borderLeft: '1px solid var(--border)', boxShadow: 'var(--shadow-drawer)' }}
     >
       {/* overlay to close */}
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -310,7 +239,7 @@ function DetailPanel({ supplierId, onClose, onEdit }) {
             <div className="h-11 w-11 rounded-xl flex items-center justify-center shrink-0 overflow-hidden"
               style={{ background: 'rgba(37,99,235,.12)' }}>
               {s.logo
-                ? <img src={s.logo} alt={s.name} className="h-11 w-11 object-cover" />
+                ? <img src={s.logo} alt="" loading="lazy" decoding="async" className="h-11 w-11 object-cover" />
                 : <Truck className="h-5 w-5" style={{ color: '#3B82F6' }} />
               }
             </div>
@@ -326,13 +255,13 @@ function DetailPanel({ supplierId, onClose, onEdit }) {
           </div>
           <div className="flex gap-1.5 shrink-0">
             {onEdit && (
-              <button onClick={() => onEdit(s)}
+              <button onClick={() => onEdit(s)} aria-label={`Edit ${s.name || 'supplier'}`}
                 className="h-8 w-8 rounded-lg flex items-center justify-center"
                 style={{ background: 'var(--surface-muted)', color: 'var(--text-muted)' }}>
                 <Edit2 className="h-3.5 w-3.5" />
               </button>
             )}
-            <button onClick={onClose}
+            <button onClick={onClose} aria-label="Close supplier details"
               className="h-8 w-8 rounded-lg flex items-center justify-center"
               style={{ background: 'var(--surface-muted)', color: 'var(--text-muted)' }}>
               <X className="h-4 w-4" />
@@ -398,30 +327,28 @@ function DetailPanel({ supplierId, onClose, onEdit }) {
 
         {/* Monthly spend trend */}
         <PanelCard title="Purchase Trend — Last 6 Months">
-          {isLoading || trend.length === 0 ? (
+          {isLoading ? (
             <div className="h-40 flex items-center justify-center text-[13px]" style={{ color: 'var(--text-muted)' }}>
-              {isLoading ? 'Loading…' : 'No purchase data'}
+              Loading…
             </div>
+          ) : trend.length === 0 ? (
+            <ChartEmptyState height={140} message="No purchase data yet" />
           ) : (
             <ResponsiveContainer width="100%" height={140}>
               <AreaChart data={trend} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
                 <defs>
                   <linearGradient id="spGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor="#2563EB" stopOpacity={.25} />
-                    <stop offset="95%" stopColor="#2563EB" stopOpacity={0}   />
+                    <stop offset="5%"  stopColor={CHART_PALETTE[0]} stopOpacity={.25} />
+                    <stop offset="95%" stopColor={CHART_PALETTE[0]} stopOpacity={0}   />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
                 <XAxis dataKey="label" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false}
                   tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(0)}K` : v} />
-                <Tooltip
-                  contentStyle={{ background: 'var(--surface-card)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12 }}
-                  formatter={(v) => [fmtRs(v), 'Spend']}
-                  labelStyle={{ color: 'var(--text-muted)', marginBottom: 4 }}
-                />
-                <Area type="monotone" dataKey="amount" stroke="#2563EB" strokeWidth={2}
-                  fill="url(#spGrad)" dot={{ r: 3, fill: '#2563EB' }} />
+                <Tooltip content={<ChartTooltip formatY={fmtRs} />} />
+                <Area type="monotone" dataKey="amount" name="Spend" stroke={CHART_PALETTE[0]} strokeWidth={2}
+                  fill="url(#spGrad)" dot={{ r: 3, fill: CHART_PALETTE[0] }} />
               </AreaChart>
             </ResponsiveContainer>
           )}
@@ -490,7 +417,7 @@ function DetailPanel({ supplierId, onClose, onEdit }) {
                         {po.purchaseNumber}
                       </p>
                       <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-                        {formatDate(po.purchaseDate)} · {po.items?.length || 0} items
+                        {formatDate(po.purchaseDate)} · {po.items?.length || 0} item{(po.items?.length || 0) === 1 ? '' : 's'}
                       </p>
                     </div>
                     <div className="text-right">
@@ -535,38 +462,35 @@ function DashboardView() {
   return (
     <div className="space-y-6">
       {/* KPI row */}
-      <motion.div variants={stagger} initial="initial" animate="animate"
-        className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {kpis.map(k => <KpiCard key={k.title} {...k} loading={isLoading} />)}
-      </motion.div>
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Monthly spend chart */}
         <PanelCard title="Monthly Purchase Spend" className="lg:col-span-2">
-          {isLoading || trend.length === 0 ? (
+          {isLoading ? (
             <div className="h-52 flex items-center justify-center text-[13px]" style={{ color: 'var(--text-muted)' }}>
-              {isLoading ? 'Loading…' : 'No data'}
+              Loading…
             </div>
+          ) : trend.length === 0 ? (
+            <ChartEmptyState height={200} message="No purchase data yet" />
           ) : (
             <ResponsiveContainer width="100%" height={200}>
               <AreaChart data={trend} margin={{ top: 4, right: 4, left: -10, bottom: 0 }}>
                 <defs>
                   <linearGradient id="dashGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor="#8B5CF6" stopOpacity={.25} />
-                    <stop offset="95%" stopColor="#8B5CF6" stopOpacity={0}   />
+                    <stop offset="5%"  stopColor={CHART_PALETTE[3]} stopOpacity={.25} />
+                    <stop offset="95%" stopColor={CHART_PALETTE[3]} stopOpacity={0}   />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
                 <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 11, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false}
                   tickFormatter={v => `${(v/1000).toFixed(0)}K`} />
-                <Tooltip
-                  contentStyle={{ background: 'var(--surface-card)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12 }}
-                  formatter={(v) => [fmtRs(v), 'Spend']}
-                  labelStyle={{ color: 'var(--text-muted)', marginBottom: 4 }}
-                />
-                <Area type="monotone" dataKey="amount" stroke="#8B5CF6" strokeWidth={2}
-                  fill="url(#dashGrad)" dot={{ r: 3, fill: '#8B5CF6' }} />
+                <Tooltip content={<ChartTooltip formatY={fmtRs} />} />
+                <Area type="monotone" dataKey="amount" name="Spend" stroke={CHART_PALETTE[3]} strokeWidth={2}
+                  fill="url(#dashGrad)" dot={{ r: 3, fill: CHART_PALETTE[3] }} />
               </AreaChart>
             </ResponsiveContainer>
           )}
@@ -639,20 +563,17 @@ function DashboardView() {
           {isLoading ? (
             <div className="h-48 animate-pulse rounded" style={{ background: 'var(--surface-muted)' }} />
           ) : payments.length === 0 ? (
-            <p className="text-[13px] text-center py-8" style={{ color: 'var(--text-muted)' }}>No payment data</p>
+            <ChartEmptyState height={180} message="No payment data yet" />
           ) : (
             <ResponsiveContainer width="100%" height={180}>
               <PieChart>
                 <Pie data={payments} dataKey="amount" nameKey="status"
                   cx="50%" cy="50%" innerRadius={45} outerRadius={72} paddingAngle={3}>
                   {payments.map((_, i) => (
-                    <Cell key={i} fill={['#10B981','#F59E0B','#EF4444'][i % 3]} />
+                    <Cell key={i} fill={['var(--color-success)','var(--brand-amber)','var(--color-danger)'][i % 3]} />
                   ))}
                 </Pie>
-                <Tooltip
-                  contentStyle={{ background: 'var(--surface-card)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12 }}
-                  formatter={(v, n) => [fmtRs(v), n]}
-                />
+                <Tooltip content={<PieChartTooltip formatValue={fmtRs} />} />
                 <Legend iconSize={10} iconType="circle"
                   formatter={(v) => <span style={{ color: 'var(--text-secondary)', fontSize: 12, textTransform: 'capitalize' }}>{v}</span>} />
               </PieChart>
@@ -766,26 +687,25 @@ function AnalyticsView() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Delivery Performance */}
         <PanelCard title="Delivery Performance (Avg Days)">
-          {isLoading || delivery.length === 0 ? (
+          {isLoading ? (
             <div className="h-52 flex items-center justify-center text-[13px]" style={{ color: 'var(--text-muted)' }}>
-              {isLoading ? 'Loading…' : 'No delivery data'}
+              Loading…
             </div>
+          ) : delivery.length === 0 ? (
+            <ChartEmptyState height={160} message="No delivery data yet" />
           ) : (
             <ResponsiveContainer width="100%" height={Math.max(160, delivery.length * 38)}>
               <BarChart data={delivery} layout="vertical" margin={{ left: 4, right: 24, top: 4, bottom: 4 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" horizontal={false} />
                 <XAxis type="number" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false}
                   tickFormatter={v => `${v}d`} />
                 <YAxis type="category" dataKey="name" width={120}
                   tick={{ fontSize: 11, fill: 'var(--text-secondary)' }} axisLine={false} tickLine={false} />
-                <Tooltip
-                  contentStyle={{ background: 'var(--surface-card)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12 }}
-                  formatter={(v, n) => [`${v}d`, n === 'avgDays' ? 'Avg Delivery' : 'Lead Time']}
-                />
+                <Tooltip content={<ChartTooltip formatY={v => `${v}d`} />} />
                 <Bar dataKey="leadTimeDays" name="Lead Time" fill="var(--surface-muted)" radius={[0,3,3,0]} barSize={8} />
                 <Bar dataKey="avgDays" name="Avg Actual" radius={[0,3,3,0]} barSize={8}>
                   {delivery.map((d, i) => (
-                    <Cell key={i} fill={d.onTime ? '#10B981' : '#EF4444'} />
+                    <Cell key={i} fill={d.onTime ? 'var(--color-success)' : 'var(--color-danger)'} />
                   ))}
                 </Bar>
                 <Legend iconSize={10} iconType="circle"
@@ -797,21 +717,20 @@ function AnalyticsView() {
 
         {/* Monthly spend stacked */}
         <PanelCard title="Monthly Spend by Top Suppliers">
-          {isLoading || stackedData.length === 0 ? (
+          {isLoading ? (
             <div className="h-52 flex items-center justify-center text-[13px]" style={{ color: 'var(--text-muted)' }}>
-              {isLoading ? 'Loading…' : 'No data'}
+              Loading…
             </div>
+          ) : stackedData.length === 0 ? (
+            <ChartEmptyState height={200} message="No spend data yet" />
           ) : (
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={stackedData} margin={{ top: 4, right: 4, left: -10, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
                 <XAxis dataKey="label" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false}
                   tickFormatter={v => `${(v/1000).toFixed(0)}K`} />
-                <Tooltip
-                  contentStyle={{ background: 'var(--surface-card)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 11 }}
-                  formatter={(v) => [fmtRs(v)]}
-                />
+                <Tooltip content={<ChartTooltip formatY={fmtRs} />} />
                 {topSupNames.map((name, i) => (
                   <Bar key={name} dataKey={name} stackId="a" fill={BAR_COLORS[i % BAR_COLORS.length]}
                     radius={i === topSupNames.length - 1 ? [3,3,0,0] : [0,0,0,0]} />
@@ -839,10 +758,11 @@ function ListView({ onSelectSupplier, can }) {
   const [editing, setEdit]    = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const pendingLogoRef        = useRef(null)
+  const debouncedSearch = useDebounce(search, 300)
 
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ['suppliers', page, pageSize, search, status],
-    queryFn:  () => suppliersService.getAll({ page, limit: pageSize, search, status }).then(r => r.data),
+    queryKey: ['suppliers', page, pageSize, debouncedSearch, status],
+    queryFn:  () => suppliersService.getAll({ page, limit: pageSize, search: debouncedSearch, status }).then(r => r.data),
     staleTime: 30_000,
   })
 
@@ -902,12 +822,13 @@ function ListView({ onSelectSupplier, can }) {
         <div className="flex items-center gap-2 px-3 h-9 rounded-lg flex-1 min-w-48"
           style={{ background: 'var(--surface-card)', border: '1px solid var(--border)' }}>
           <Search className="h-3.5 w-3.5 shrink-0" style={{ color: 'var(--text-muted)' }} />
-          <input type="text" placeholder="Search suppliers…" value={search}
+          <input type="text" placeholder="Search suppliers…" aria-label="Search suppliers" value={search}
             onChange={e => { setSearch(e.target.value); setPage(1) }}
             className="flex-1 bg-transparent text-[13px] outline-none"
             style={{ color: 'var(--text-primary)' }} />
         </div>
         <select value={status} onChange={e => { setStatus(e.target.value); setPage(1) }}
+          aria-label="Filter by status"
           className="h-9 px-3 rounded-lg text-[13px] outline-none"
           style={{ background: 'var(--surface-card)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}>
           <option value="">All Status</option>
@@ -931,20 +852,36 @@ function ListView({ onSelectSupplier, can }) {
       ) : isError ? (
         <ErrorState error={error} onRetry={refetch} />
       ) : suppliers.length === 0 ? (
-        <div className="text-center py-16">
-          <Truck className="h-12 w-12 mx-auto mb-3 opacity-20" style={{ color: 'var(--text-muted)' }} />
-          <p className="text-[14px]" style={{ color: 'var(--text-muted)' }}>No suppliers found</p>
+        <div className="rounded-xl" style={{ background: 'var(--surface-card)', border: '1px solid var(--border)' }}>
+          <EmptyState
+            icon={Truck}
+            title={search || status ? 'No matching suppliers' : 'No suppliers yet'}
+            description={search || status ? 'Try a different search or clear the status filter.' : 'Add your first supplier to start placing purchase orders.'}
+            action={
+              (search || status) ? (
+                <Button variant="secondary" size="sm" onClick={() => { setSearch(''); setStatus(''); setPage(1) }}>Clear filters</Button>
+              ) : can('inventory_manager') ? (
+                <Button size="sm" icon={Plus} onClick={() => setCreate(true)}>Add Supplier</Button>
+              ) : undefined
+            }
+          />
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {suppliers.map(s => (
-            <motion.div key={s._id}
-              initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+            <div key={s._id}
+              role="button" tabIndex={0} aria-label={`View details for ${s.name}`}
               className="rounded-xl p-5 relative cursor-pointer group"
               style={{ background: 'var(--surface-card)', border: '1px solid var(--border)', transition: 'border-color .15s' }}
               onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(3,4,94,.45)'}
               onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
               onClick={() => onSelectSupplier(s._id)}
+              onKeyDown={e => {
+                if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) {
+                  e.preventDefault()
+                  onSelectSupplier(s._id)
+                }
+              }}
             >
               {/* Status */}
               <div className="absolute top-4 right-4 flex items-center gap-1.5">
@@ -956,7 +893,7 @@ function ListView({ onSelectSupplier, can }) {
                 <div className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0 overflow-hidden"
                   style={{ background: 'rgba(37,99,235,.12)' }}>
                   {s.logo
-                    ? <img src={s.logo} alt={s.name} className="h-10 w-10 object-cover" />
+                    ? <img src={s.logo} alt={s.name} loading="lazy" decoding="async" className="h-10 w-10 object-cover" />
                     : <Truck className="h-5 w-5" style={{ color: '#3B82F6' }} />
                   }
                 </div>
@@ -996,6 +933,7 @@ function ListView({ onSelectSupplier, can }) {
                   {can('inventory_manager') && (
                     <>
                       <button onClick={e => { e.stopPropagation(); setEdit(s) }}
+                        aria-label={`Edit ${s.name}`}
                         className="h-7 w-7 rounded-md flex items-center justify-center ml-1"
                         style={{ color: 'var(--text-muted)' }}
                         onMouseEnter={e => { e.stopPropagation(); e.currentTarget.style.background = 'var(--surface-muted)' }}
@@ -1004,6 +942,7 @@ function ListView({ onSelectSupplier, can }) {
                       </button>
                       <button
                         onClick={e => { e.stopPropagation(); setDeleteTarget(s) }}
+                        aria-label={`Delete ${s.name}`}
                         className="h-7 w-7 rounded-md flex items-center justify-center"
                         style={{ color: '#EF4444' }}
                         onMouseEnter={e => { e.stopPropagation(); e.currentTarget.style.background = 'rgba(239,68,68,.1)' }}
@@ -1014,7 +953,7 @@ function ListView({ onSelectSupplier, can }) {
                   )}
                 </div>
               </div>
-            </motion.div>
+            </div>
           ))}
         </div>
       )}
@@ -1040,43 +979,41 @@ function ListView({ onSelectSupplier, can }) {
       />
 
       {/* CRUD Modals */}
-      <AnimatePresence>
+      <Modal open={creating} title="Add Supplier" onClose={() => { setCreate(false); pendingLogoRef.current = null }}>
         {creating && (
-          <Modal title="Add Supplier" onClose={() => { setCreate(false); pendingLogoRef.current = null }}>
-            <SupplierForm
-              onSubmit={createMutation.mutate}
-              isPending={createMutation.isPending}
-              submitLabel="Add Supplier"
-              onLogoSelect={(f) => { pendingLogoRef.current = f }}
-              onLogoRemove={() => { pendingLogoRef.current = null }}
-            />
-          </Modal>
+          <SupplierForm
+            onSubmit={createMutation.mutate}
+            isPending={createMutation.isPending}
+            submitLabel="Add Supplier"
+            onLogoSelect={(f) => { pendingLogoRef.current = f }}
+            onLogoRemove={() => { pendingLogoRef.current = null }}
+          />
         )}
+      </Modal>
+      <Modal open={!!editing} title="Edit Supplier" onClose={() => { setEdit(null); pendingLogoRef.current = null }}>
         {editing && (
-          <Modal title="Edit Supplier" onClose={() => { setEdit(null); pendingLogoRef.current = null }}>
-            <SupplierForm
-              defaultValues={editing}
-              onSubmit={(d) => updateMutation.mutate({ id: editing._id, data: d })}
-              isPending={updateMutation.isPending}
-              submitLabel="Save Changes"
-              currentLogo={editing.logo || null}
-              onLogoSelect={(f) => { pendingLogoRef.current = f }}
-              onLogoRemove={() => {
-                if (editing.logo) logoDeleteMutation.mutate(editing._id)
-                else pendingLogoRef.current = null
-              }}
-              logoUploading={logoDeleteMutation.isPending}
-            />
-          </Modal>
+          <SupplierForm
+            defaultValues={editing}
+            onSubmit={(d) => updateMutation.mutate({ id: editing._id, data: d })}
+            isPending={updateMutation.isPending}
+            submitLabel="Save Changes"
+            currentLogo={editing.logo || null}
+            onLogoSelect={(f) => { pendingLogoRef.current = f }}
+            onLogoRemove={() => {
+              if (editing.logo) logoDeleteMutation.mutate(editing._id)
+              else pendingLogoRef.current = null
+            }}
+            logoUploading={logoDeleteMutation.isPending}
+          />
         )}
-      </AnimatePresence>
+      </Modal>
 
       {/* Add button (inside list so it has access to setCreate) */}
       {can('inventory_manager') && (
         <div className="fixed bottom-8 right-8 z-30">
           <button onClick={() => setCreate(true)}
             className="flex items-center gap-2 px-4 py-3 rounded-2xl text-[13px] font-bold text-white shadow-xl"
-            style={{ background: 'var(--brand-primary)', boxShadow: '0 6px 24px rgba(3,4,94,.5)' }}>
+            style={{ background: 'var(--brand-primary)' }}>
             <Plus className="h-4 w-4" /> Add Supplier
           </button>
         </div>
@@ -1127,15 +1064,12 @@ export default function SuppliersPage() {
 
   return (
     <div className="space-y-6 pb-24">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-[22px] font-bold" style={{ color: 'var(--text-primary)' }}>Supplier Management</h1>
-          <p className="text-[13px] mt-1" style={{ color: 'var(--text-muted)' }}>
-            Monitor performance, analytics and purchase history across all suppliers
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        icon={Truck}
+        eyebrow="Catalog"
+        title="Supplier Management"
+        subtitle="Monitor performance, analytics and purchase history across all suppliers"
+      />
 
       {/* Tabs */}
       <div className="flex gap-1 p-1 rounded-xl w-fit"
@@ -1146,7 +1080,7 @@ export default function SuppliersPage() {
             style={{
               background: tab === t.id ? 'var(--brand-primary)' : 'transparent',
               color:      tab === t.id ? '#fff' : 'var(--text-muted)',
-              boxShadow:  tab === t.id ? '0 2px 8px rgba(3,4,94,.4)' : 'none',
+              boxShadow:  tab === t.id ? 'var(--shadow-xs)' : 'none',
             }}>
             <t.icon className="h-3.5 w-3.5" />
             {t.label}
@@ -1155,15 +1089,9 @@ export default function SuppliersPage() {
       </div>
 
       {/* Tab content */}
-      <AnimatePresence mode="wait">
-        <motion.div key={tab}
-          initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
-          transition={{ duration: .18 }}>
-          {tab === 'list'      && <ListView onSelectSupplier={setSelect} can={can} />}
-          {tab === 'dashboard' && <DashboardView />}
-          {tab === 'analytics' && <AnalyticsView />}
-        </motion.div>
-      </AnimatePresence>
+      {tab === 'list'      && <ListView onSelectSupplier={setSelect} can={can} />}
+      {tab === 'dashboard' && <DashboardView />}
+      {tab === 'analytics' && <AnalyticsView />}
 
       {/* Detail panel */}
       <AnimatePresence>
@@ -1177,25 +1105,23 @@ export default function SuppliersPage() {
       </AnimatePresence>
 
       {/* Edit modal from detail panel */}
-      <AnimatePresence>
+      <Modal open={!!editingFromPanel} title="Edit Supplier" onClose={() => { setEditFromPanel(null); panelLogoRef.current = null }}>
         {editingFromPanel && (
-          <Modal title="Edit Supplier" onClose={() => { setEditFromPanel(null); panelLogoRef.current = null }}>
-            <SupplierForm
-              defaultValues={editingFromPanel}
-              onSubmit={(d) => updateMutation.mutate({ id: editingFromPanel._id, data: d })}
-              isPending={updateMutation.isPending}
-              submitLabel="Save Changes"
-              currentLogo={editingFromPanel.logo || null}
-              onLogoSelect={(f) => { panelLogoRef.current = f }}
-              onLogoRemove={() => {
-                if (editingFromPanel.logo) panelLogoDeleteMutation.mutate(editingFromPanel._id)
-                else panelLogoRef.current = null
-              }}
-              logoUploading={panelLogoDeleteMutation.isPending}
-            />
-          </Modal>
+          <SupplierForm
+            defaultValues={editingFromPanel}
+            onSubmit={(d) => updateMutation.mutate({ id: editingFromPanel._id, data: d })}
+            isPending={updateMutation.isPending}
+            submitLabel="Save Changes"
+            currentLogo={editingFromPanel.logo || null}
+            onLogoSelect={(f) => { panelLogoRef.current = f }}
+            onLogoRemove={() => {
+              if (editingFromPanel.logo) panelLogoDeleteMutation.mutate(editingFromPanel._id)
+              else panelLogoRef.current = null
+            }}
+            logoUploading={panelLogoDeleteMutation.isPending}
+          />
         )}
-      </AnimatePresence>
+      </Modal>
     </div>
   )
 }

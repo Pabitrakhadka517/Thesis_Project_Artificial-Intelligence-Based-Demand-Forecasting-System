@@ -31,6 +31,7 @@ export default function LoginPage() {
   const isLocked = errorStatus === 429
 
   const { register, handleSubmit, formState: { errors } } = useForm({ resolver: zodResolver(schema) })
+  const year = new Date().getFullYear()
 
   const onSubmit = async data => {
     clearError()
@@ -45,20 +46,6 @@ export default function LoginPage() {
         className="hidden lg:flex flex-col justify-between w-[52%] relative overflow-hidden p-12"
         style={{ background: 'var(--brand-primary)' }}
       >
-        {/* Subtle grid */}
-        <div className="absolute inset-0 opacity-[0.07]"
-          style={{
-            backgroundImage: 'linear-gradient(rgba(255,255,255,.6) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.6) 1px,transparent 1px)',
-            backgroundSize:  '40px 40px',
-          }}
-        />
-
-        {/* Glow orbs */}
-        <div className="absolute top-1/4 left-1/4 h-64 w-64 rounded-full opacity-20 blur-3xl"
-          style={{ background: 'radial-gradient(circle,rgba(255,255,255,.7),transparent)' }} />
-        <div className="absolute bottom-1/3 right-1/4 h-48 w-48 rounded-full opacity-15 blur-3xl"
-          style={{ background: 'radial-gradient(circle,rgba(186,230,253,.6),transparent)' }} />
-
         {/* Logo */}
         <div className="relative flex items-center gap-3">
           <div className="h-10 w-10 rounded-xl flex items-center justify-center"
@@ -103,7 +90,7 @@ export default function LoginPage() {
         </div>
 
         <p className="relative text-[11px]" style={{ color: 'rgba(219,234,254,.45)' }}>
-          © 2025 {APP_NAME} · Kathmandu Valley Wholesale Grocery System
+          © {year} {APP_NAME} · Kathmandu Valley Wholesale Grocery System
         </p>
       </div>
 
@@ -157,7 +144,7 @@ export default function LoginPage() {
 
             {/* Forgot password */}
             <div className="flex justify-end">
-              <Link to="/forgot-password" className="text-[12px] font-medium" style={{ color: '#2563EB' }}>
+              <Link to="/forgot-password" className="text-[12px] font-medium" style={{ color: 'var(--brand-blue)' }}>
                 Forgot password?
               </Link>
             </div>

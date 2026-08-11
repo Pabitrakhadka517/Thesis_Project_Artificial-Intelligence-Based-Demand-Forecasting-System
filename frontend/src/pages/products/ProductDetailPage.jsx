@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { motion, AnimatePresence } from 'framer-motion'
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis,
   Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine,
@@ -10,7 +9,7 @@ import {
   ArrowLeft, Package, Edit2, Brain, AlertTriangle, CheckCircle,
   XCircle, TrendingDown, TrendingUp, Truck, ShoppingBag,
   ShoppingCart, Activity, RefreshCw, Calendar, MapPin,
-  BarChart2, Layers, Target, Award, Clock, Zap,
+  Layers, Target, Award, Clock, Zap,
   ChevronDown, ChevronUp, Phone, Mail, Tag, Minus,
 } from 'lucide-react'
 import { productsService } from '@/services/productsService'
@@ -19,6 +18,11 @@ import { useRole } from '@/hooks/useRole'
 import { useToast } from '@/hooks/useToast'
 import { useMutation } from '@tanstack/react-query'
 import { formatRs, formatNumber, formatDate, formatRelativeTime, getProductImage, imgFallback, STOCK_STATUS } from '@/utils'
+import { PageHeader } from '@/components/common/PageHeader'
+import { AIExplainability } from '@/components/common/AIExplainability'
+import { ChartTooltip } from '@/components/charts/ChartTooltip'
+import { ChartEmptyState } from '@/components/charts/ChartEmptyState'
+import { RISK_STYLES, ALERT_PRIORITY_STYLES } from '@/constants/statusColors'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const fmtRs  = v  => formatRs(v ?? 0)
@@ -33,40 +37,40 @@ const SS = Object.fromEntries(
   Object.entries(STOCK_STATUS).map(([k, v]) => [k, { ...v, Icon: SS_ICON[k] || CheckCircle }])
 )
 
-const RISK = {
-  high:   { color: '#EF4444', bg: 'rgba(239,68,68,.10)',  label: 'High Risk'   },
-  medium: { color: '#F59E0B', bg: 'rgba(245,158,11,.10)', label: 'Medium Risk' },
-  low:    { color: '#10B981', bg: 'rgba(16,185,129,.10)', label: 'Low Risk'    },
-}
+// Risk styling reuses the canonical map (shared with Recommendations/AI pages).
+const RISK = Object.fromEntries(
+  Object.entries(RISK_STYLES).map(([k, s]) => [k, { color: s.color, bg: s.tint, label: s.label }])
+)
 
 const MOV_TYPE = {
-  purchase:   { label: 'Purchase',   color: '#10B981', sign: '+' },
-  sale:       { label: 'Sale',       color: '#EF4444', sign: '−' },
-  adjustment: { label: 'Adjustment', color: '#F59E0B', sign: '~' },
-  return:     { label: 'Return',     color: '#2563EB', sign: '+' },
-  waste:      { label: 'Waste',      color: '#6B7280', sign: '−' },
-  transfer:   { label: 'Transfer',   color: '#8B5CF6', sign: '→' },
+  purchase:   { label: 'Purchase',   color: 'var(--color-success)', sign: '+' },
+  sale:       { label: 'Sale',       color: 'var(--color-danger)',  sign: '−' },
+  adjustment: { label: 'Adjustment', color: 'var(--brand-amber)',   sign: '~' },
+  return:     { label: 'Return',     color: 'var(--brand-blue)',    sign: '+' },
+  waste:      { label: 'Waste',      color: 'var(--text-muted)',    sign: '−' },
+  transfer:   { label: 'Transfer',   color: 'var(--brand-purple)',  sign: '→' },
 }
 
 const PO_STATUS = {
-  ordered:  { color: '#2563EB', label: 'Ordered'  },
-  received: { color: '#10B981', label: 'Received' },
-  partial:  { color: '#F59E0B', label: 'Partial'  },
-  cancelled:{ color: '#6B7280', label: 'Cancelled'},
+  ordered:  { color: 'var(--brand-blue)',    bg: 'var(--tint-primary)', label: 'Ordered'  },
+  received: { color: 'var(--color-success)', bg: 'var(--tint-success)', label: 'Received' },
+  partial:  { color: 'var(--brand-amber)',   bg: 'var(--tint-warning)', label: 'Partial'  },
+  cancelled:{ color: 'var(--text-muted)',    bg: 'var(--surface-muted)', label: 'Cancelled'},
 }
 
 const PAY_STATUS = {
-  paid:    { color: '#10B981', label: 'Paid'    },
-  partial: { color: '#F59E0B', label: 'Partial' },
-  pending: { color: '#EF4444', label: 'Pending' },
+  paid:    { color: 'var(--color-success)', bg: 'var(--tint-success)', label: 'Paid'    },
+  partial: { color: 'var(--brand-amber)',   bg: 'var(--tint-warning)', label: 'Partial' },
+  pending: { color: 'var(--color-danger)',  bg: 'var(--tint-danger)',  label: 'Pending' },
 }
 
-const ALERT_PRI = {
-  critical: '#EF4444', high: '#F97316', medium: '#F59E0B', low: '#10B981',
-}
+// Alert-priority dot colors reuse the canonical map (shared with Navbar/AdminDashboard).
+const ALERT_PRI = Object.fromEntries(
+  Object.entries(ALERT_PRIORITY_STYLES).map(([k, s]) => [k, s.color])
+)
 
 // ── Sub-components ────────────────────────────────────────────────────────────
-function ConfidenceRing({ value, color = '#2563EB' }) {
+function ConfidenceRing({ value, color = 'var(--brand-blue)' }) {
   const r    = 28
   const circ = 2 * Math.PI * r
   const dash = ((Math.min(100, value ?? 0)) / 100) * circ
@@ -87,11 +91,11 @@ function ConfidenceRing({ value, color = '#2563EB' }) {
   )
 }
 
-function KpiTile({ icon: Icon, label, value, sub, color = '#2563EB', small }) {
+function KpiTile({ icon: Icon, label, value, sub, color = 'var(--brand-blue)', small }) {
   return (
     <div className="rounded-xl p-4 flex items-start gap-3"
       style={{ background: 'var(--surface-card)', border: '1px solid var(--border)' }}>
-      <div className="p-2 rounded-lg shrink-0" style={{ background: `${color}1a` }}>
+      <div className="p-2 rounded-lg shrink-0" style={{ background: `color-mix(in srgb, ${color} 12%, transparent)` }}>
         <Icon className="h-4 w-4" style={{ color }} />
       </div>
       <div className="min-w-0">
@@ -121,28 +125,12 @@ function InfoRow({ label, value, mono }) {
   )
 }
 
-function ChartTooltip({ active, payload, label }) {
-  if (!active || !payload?.length) return null
-  return (
-    <div className="rounded-lg px-3 py-2 text-[12px] shadow-lg"
-      style={{ background: 'var(--surface-card)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}>
-      <p className="font-semibold mb-1">{label}</p>
-      {payload.map(p => (
-        <p key={p.dataKey} style={{ color: p.color ?? p.stroke }}>
-          {p.name}: {typeof p.value === 'number' && p.value > 100
-            ? fmtRs(p.value) : fmtNum(p.value)}
-        </p>
-      ))}
-    </div>
-  )
-}
-
 function StatusBadge({ status, map }) {
   const cfg = map[status]
   if (!cfg) return <span style={{ color: 'var(--text-muted)' }}>—</span>
   return (
     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-      style={{ background: `${cfg.color}22`, color: cfg.color }}>
+      style={{ background: cfg.bg, color: cfg.color }}>
       {cfg.label}
     </span>
   )
@@ -156,7 +144,6 @@ export default function ProductDetailPage() {
   const { toast }       = useToast()
   const qc              = useQueryClient()
   const [histTab, setHistTab] = useState('movements')
-  const [showFullExplan, setShowFull] = useState(false)
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['product-detail', id],
@@ -197,7 +184,7 @@ export default function ProductDetailPage() {
 
   if (isError || !data) return (
     <div className="flex flex-col items-center justify-center py-24">
-      <XCircle className="h-12 w-12 mb-3" style={{ color: '#EF4444' }} />
+      <XCircle className="h-12 w-12 mb-3" style={{ color: 'var(--color-danger)' }} />
       <p className="text-[16px] font-semibold" style={{ color: 'var(--text-primary)' }}>Product not found</p>
       <button onClick={() => navigate(-1)}
         className="mt-4 flex items-center gap-2 px-4 py-2 rounded-lg text-[13px]"
@@ -227,9 +214,9 @@ export default function ProductDetailPage() {
     : trend === 'decreasing' || trend === 'falling'
     ? TrendingDown : Minus
   const trendColor = trend === 'increasing' || trend === 'rising'
-    ? '#EF4444'
+    ? 'var(--color-danger)'
     : trend === 'decreasing' || trend === 'falling'
-    ? '#10B981' : 'var(--text-muted)'
+    ? 'var(--color-success)' : 'var(--text-muted)'
 
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto pb-12">
@@ -259,7 +246,7 @@ export default function ProductDetailPage() {
               </span>
               {alerts.length > 0 && (
                 <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full"
-                  style={{ background: 'rgba(239,68,68,.1)', color: '#EF4444' }}>
+                  style={{ background: 'var(--tint-danger)', color: 'var(--color-danger)' }}>
                   <AlertTriangle className="h-3 w-3" /> {alerts.length} alert{alerts.length !== 1 ? 's' : ''}
                 </span>
               )}
@@ -276,7 +263,7 @@ export default function ProductDetailPage() {
             disabled={analyzeMutation.isPending || !aiOnline}
             title={!aiOnline ? 'AI service is offline' : undefined}
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-[12px] font-medium disabled:opacity-40"
-            style={{ background: 'rgba(37,99,235,.1)', color: '#2563EB' }}>
+            style={{ background: 'rgba(37,99,235,.1)', color: 'var(--brand-blue)' }}>
             <Brain className="h-3.5 w-3.5" />
             {analyzeMutation.isPending ? 'Analyzing…' : !aiOnline ? 'AI Offline' : 'Run AI Analysis'}
           </button>
@@ -314,7 +301,7 @@ export default function ProductDetailPage() {
           style={{ background: 'var(--surface-card)', border: '1px solid var(--border)' }}>
           <h3 className="text-[13px] font-bold mb-3 flex items-center gap-2"
             style={{ color: 'var(--text-primary)' }}>
-            <Tag className="h-4 w-4" style={{ color: '#2563EB' }} /> Product Details
+            <Tag className="h-4 w-4" style={{ color: 'var(--brand-blue)' }} /> Product Details
           </h3>
           <div>
             <InfoRow label="Category"     value={product.category?.name || '—'} />
@@ -342,14 +329,14 @@ export default function ProductDetailPage() {
           style={{ background: 'var(--surface-card)', border: '1px solid var(--border)' }}>
           <h3 className="text-[13px] font-bold mb-3 flex items-center gap-2"
             style={{ color: 'var(--text-primary)' }}>
-            <Truck className="h-4 w-4" style={{ color: '#10B981' }} /> Supplier & Delivery
+            <Truck className="h-4 w-4" style={{ color: 'var(--color-success)' }} /> Supplier & Delivery
           </h3>
           {product.supplier ? (
             <div className="mb-4">
               <div className="flex items-center gap-3 p-3 rounded-lg mb-3"
                 style={{ background: 'var(--surface-muted)' }}>
                 <div className="h-10 w-10 rounded-full flex items-center justify-center text-[14px] font-bold shrink-0"
-                  style={{ background: 'rgba(16,185,129,.15)', color: '#10B981' }}>
+                  style={{ background: 'rgba(16,185,129,.15)', color: 'var(--color-success)' }}>
                   {(product.supplier.name || 'S')[0].toUpperCase()}
                 </div>
                 <div className="min-w-0">
@@ -401,31 +388,29 @@ export default function ProductDetailPage() {
         <KpiTile icon={Layers}      label="Current Stock"      color={ss.color}
           value={`${fmtNum(product.currentStock)} ${product.unit}`}
           sub={ss.label} />
-        <KpiTile icon={Target}      label="Safety Stock"       color="#8B5CF6"
+        <KpiTile icon={Target}      label="Safety Stock"       color="var(--brand-purple)"
           value={prediction?.safetyStock != null ? `${fmtNum(prediction.safetyStock)} ${product.unit}` : '—'}
           sub="Buffer stock" />
-        <KpiTile icon={AlertTriangle} label="Reorder Point"    color="#F59E0B"
+        <KpiTile icon={AlertTriangle} label="Reorder Point"    color="var(--brand-amber)"
           value={`${fmtNum(prediction?.reorderPoint ?? product.reorderLevel)} ${product.unit}`}
           sub="Trigger level" />
-        <KpiTile icon={ShoppingCart}  label="Suggested Purchase" color="#10B981"
+        <KpiTile icon={ShoppingCart}  label="Suggested Purchase" color="var(--color-success)"
           value={prediction?.suggestedPurchase != null ? `${fmtNum(prediction.suggestedPurchase)} ${product.unit}` : '—'}
           sub={prediction?.eoq ? `EOQ: ${fmtNum(prediction.eoq)}` : 'No AI data'} />
-        <KpiTile icon={Clock}       label="Days of Stock"      color="#2563EB"
+        <KpiTile icon={Clock}       label="Days of Stock"      color="var(--brand-blue)"
           value={prediction?.daysOfStock != null ? `${prediction.daysOfStock}d` : '—'}
           sub={`Lead: ${metrics.leadTimeDays}d`}
           small={false} />
-        <KpiTile icon={Award}       label="Profit Margin"      color="#F59E0B"
+        <KpiTile icon={Award}       label="Profit Margin"      color="var(--brand-amber)"
           value={`${metrics.profitMargin}%`}
           sub={`Turnover: ${metrics.inventoryTurnover ?? '—'}x/yr`} />
       </div>
 
       {/* ── AI Analysis ──────────────────────────────────────────────────────── */}
       {prediction ? (
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
+        <div
           className="rounded-xl p-5"
-          style={{ background: 'var(--surface-card)', border: `1px solid ${rsk.color}40` }}>
+          style={{ background: 'var(--surface-card)', border: `1px solid color-mix(in srgb, ${rsk.color} 25%, transparent)` }}>
           <div className="flex items-start gap-5 flex-wrap">
 
             {/* Confidence ring + risk */}
@@ -440,7 +425,7 @@ export default function ProductDetailPage() {
             {/* Explanation + metrics */}
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-2">
-                <Brain className="h-4 w-4" style={{ color: '#2563EB' }} />
+                <Brain className="h-4 w-4" style={{ color: 'var(--brand-blue)' }} />
                 <h3 className="text-[13px] font-bold" style={{ color: 'var(--text-primary)' }}>
                   AI Analysis
                 </h3>
@@ -449,44 +434,25 @@ export default function ProductDetailPage() {
                 </span>
                 {!prediction.hasHistoricalData && (
                   <span className="text-[10px] px-1.5 py-0.5 rounded"
-                    style={{ background: 'rgba(245,158,11,.15)', color: '#F59E0B' }}>
+                    style={{ background: 'rgba(245,158,11,.15)', color: 'var(--brand-amber)' }}>
                     Limited data
                   </span>
                 )}
               </div>
 
-              {prediction.explanation && (
-                <div className="mb-3">
-                  <p className="text-[12px] leading-relaxed" style={{ color: 'var(--text-muted)' }}>
-                    {showFullExplan ? prediction.explanation : prediction.explanation.slice(0, 220)}
-                    {prediction.explanation.length > 220 && (
-                      <button onClick={() => setShowFull(s => !s)}
-                        className="ml-1 font-medium" style={{ color: '#2563EB' }}>
-                        {showFullExplan ? 'Show less' : '…Read more'}
-                      </button>
-                    )}
+              <div className="grid grid-cols-2 gap-3 mb-3">
+                <div className="px-3 py-2.5 rounded-lg" style={{ background: 'var(--tint-danger)' }}>
+                  <p className="text-[10px] font-semibold uppercase tracking-wide mb-0.5" style={{ color: 'var(--color-danger)' }}>
+                    Stockout Risk
                   </p>
+                  <p className="text-[15px] font-bold" style={{ color: 'var(--text-primary)' }}>{pct(prediction.stockoutProbability)}</p>
                 </div>
-              )}
-
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {[
-                  { label: '30d Forecast',   value: prediction.forecastDemand != null ? `${Math.round(prediction.forecastDemand)} ${product.unit}` : '—', color: '#2563EB' },
-                  { label: 'Daily Demand',   value: prediction.dailyDemand != null ? `${(+prediction.dailyDemand).toFixed(1)}/day` : '—', color: '#8B5CF6' },
-                  { label: 'Stockout Risk',  value: pct(prediction.stockoutProbability),  color: '#EF4444' },
-                  { label: 'Overstock Risk', value: pct(prediction.overstockProbability), color: '#F59E0B' },
-                ].map(({ label, value, color }) => (
-                  <div key={label} className="px-3 py-2.5 rounded-lg"
-                    style={{ background: `${color}0d` }}>
-                    <p className="text-[10px] font-semibold uppercase tracking-wide mb-0.5"
-                      style={{ color }}>
-                      {label}
-                    </p>
-                    <p className="text-[15px] font-bold" style={{ color: 'var(--text-primary)' }}>
-                      {value}
-                    </p>
-                  </div>
-                ))}
+                <div className="px-3 py-2.5 rounded-lg" style={{ background: 'var(--tint-warning)' }}>
+                  <p className="text-[10px] font-semibold uppercase tracking-wide mb-0.5" style={{ color: 'var(--brand-amber)' }}>
+                    Overstock Risk
+                  </p>
+                  <p className="text-[15px] font-bold" style={{ color: 'var(--text-primary)' }}>{pct(prediction.overstockProbability)}</p>
+                </div>
               </div>
             </div>
 
@@ -500,7 +466,22 @@ export default function ProductDetailPage() {
               <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>Demand Trend</span>
             </div>
           </div>
-        </motion.div>
+
+          <AIExplainability
+            className="mt-4"
+            currentStock={product.currentStock}
+            unit={product.unit}
+            forecastDemand={prediction.forecastDemand}
+            dailyDemand={prediction.dailyDemand}
+            leadTimeDays={prediction.leadTimeDays}
+            safetyStock={prediction.safetyStock}
+            reorderPoint={prediction.reorderPoint ?? product.reorderLevel}
+            eoq={prediction.eoq}
+            suggestedPurchase={prediction.suggestedPurchase}
+            reasoning={prediction.explanation}
+            hasHistoricalData={prediction.hasHistoricalData}
+          />
+        </div>
       ) : (
         <div className="rounded-xl p-6 flex items-center gap-4"
           style={{ background: 'var(--surface-card)', border: '1px dashed var(--border)' }}>
@@ -517,7 +498,7 @@ export default function ProductDetailPage() {
             disabled={analyzeMutation.isPending || !aiOnline}
             title={!aiOnline ? 'AI service is offline' : undefined}
             className="ml-auto shrink-0 px-4 py-2 rounded-lg text-[12px] font-bold disabled:opacity-40"
-            style={{ background: '#2563EB', color: '#fff' }}>
+            style={{ background: '#7C3AED', color: '#fff' }}>
             {analyzeMutation.isPending ? 'Running…' : !aiOnline ? 'AI Offline' : 'Analyze Now'}
           </button>
         </div>
@@ -539,30 +520,24 @@ export default function ProductDetailPage() {
               </p>
             </div>
             <div className="text-right">
-              <p className="text-[18px] font-bold" style={{ color: '#10B981' }}>
+              <p className="text-[18px] font-bold" style={{ color: 'var(--color-success)' }}>
                 {fmtNum(metrics.totalQtySold30d)} <span className="text-[12px] font-normal">{product.unit}</span>
               </p>
               <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>sold last 30 days</p>
             </div>
           </div>
           {salesTrend.length === 0 ? (
-            <div className="flex items-center justify-center py-16 rounded-xl"
-              style={{ background: 'var(--surface-muted)' }}>
-              <div className="text-center">
-                <BarChart2 className="h-8 w-8 mx-auto mb-2 opacity-30" style={{ color: 'var(--text-muted)' }} />
-                <p className="text-[12px]" style={{ color: 'var(--text-muted)' }}>No sales data yet</p>
-              </div>
-            </div>
+            <ChartEmptyState height={200} message="No sales data yet" />
           ) : (
             <div style={{ height: 200 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={salesTrend} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
                   <XAxis dataKey="date" tick={{ fontSize: 9, fill: 'var(--text-muted)' }} tickLine={false}
                     tickFormatter={d => d?.slice(5)} interval="preserveStartEnd" />
                   <YAxis tick={{ fontSize: 9, fill: 'var(--text-muted)' }} tickLine={false} axisLine={false} />
-                  <Tooltip content={<ChartTooltip />} />
-                  <Bar dataKey="quantity" name="Units Sold" fill="#2563EB" radius={[3, 3, 0, 0]} />
+                  <Tooltip content={<ChartTooltip formatY={fmtNum} />} />
+                  <Bar dataKey="quantity" name="Units Sold" fill="var(--brand-blue)" radius={[3, 3, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -583,35 +558,29 @@ export default function ProductDetailPage() {
             </div>
           </div>
           {forecastData.length === 0 ? (
-            <div className="flex items-center justify-center py-16 rounded-xl"
-              style={{ background: 'var(--surface-muted)' }}>
-              <div className="text-center">
-                <Brain className="h-8 w-8 mx-auto mb-2 opacity-30" style={{ color: 'var(--text-muted)' }} />
-                <p className="text-[12px]" style={{ color: 'var(--text-muted)' }}>Run AI to see forecast</p>
-              </div>
-            </div>
+            <ChartEmptyState height={200} message="Run AI to see forecast" />
           ) : (
             <div style={{ height: 200 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={forecastData} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
                   <defs>
                     <linearGradient id="fcBand" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%"  stopColor="#8B5CF6" stopOpacity={0.2} />
-                      <stop offset="95%" stopColor="#8B5CF6" stopOpacity={0.02} />
+                      <stop offset="5%"  stopColor="var(--brand-purple)" stopOpacity={0.2} />
+                      <stop offset="95%" stopColor="var(--brand-purple)" stopOpacity={0.02} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
                   <XAxis dataKey="date" tick={{ fontSize: 9, fill: 'var(--text-muted)' }} tickLine={false}
                     interval={4} />
                   <YAxis tick={{ fontSize: 9, fill: 'var(--text-muted)' }} tickLine={false} axisLine={false} />
-                  <Tooltip content={<ChartTooltip />} />
+                  <Tooltip content={<ChartTooltip formatY={fmtNum} />} />
                   <Area dataKey="upper"  name="Upper"    stroke="none" fill="url(#fcBand)" />
-                  <Area dataKey="lower"  name="Lower"    stroke="none" fill="white"        fillOpacity={1} />
-                  <Area dataKey="demand" name="Forecast" stroke="#8B5CF6" strokeWidth={2}
+                  <Area dataKey="lower"  name="Lower"    stroke="none" fill="var(--surface-card)" fillOpacity={1} />
+                  <Area dataKey="demand" name="Forecast" stroke="var(--brand-purple)" strokeWidth={2}
                     fill="none" dot={false} />
                   {prediction?.reorderPoint && (
-                    <ReferenceLine y={prediction.reorderPoint} stroke="#F59E0B"
-                      strokeDasharray="4 2" label={{ value: 'ROP', fontSize: 9, fill: '#F59E0B' }} />
+                    <ReferenceLine y={prediction.reorderPoint} stroke="var(--brand-amber)"
+                      strokeDasharray="4 2" label={{ value: 'ROP', fontSize: 9, fill: 'var(--brand-amber)' }} />
                   )}
                 </AreaChart>
               </ResponsiveContainer>
@@ -619,14 +588,14 @@ export default function ProductDetailPage() {
           )}
           {forecastData.length > 0 && (
             <div className="mt-3 flex gap-3 text-[10px]">
-              <span className="flex items-center gap-1" style={{ color: '#8B5CF6' }}>
+              <span className="flex items-center gap-1" style={{ color: 'var(--brand-purple)' }}>
                 <span className="h-0.5 w-4 inline-block bg-current" /> Forecast
               </span>
-              <span className="flex items-center gap-1" style={{ color: '#8B5CF6', opacity: .5 }}>
+              <span className="flex items-center gap-1" style={{ color: 'var(--brand-purple)', opacity: .5 }}>
                 <span className="h-3 w-4 inline-block rounded opacity-30 bg-current" /> 90% Band
               </span>
-              <span className="flex items-center gap-1" style={{ color: '#F59E0B' }}>
-                <span className="h-0.5 w-4 inline-block bg-current" style={{ borderTop: '2px dashed #F59E0B' }} /> Reorder
+              <span className="flex items-center gap-1" style={{ color: 'var(--brand-amber)' }}>
+                <span className="h-0.5 w-4 inline-block bg-current" style={{ borderTop: '2px dashed var(--brand-amber)' }} /> Reorder
               </span>
             </div>
           )}
@@ -636,10 +605,10 @@ export default function ProductDetailPage() {
       {/* ── Performance Metrics ───────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
-          { icon: ShoppingBag,  label: 'Revenue (30d)',       value: fmtRs(metrics.totalRevenue30d),    color: '#10B981' },
-          { icon: ShoppingCart, label: 'Purchased (All-time)',value: `${fmtNum(metrics.totalQtyPurchased)} ${product.unit}`, color: '#2563EB' },
-          { icon: Activity,     label: 'Turnover Rate',       value: metrics.inventoryTurnover != null ? `${metrics.inventoryTurnover}×/yr` : '—', color: '#8B5CF6' },
-          { icon: Zap,          label: 'Avg Buy Price',       value: fmtRs(metrics.avgBuyingPrice),     color: '#F59E0B' },
+          { icon: ShoppingBag,  label: 'Revenue (30d)',       value: fmtRs(metrics.totalRevenue30d),    color: 'var(--color-success)' },
+          { icon: ShoppingCart, label: 'Purchased (All-time)',value: `${fmtNum(metrics.totalQtyPurchased)} ${product.unit}`, color: 'var(--brand-blue)' },
+          { icon: Activity,     label: 'Turnover Rate',       value: metrics.inventoryTurnover != null ? `${metrics.inventoryTurnover}×/yr` : '—', color: 'var(--brand-purple)' },
+          { icon: Zap,          label: 'Avg Buy Price',       value: fmtRs(metrics.avgBuyingPrice),     color: 'var(--brand-amber)' },
         ].map(({ icon: Icon, label, value, color }) => (
           <div key={label} className="rounded-xl p-4"
             style={{ background: 'var(--surface-card)', border: '1px solid var(--border)' }}>
@@ -667,13 +636,13 @@ export default function ProductDetailPage() {
             <button key={key} onClick={() => setHistTab(key)}
               className="flex items-center gap-1.5 px-4 py-3 text-[13px] font-medium border-b-2 transition-colors"
               style={histTab === key
-                ? { borderColor: '#2563EB', color: '#2563EB', background: 'var(--surface-card)' }
+                ? { borderColor: 'var(--brand-blue)', color: 'var(--brand-blue)', background: 'var(--surface-card)' }
                 : { borderColor: 'transparent', color: 'var(--text-muted)' }}>
               <Icon className="h-3.5 w-3.5" />
               {label}
               <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold"
                 style={{ background: histTab === key ? 'rgba(37,99,235,.12)' : 'var(--surface-muted)',
-                         color: histTab === key ? '#2563EB' : 'var(--text-muted)' }}>
+                         color: histTab === key ? 'var(--brand-blue)' : 'var(--text-muted)' }}>
                 {count}
               </span>
             </button>
@@ -681,10 +650,9 @@ export default function ProductDetailPage() {
         </div>
 
         {/* Stock Movements */}
-        <AnimatePresence mode="wait">
+        <>
           {histTab === 'movements' && (
-            <motion.div key="movements"
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <div>
               {stockMovements.length === 0 ? (
                 <div className="flex items-center justify-center py-12">
                   <p className="text-[13px]" style={{ color: 'var(--text-muted)' }}>No stock movements recorded</p>
@@ -702,7 +670,7 @@ export default function ProductDetailPage() {
                     </thead>
                     <tbody>
                       {stockMovements.map((m, i) => {
-                        const mt = MOV_TYPE[m.type] || { label: m.type, color: '#6B7280', sign: '~' }
+                        const mt = MOV_TYPE[m.type] || { label: m.type, color: 'var(--text-muted)', sign: '~' }
                         const isIn = ['purchase', 'return'].includes(m.type)
                         return (
                           <tr key={m._id || i} className="border-b last:border-b-0"
@@ -712,12 +680,12 @@ export default function ProductDetailPage() {
                             </td>
                             <td className="px-4 py-2.5">
                               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-                                style={{ background: `${mt.color}20`, color: mt.color }}>
+                                style={{ background: `color-mix(in srgb, ${mt.color} 14%, transparent)`, color: mt.color }}>
                                 {mt.label}
                               </span>
                             </td>
                             <td className="px-4 py-2.5 font-bold"
-                              style={{ color: isIn ? '#10B981' : '#EF4444' }}>
+                              style={{ color: isIn ? 'var(--color-success)' : 'var(--color-danger)' }}>
                               {isIn ? '+' : '−'}{Math.abs(m.quantity)}
                             </td>
                             <td className="px-4 py-2.5" style={{ color: 'var(--text-muted)' }}>
@@ -745,13 +713,12 @@ export default function ProductDetailPage() {
                   </table>
                 </div>
               )}
-            </motion.div>
+            </div>
           )}
 
           {/* Sales History */}
           {histTab === 'sales' && (
-            <motion.div key="sales"
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <div>
               {salesHistory.length === 0 ? (
                 <div className="flex items-center justify-center py-12">
                   <p className="text-[13px]" style={{ color: 'var(--text-muted)' }}>No sales recorded for this product</p>
@@ -783,13 +750,13 @@ export default function ProductDetailPage() {
                           <td className="px-4 py-2.5" style={{ color: 'var(--text-primary)' }}>
                             {s.customerName || 'Walk-in'}
                           </td>
-                          <td className="px-4 py-2.5 font-bold" style={{ color: '#EF4444' }}>
+                          <td className="px-4 py-2.5 font-bold" style={{ color: 'var(--color-danger)' }}>
                             −{fmtNum(s.quantity)}
                           </td>
                           <td className="px-4 py-2.5" style={{ color: 'var(--text-muted)' }}>
                             {fmtRs(s.unitPrice)}
                           </td>
-                          <td className="px-4 py-2.5 font-semibold" style={{ color: '#10B981' }}>
+                          <td className="px-4 py-2.5 font-semibold" style={{ color: 'var(--color-success)' }}>
                             {fmtRs(s.lineTotal)}
                           </td>
                           <td className="px-4 py-2.5">
@@ -798,8 +765,8 @@ export default function ProductDetailPage() {
                                 background: s.status === 'completed' ? 'rgba(16,185,129,.12)' :
                                             s.status === 'refunded'  ? 'rgba(245,158,11,.12)' :
                                             'rgba(107,114,128,.12)',
-                                color: s.status === 'completed' ? '#10B981' :
-                                       s.status === 'refunded'  ? '#F59E0B' : '#6B7280',
+                                color: s.status === 'completed' ? 'var(--color-success)' :
+                                       s.status === 'refunded'  ? 'var(--brand-amber)' : 'var(--text-muted)',
                               }}>
                               {s.status}
                             </span>
@@ -810,13 +777,12 @@ export default function ProductDetailPage() {
                   </table>
                 </div>
               )}
-            </motion.div>
+            </div>
           )}
 
           {/* Purchase History */}
           {histTab === 'purchases' && (
-            <motion.div key="purchases"
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <div>
               {purchaseHistory.length === 0 ? (
                 <div className="flex items-center justify-center py-12">
                   <p className="text-[13px]" style={{ color: 'var(--text-muted)' }}>No purchases recorded for this product</p>
@@ -848,13 +814,13 @@ export default function ProductDetailPage() {
                           <td className="px-4 py-2.5" style={{ color: 'var(--text-primary)' }}>
                             {p.supplierName || '—'}
                           </td>
-                          <td className="px-4 py-2.5 font-bold" style={{ color: '#10B981' }}>
+                          <td className="px-4 py-2.5 font-bold" style={{ color: 'var(--color-success)' }}>
                             +{fmtNum(p.quantity)}
                           </td>
                           <td className="px-4 py-2.5" style={{ color: 'var(--text-muted)' }}>
                             {fmtRs(p.buyingPrice)}
                           </td>
-                          <td className="px-4 py-2.5 font-semibold" style={{ color: '#2563EB' }}>
+                          <td className="px-4 py-2.5 font-semibold" style={{ color: 'var(--brand-blue)' }}>
                             {fmtRs(p.lineTotal)}
                           </td>
                           <td className="px-4 py-2.5">
@@ -869,9 +835,9 @@ export default function ProductDetailPage() {
                   </table>
                 </div>
               )}
-            </motion.div>
+            </div>
           )}
-        </AnimatePresence>
+        </>
       </div>
 
       {/* ── Alerts ───────────────────────────────────────────────────────────── */}
@@ -880,16 +846,16 @@ export default function ProductDetailPage() {
           style={{ background: 'var(--surface-card)', border: '1px solid var(--border)' }}>
           <h3 className="text-[13px] font-bold mb-3 flex items-center gap-2"
             style={{ color: 'var(--text-primary)' }}>
-            <AlertTriangle className="h-4 w-4" style={{ color: '#EF4444' }} />
+            <AlertTriangle className="h-4 w-4" style={{ color: 'var(--color-danger)' }} />
             Active Alerts
             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-              style={{ background: 'rgba(239,68,68,.1)', color: '#EF4444' }}>
+              style={{ background: 'var(--tint-danger)', color: 'var(--color-danger)' }}>
               {alerts.length}
             </span>
           </h3>
           <div className="space-y-2">
             {alerts.map((a, i) => {
-              const priColor = ALERT_PRI[a.priority] || '#F59E0B'
+              const priColor = ALERT_PRI[a.priority] || 'var(--brand-amber)'
               return (
                 <div key={a._id || i}
                   className="flex items-start gap-3 p-3 rounded-lg"
@@ -901,7 +867,7 @@ export default function ProductDetailPage() {
                         {a.title}
                       </p>
                       <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase"
-                        style={{ background: `${priColor}20`, color: priColor }}>
+                        style={{ background: `color-mix(in srgb, ${priColor} 14%, transparent)`, color: priColor }}>
                         {a.priority}
                       </span>
                       {!a.isRead && (

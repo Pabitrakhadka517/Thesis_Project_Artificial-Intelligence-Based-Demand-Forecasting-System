@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { motion, AnimatePresence } from 'framer-motion'
 import {
   FlaskConical, Play, Trash2, RefreshCw, Calendar,
   BarChart2, TrendingUp, Package, AlertTriangle, CheckCircle,
@@ -9,8 +8,9 @@ import {
 import axiosInstance from '@/api/axiosInstance'
 import { Button } from '@/components/common/Button'
 import { TrainingProgress } from '@/components/common/TrainingProgress'
+import { PageHeader } from '@/components/common/PageHeader'
 import { useToast } from '@/hooks/useToast'
-import { formatNumber } from '@/utils'
+import { formatNumber, formatRs } from '@/utils'
 
 // ── Service calls ─────────────────────────────────────────────────────────────
 
@@ -137,7 +137,7 @@ export default function SyntheticDataPage() {
       </p>
       <button onClick={() => setConnected(true)}
         className="px-5 py-2.5 rounded-lg text-[13px] font-semibold text-white"
-        style={{ background: 'linear-gradient(135deg,#8B5CF6,#6D28D9)' }}>
+        style={{ background: '#7C3AED' }}>
         Open Generator
       </button>
     </div>
@@ -145,25 +145,20 @@ export default function SyntheticDataPage() {
 
   return (
     <div className="space-y-6 pb-6">
-      {/* Header */}
-      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
-        className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <FlaskConical className="h-5 w-5" style={{ color: '#8B5CF6' }} />
-            <h1 className="text-[22px] font-bold" style={{ color: 'var(--text-primary)' }}>Synthetic Data Generator</h1>
-          </div>
-          <p className="text-[13px]" style={{ color: 'var(--text-muted)' }}>
-            Generate 200,000+ wholesale grocery records with 30+ ML features — Nepal festival &amp; seasonal patterns included.
-          </p>
-        </div>
-        <Button variant="outline" size="sm" icon={RefreshCw} onClick={refetchStatus} loading={statusLoading}>
-          Refresh Status
-        </Button>
-      </motion.div>
+      <PageHeader
+        icon={Database}
+        eyebrow="Administration"
+        title="Synthetic Data Generator"
+        subtitle="Generate 200,000+ wholesale grocery records with 30+ ML features — Nepal festival & seasonal patterns included."
+        actions={
+          <Button variant="outline" size="sm" icon={RefreshCw} onClick={refetchStatus} loading={statusLoading}>
+            Refresh Status
+          </Button>
+        }
+      />
 
       {/* Status card */}
-      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
+      <div>
         <div className="rounded-xl p-5"
           style={{
             background: 'var(--surface-card)',
@@ -221,13 +216,13 @@ export default function SyntheticDataPage() {
             </div>
           )}
         </div>
-      </motion.div>
+      </div>
 
       {/* Generator panel */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
 
         {/* Config */}
-        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+        <div>
           <div className="rounded-xl overflow-hidden h-full"
             style={{ background: 'var(--surface-card)', border: '1px solid var(--border)' }}>
             <div className="px-5 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
@@ -286,7 +281,7 @@ export default function SyntheticDataPage() {
                 onClick={handleGenerate}
                 disabled={generateMut.isPending}
                 className="w-full flex items-center justify-center gap-2.5 py-3 rounded-xl font-semibold text-[14px] text-white transition-opacity"
-                style={{ background: 'linear-gradient(135deg,#8B5CF6,#6D28D9)', opacity: generateMut.isPending ? .6 : 1 }}>
+                style={{ background: '#7C3AED', opacity: generateMut.isPending ? .6 : 1 }}>
                 {generateMut.isPending
                   ? <><RefreshCw className="h-4 w-4 animate-spin" /> Generating — this may take 1–2 minutes…</>
                   : <><Play className="h-4 w-4" /> Generate {years} Year{years > 1 ? 's' : ''} of Data</>}
@@ -308,11 +303,10 @@ export default function SyntheticDataPage() {
               )}
             </div>
           </div>
-        </motion.div>
+        </div>
 
         {/* Right panel: what gets generated + result */}
-        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
-          className="space-y-5">
+        <div className="space-y-5">
 
           {/* Category grid */}
           <div className="rounded-xl p-5" style={{ background: 'var(--surface-card)', border: '1px solid var(--border)' }}>
@@ -355,10 +349,8 @@ export default function SyntheticDataPage() {
           </div>
 
           {/* Result card */}
-          <AnimatePresence>
-            {lastResult && (
-              <motion.div
-                initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
+          {lastResult && (
+              <div
                 className="rounded-xl overflow-hidden"
                 style={{ border: '1px solid rgba(34,197,94,.3)', background: 'var(--surface-card)' }}>
                 <div className="px-5 py-4 flex items-center gap-2"
@@ -369,7 +361,7 @@ export default function SyntheticDataPage() {
                 <div className="p-5 space-y-4">
                   <div className="grid grid-cols-2 gap-3">
                     <StatCard icon={Database}     label="Sale Records"    value={formatNumber(lastResult.records_generated)} color="#22C55E" />
-                    <StatCard icon={TrendingUp}   label="Total Revenue"   value={`Rs ${formatNumber(Math.round(lastResult.total_revenue / 1000))}K`} color="#2563EB" />
+                    <StatCard icon={TrendingUp}   label="Total Revenue"   value={formatRs(lastResult.total_revenue)} color="#2563EB" />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <StatCard icon={Calendar}     label="Festival Items"  value={formatNumber(lastResult.festival_records)} color="#F59E0B" />
@@ -429,10 +421,9 @@ export default function SyntheticDataPage() {
                     </div>
                   )}
                 </div>
-              </motion.div>
+              </div>
             )}
-          </AnimatePresence>
-        </motion.div>
+        </div>
       </div>
     </div>
   )

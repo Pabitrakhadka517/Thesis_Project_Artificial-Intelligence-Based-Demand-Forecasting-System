@@ -15,6 +15,7 @@ import { Button } from '@/components/common/Button'
 import { SkeletonCard, SkeletonTable } from '@/components/common/Skeleton'
 import { EmptyState } from '@/components/common/EmptyState'
 import { TrainingProgress } from '@/components/common/TrainingProgress'
+import { PageHeader } from '@/components/common/PageHeader'
 import { useToast } from '@/hooks/useToast'
 
 // ── constants ──────────────────────────────────────────────────────────────────
@@ -46,16 +47,42 @@ function mapeToAccuracy(mape) {
 }
 
 // ── Custom tooltip for chart ───────────────────────────────────────────────────
+// Can't use the shared ChartTooltip directly — it renders every series in
+// payload, and this chart carries two invisible confidence-band Areas
+// (upper_bound/lower_bound) alongside the two visible lines that need to
+// stay out of the tooltip. Styling kept in lockstep with the shared
+// components/charts/ChartTooltip.jsx instead.
 function ChartTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null
   const actual = payload.find(p => p.dataKey === 'actual_qty')
   const pred   = payload.find(p => p.dataKey === 'predicted_qty')
   return (
-    <div className="rounded-xl px-4 py-3 text-[12px]"
-      style={{ background: 'var(--surface-card)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-md)' }}>
-      <p className="font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>{label}</p>
-      {actual?.value != null && <p style={{ color: '#16A34A' }}>Actual: <strong>{smartRound(actual.value)}</strong> units</p>}
-      {pred?.value != null && <p style={{ color: '#2563EB' }}>Forecast: <strong>{smartRound(pred.value)}</strong> units</p>}
+    <div style={{
+      background: 'var(--surface-card)',
+      border: '1px solid var(--border)',
+      borderRadius: 'var(--r-md)',
+      padding: '10px 14px',
+      boxShadow: 'var(--shadow-lg)',
+      fontSize: '12px',
+      minWidth: '150px',
+    }}>
+      <p style={{ color: 'var(--text-muted)', marginBottom: '8px', fontSize: '11px', fontWeight: 600, borderBottom: '1px solid var(--border-subtle)', paddingBottom: '6px' }}>
+        {label}
+      </p>
+      {actual?.value != null && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: pred?.value != null ? '4px' : 0 }}>
+          <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: 'var(--color-success)', flexShrink: 0 }} />
+          <span style={{ color: 'var(--text-secondary)', flex: 1 }}>Actual</span>
+          <span style={{ color: 'var(--text-primary)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{smartRound(actual.value)} units</span>
+        </div>
+      )}
+      {pred?.value != null && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: 'var(--brand-blue)', flexShrink: 0 }} />
+          <span style={{ color: 'var(--text-secondary)', flex: 1 }}>Forecast</span>
+          <span style={{ color: 'var(--text-primary)', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{smartRound(pred.value)} units</span>
+        </div>
+      )}
     </div>
   )
 }
@@ -310,20 +337,12 @@ export default function ForecastingPage() {
 
   return (
     <div className="space-y-5 pb-6 page-enter">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <TrendingUp className="h-5 w-5" style={{ color: '#2563EB' }} />
-            <h1 className="text-[22px] font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>
-              AI Demand Forecasting
-            </h1>
-          </div>
-          <p className="text-[13px]" style={{ color: 'var(--text-muted)' }}>
-            Powered by three AI models — automatically selects the best fit for each product
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        icon={TrendingUp}
+        eyebrow="Operations"
+        title="AI Demand Forecasting"
+        subtitle="Powered by three AI models — automatically selects the best fit for each product"
+      />
 
       {/* Tab bar */}
       <div className="flex gap-1 p-1 rounded-xl w-fit" style={{ background: 'var(--surface-muted)', border: '1px solid var(--border)' }}>
@@ -476,7 +495,7 @@ export default function ForecastingPage() {
 
           {/* Results */}
           {result && (
-            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
+            <div className="space-y-5">
 
               {/* Banner */}
               <div className="rounded-xl p-4 flex flex-wrap items-center gap-4"
@@ -509,7 +528,7 @@ export default function ForecastingPage() {
                 <CardContent>
                   <ResponsiveContainer width="100%" height={320}>
                     <ComposedChart data={chartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
                       <XAxis
                         dataKey="date"
                         tick={{ fontSize: 10, fill: 'var(--text-muted)' }}
@@ -519,10 +538,10 @@ export default function ForecastingPage() {
                       <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} width={60} />
                       <Tooltip content={<ChartTooltip />} />
                       <Legend wrapperStyle={{ fontSize: 12 }} />
-                      <Area dataKey="upper_bound" stroke="transparent" fill="rgba(37,99,235,.12)" name="Upper bound" legendType="none" />
+                      <Area dataKey="upper_bound" stroke="transparent" fill="var(--tint-primary)" name="Upper bound" legendType="none" />
                       <Area dataKey="lower_bound" stroke="transparent" fill="var(--surface-card)" fillOpacity={1} name="Lower bound" legendType="none" />
-                      <Line type="monotone" dataKey="actual_qty" stroke="#16A34A" strokeWidth={2} dot={false} name="Actual" connectNulls={false} />
-                      <Line type="monotone" dataKey="predicted_qty" stroke="#2563EB" strokeWidth={2} strokeDasharray="5 3" dot={false} name="Forecast" connectNulls={false} />
+                      <Line type="monotone" dataKey="actual_qty" stroke="var(--color-success)" strokeWidth={2} dot={false} name="Actual" connectNulls={false} />
+                      <Line type="monotone" dataKey="predicted_qty" stroke="var(--brand-blue)" strokeWidth={2} strokeDasharray="5 3" dot={false} name="Forecast" connectNulls={false} />
                     </ComposedChart>
                   </ResponsiveContainer>
                 </CardContent>
@@ -615,7 +634,7 @@ export default function ForecastingPage() {
                 </CardContent>
               </Card>
 
-            </motion.div>
+            </div>
           )}
         </div>
       )}

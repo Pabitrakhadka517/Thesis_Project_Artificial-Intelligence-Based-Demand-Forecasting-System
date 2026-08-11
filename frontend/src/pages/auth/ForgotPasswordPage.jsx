@@ -55,7 +55,7 @@ export default function ForgotPasswordPage() {
         {/* Logo */}
         <div className="flex items-center gap-2.5 mb-8">
           <div className="h-9 w-9 rounded-xl flex items-center justify-center"
-            style={{ background: 'var(--brand-primary)', boxShadow: '0 4px 16px rgba(3,4,94,.35)' }}>
+            style={{ background: 'var(--brand-primary)' }}>
             <Zap className="h-4 w-4 text-white" strokeWidth={2.5} />
           </div>
           <span className="text-[17px] font-bold" style={{ color: 'var(--text-primary)' }}>{APP_NAME}</span>
@@ -101,14 +101,14 @@ export default function ForgotPasswordPage() {
             <div className="flex items-center justify-center mb-5">
               <div className="h-16 w-16 rounded-full flex items-center justify-center"
                 style={{ background: 'rgba(22,163,74,.1)', border: '2px solid rgba(22,163,74,.25)' }}>
-                <CheckCircle className="h-8 w-8" style={{ color: '#16A34A' }} />
+                <CheckCircle className="h-8 w-8" style={{ color: 'var(--brand-green)' }} />
               </div>
             </div>
             <h3 className="text-[22px] font-bold mb-2" style={{ color: 'var(--text-primary)' }}>Check your inbox</h3>
             <p className="text-[14px] mb-1" style={{ color: 'var(--text-muted)' }}>
               We've sent a password reset link to
             </p>
-            <p className="text-[14px] font-semibold mb-6" style={{ color: '#2563EB' }}>
+            <p className="text-[14px] font-semibold mb-6" style={{ color: 'var(--brand-blue)' }}>
               {getValues('email')}
             </p>
             <p className="text-[12px]" style={{ color: 'var(--text-muted)' }}>
@@ -121,7 +121,7 @@ export default function ForgotPasswordPage() {
           <Link to="/login"
             className="inline-flex items-center gap-1.5 text-[13px] font-medium"
             style={{ color: 'var(--text-muted)' }}
-            onMouseEnter={e => e.currentTarget.style.color = '#2563EB'}
+            onMouseEnter={e => e.currentTarget.style.color = 'var(--brand-blue)'}
             onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}>
             <ArrowLeft className="h-3.5 w-3.5" />
             Back to sign in

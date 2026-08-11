@@ -1,10 +1,9 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { motion, AnimatePresence } from 'framer-motion'
 import {
   BarChart3, Package, TrendingUp, ShoppingBag,
   RefreshCw, DollarSign, Layers, AlertTriangle,
-  Activity, Target, Cpu, ChevronDown, Zap,
+  Activity, Target, Cpu, ChevronDown, Zap, Download,
 } from 'lucide-react'
 import { AdvancedTab } from './AdvancedTab'
 import {
@@ -18,10 +17,12 @@ import { AreaChart } from '@/components/charts/AreaChart'
 import { BarChart } from '@/components/charts/BarChart'
 import { LineChart } from '@/components/charts/LineChart'
 import { PieChart } from '@/components/charts/PieChart'
+import { ChartEmptyState } from '@/components/charts/ChartEmptyState'
 import { SkeletonChart } from '@/components/common/Skeleton'
 import { ErrorState } from '@/components/common/ErrorState'
 import { EmptyState } from '@/components/common/EmptyState'
-import { formatNumber, formatDate } from '@/utils'
+import { formatNumber, formatDate, exportCSV, formatRs } from '@/utils'
+import { CHART_PALETTE, STOCK_STATUS_STYLES } from '@/constants/statusColors'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -33,6 +34,43 @@ const TABS = [
   { id: 'advanced',  label: 'Advanced',   icon: Zap         },
 ]
 
+// Static chart series-config arrays hoisted to module scope (rather than
+// recreated inline in JSX every render) so the memoized chart wrapper
+// components below can actually skip re-rendering when unrelated state
+// on this query-heavy page changes.
+const REVENUE_TREND_AREAS   = [
+  { key: 'revenue', label: 'Revenue (Rs.)', color: 'var(--brand-blue)' },
+  { key: 'orders',  label: 'Orders',        color: 'var(--brand-purple)' },
+]
+const MONTHLY_TREND_BARS    = [
+  { key: 'revenue',  label: 'Revenue (Rs.)', color: 'var(--brand-blue)' },
+  { key: 'quantity', label: 'Quantity',      color: 'var(--color-success)' },
+]
+const TOP_REVENUE_BARS      = [{ key: 'revenue',  label: 'Revenue (Rs.)',   color: 'var(--brand-blue)' }]
+const TOP_QUANTITY_BARS     = [{ key: 'quantity', label: 'Quantity (units)', color: 'var(--brand-purple)' }]
+const MODEL_ACCURACY_BARS   = [
+  { key: 'avg_mae',  label: 'MAE',  color: 'var(--brand-blue)' },
+  { key: 'avg_rmse', label: 'RMSE', color: 'var(--brand-amber)' },
+]
+const MODEL_COVERAGE_COLORS = ['var(--brand-purple)', 'var(--color-success)', 'var(--color-danger)', '#94A3B8']
+const DEMAND_BY_CATEGORY_BARS = [
+  { key: 'prophet', label: 'Prophet',       color: 'var(--brand-purple)' },
+  { key: 'rf',      label: 'Random Forest', color: 'var(--color-success)' },
+  { key: 'lstm',    label: 'LSTM',           color: 'var(--color-danger)' },
+]
+const ACTUAL_VS_FORECAST_LINES = [
+  { key: 'actual',   label: 'Actual',   color: 'var(--brand-blue)' },
+  { key: 'forecast', label: 'Forecast', color: 'var(--brand-purple)' },
+]
+const CATEGORY_PERF_BARS  = [{ key: 'revenue', label: 'Revenue (Rs.)', color: 'var(--brand-blue)' }]
+const VELOCITY_BARS       = [{ key: 'velocity_per_day', label: 'Units/day', color: 'var(--color-success)' }]
+const SKU_TREND_AREAS     = [
+  { key: 'revenue',  label: 'Revenue (Rs.)', color: 'var(--brand-blue)' },
+  { key: 'quantity', label: 'Quantity',       color: 'var(--color-success)' },
+]
+const STOCK_BY_CATEGORY_BARS = [{ key: 'total_value',   label: 'Stock Value (Rs.)',    color: 'var(--brand-blue)' }]
+const TURNOVER_BARS          = [{ key: 'turnover_rate', label: 'Turnover Rate (×/yr)', color: 'var(--color-success)' }]
+
 const DAY_OPTIONS = [
   { value: 7,   label: '7 days'   },
   { value: 14,  label: '14 days'  },
@@ -43,36 +81,23 @@ const DAY_OPTIONS = [
   { value: 365, label: '1 year'   },
 ]
 
-const PIE_COLORS = ['#2563EB','#22C55E','#F59E0B','#EF4444','#8B5CF6','#06B6D4','#EC4899','#14B8A6']
+// Canonical palette/status colors (constants/statusColors.js) — previously
+// redefined locally with drifting values against the app-wide chart palette.
+const PIE_COLORS = CHART_PALETTE
 
-const STATUS_COLORS = {
-  healthy:      '#22C55E',
-  low:          '#F59E0B',
-  critical:     '#EF4444',
-  out_of_stock: '#DC2626',
-  overstock:    '#6366F1',
-}
+const STATUS_COLORS = Object.fromEntries(
+  Object.entries(STOCK_STATUS_STYLES).map(([k, v]) => [k, v.color])
+)
 
-const SCATTER_COLORS = {
-  healthy:      '#22C55E',
-  low:          '#F59E0B',
-  critical:     '#EF4444',
-  out_of_stock: '#DC2626',
-  overstock:    '#6366F1',
-}
+const SCATTER_COLORS = STATUS_COLORS
+const STATUS_PIE_COLORS = [STATUS_COLORS.healthy, STATUS_COLORS.low, STATUS_COLORS.critical, STATUS_COLORS.out_of_stock, STATUS_COLORS.overstock]
 
-function formatRs(v) {
-  if (v == null) return '—'
-  if (v >= 1_000_000) return `Rs. ${(v / 1_000_000).toFixed(1)}M`
-  if (v >= 1_000)     return `Rs. ${(v / 1_000).toFixed(0)}K`
-  return `Rs. ${formatNumber(v)}`
-}
 
 function pct(v) { return v != null ? `${v}%` : '—' }
 
 // ── Shared UI Atoms ───────────────────────────────────────────────────────────
 
-function KPI({ label, value, sub, color = '#2563EB', loading }) {
+function KPI({ label, value, sub, color = 'var(--brand-blue)', loading }) {
   return (
     <div className="rounded-xl p-4"
       style={{ background: 'var(--surface-card)', border: '1px solid var(--border)', borderLeft: `3px solid ${color}`, boxShadow: 'var(--shadow-xs)' }}>
@@ -106,6 +131,20 @@ function SelectDays({ value, onChange }) {
   )
 }
 
+// Downloads whatever table a card is showing as CSV — analytics previously
+// had no export mechanism anywhere on this page.
+function ExportBtn({ rows, filename }) {
+  return (
+    <button
+      onClick={() => rows?.length && exportCSV(rows, `${filename}.csv`)}
+      disabled={!rows?.length}
+      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11.5px] font-medium transition-opacity hover:opacity-80 disabled:opacity-40"
+      style={{ background: 'var(--surface-muted)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>
+      <Download className="h-3 w-3" /> Export
+    </button>
+  )
+}
+
 function ChartCard({ title, subtitle, action, loading, height = 260, children }) {
   return (
     <Card>
@@ -131,8 +170,8 @@ function ScatterTooltip({ active, payload }) {
     <div className="chart-tooltip text-[12px]">
       <p className="font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>{d.name || `SKU ${d.sku_id}`}</p>
       {d.category && <p style={{ color: 'var(--text-muted)' }}>{d.category}</p>}
-      <p style={{ color: '#EF4444' }}>Stockout risk: {(d.x * 100).toFixed(1)}%</p>
-      <p style={{ color: '#6366F1' }}>Overstock risk: {(d.y * 100).toFixed(1)}%</p>
+      <p style={{ color: 'var(--color-danger)' }}>Stockout risk: {(d.x * 100).toFixed(1)}%</p>
+      <p style={{ color: 'var(--brand-indigo)' }}>Overstock risk: {(d.y * 100).toFixed(1)}%</p>
       <p className="mt-1 capitalize font-medium"
         style={{ color: STATUS_COLORS[d.status] || '#94A3B8' }}>{d.status?.replace('_', ' ')}</p>
     </div>
@@ -178,11 +217,10 @@ function DashboardTab() {
   const stockStatus = summary?.stock_status || {}
   const totalTracked = Object.values(stockStatus).reduce((a, b) => a + b, 0)
 
-  const statusPieData = Object.entries(stockStatus).map(([k, v]) => ({
+  const statusPieData = useMemo(() => Object.entries(stockStatus).map(([k, v]) => ({
     name: k.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase()),
     value: v,
-  }))
-  const statusColors = ['#22C55E','#F59E0B','#EF4444','#DC2626','#6366F1']
+  })), [stockStatus])
 
   // Heatmap grid: days 1-7 × hours 0-23
   const hmLookup = {}
@@ -194,12 +232,12 @@ function DashboardTab() {
     <div className="space-y-5">
       {/* KPI strip */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <KPI label="Revenue (30d)"    value={formatRs(summary?.revenue_30d)}        color="#2563EB" loading={sumLoading} />
-        <KPI label="Revenue (7d)"     value={formatRs(summary?.revenue_7d)}          color="#22C55E" loading={sumLoading} />
-        <KPI label="Growth vs Prev"   value={pct(summary?.revenue_growth_pct)}       color={summary?.revenue_growth_pct >= 0 ? '#22C55E' : '#EF4444'} loading={sumLoading} />
-        <KPI label="Transactions"     value={formatNumber(summary?.total_transactions_30d)} color="#8B5CF6" loading={sumLoading} />
-        <KPI label="Avg Order Value"  value={formatRs(summary?.avg_order_value_30d)} color="#F59E0B" loading={sumLoading} />
-        <KPI label="Unread Alerts"    value={formatNumber(summary?.unread_alerts)}    color="#EF4444" loading={sumLoading} />
+        <KPI label="Revenue (30d)"    value={formatRs(summary?.revenue_30d)}        color="var(--brand-blue)" loading={sumLoading} />
+        <KPI label="Revenue (7d)"     value={formatRs(summary?.revenue_7d)}          color="var(--color-success)" loading={sumLoading} />
+        <KPI label="Growth vs Prev"   value={pct(summary?.revenue_growth_pct)}       color={summary?.revenue_growth_pct >= 0 ? 'var(--color-success)' : 'var(--color-danger)'} loading={sumLoading} />
+        <KPI label="Transactions"     value={formatNumber(summary?.total_transactions_30d)} color="var(--brand-purple)" loading={sumLoading} />
+        <KPI label="Avg Order Value"  value={formatRs(summary?.avg_order_value_30d)} color="var(--brand-amber)" loading={sumLoading} />
+        <KPI label="Unread Alerts"    value={formatNumber(summary?.unread_alerts)}    color="var(--color-danger)" loading={sumLoading} />
       </div>
 
       {/* Revenue trend */}
@@ -212,10 +250,7 @@ function DashboardTab() {
       >
         <AreaChart
           data={trend || []}
-          areas={[
-            { key: 'revenue', label: 'Revenue (Rs.)', color: '#2563EB' },
-            { key: 'orders',  label: 'Orders',        color: '#8B5CF6' },
-          ]}
+          areas={REVENUE_TREND_AREAS}
           xKey="date" height={240}
           formatXAxis={v => formatDate(v, 'MMM d')}
           formatYAxis={v => v >= 1000 ? `${(v/1000).toFixed(0)}K` : v}
@@ -234,7 +269,7 @@ function DashboardTab() {
         <ChartCard title="Stock Health Distribution" subtitle={`${totalTracked} total SKUs tracked`} loading={sumLoading} height={280}>
           <PieChart
             data={statusPieData} nameKey="name" valueKey="value"
-            height={280} donut colors={statusColors}
+            height={280} donut colors={STATUS_PIE_COLORS}
           />
         </ChartCard>
       </div>
@@ -252,8 +287,8 @@ function DashboardTab() {
               className="px-3 py-1.5 text-[11px] font-semibold rounded-lg transition-all"
               style={{
                 background: topBy === 'revenue' ? 'rgba(37,99,235,.12)' : 'transparent',
-                color: topBy === 'revenue' ? '#2563EB' : 'var(--text-muted)',
-                border: `1.5px solid ${topBy === 'revenue' ? '#2563EB' : 'var(--border)'}`,
+                color: topBy === 'revenue' ? 'var(--brand-blue)' : 'var(--text-muted)',
+                border: `1.5px solid ${topBy === 'revenue' ? 'var(--brand-blue)' : 'var(--border)'}`,
               }}
             >Revenue</button>
             <button
@@ -261,8 +296,8 @@ function DashboardTab() {
               className="px-3 py-1.5 text-[11px] font-semibold rounded-lg transition-all"
               style={{
                 background: topBy === 'quantity' ? 'rgba(139,92,246,.12)' : 'transparent',
-                color: topBy === 'quantity' ? '#8B5CF6' : 'var(--text-muted)',
-                border: `1.5px solid ${topBy === 'quantity' ? '#8B5CF6' : 'var(--border)'}`,
+                color: topBy === 'quantity' ? 'var(--brand-purple)' : 'var(--text-muted)',
+                border: `1.5px solid ${topBy === 'quantity' ? 'var(--brand-purple)' : 'var(--border)'}`,
               }}
             >Quantity</button>
           </div>
@@ -272,10 +307,7 @@ function DashboardTab() {
           data={(topProducts || []).map(d => ({
             ...d, name: d.name?.length > 14 ? d.name.slice(0, 14) + '…' : (d.name || `SKU ${d.sku_id}`),
           }))}
-          bars={topBy === 'revenue'
-            ? [{ key: 'revenue',  label: 'Revenue (Rs.)',  color: '#2563EB' }]
-            : [{ key: 'quantity', label: 'Quantity (units)', color: '#8B5CF6' }]
-          }
+          bars={topBy === 'revenue' ? TOP_REVENUE_BARS : TOP_QUANTITY_BARS}
           xKey="name" height={260}
           formatYAxis={v => v >= 1000 ? `${(v/1000).toFixed(0)}K` : v}
         />
@@ -285,10 +317,7 @@ function DashboardTab() {
       <ChartCard title="Monthly Revenue Trend" subtitle="Last 12 months" loading={monthlyLoading} height={240}>
         <BarChart
           data={(monthly || []).map(d => ({ ...d, label: d.label }))}
-          bars={[
-            { key: 'revenue',  label: 'Revenue (Rs.)', color: '#2563EB' },
-            { key: 'quantity', label: 'Quantity',      color: '#22C55E' },
-          ]}
+          bars={MONTHLY_TREND_BARS}
           xKey="label" height={240}
           formatYAxis={v => v >= 1000 ? `${(v/1000).toFixed(0)}K` : v}
         />
@@ -407,11 +436,11 @@ function InventoryTab() {
     <div className="space-y-5">
       {/* KPI strip */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        <KPI label="Total Units"      value={formatNumber(summary?.total_inventory_units, 0)}  color="#2563EB"  loading={sumLoading} />
-        <KPI label="Inventory Value"  value={formatRs(summary?.total_inventory_value)}          color="#22C55E"  loading={sumLoading} />
-        <KPI label="Avg Days Supply"  value={summary?.avg_days_of_supply != null ? `${formatNumber(summary.avg_days_of_supply, 0)} d` : '—'} color="#8B5CF6" loading={sumLoading} />
-        <KPI label="High Stockout Risk" value={formatNumber(summary?.high_stockout_risk_items)} color="#EF4444"  loading={sumLoading} sub="≥50% risk" />
-        <KPI label="Zero Stock Items" value={formatNumber(summary?.zero_stock_items)}            color="#DC2626"  loading={sumLoading} />
+        <KPI label="Total Units"      value={formatNumber(summary?.total_inventory_units, 0)}  color="var(--brand-blue)"  loading={sumLoading} />
+        <KPI label="Inventory Value"  value={formatRs(summary?.total_inventory_value)}          color="var(--color-success)"  loading={sumLoading} />
+        <KPI label="Avg Days Supply"  value={summary?.avg_days_of_supply != null ? `${formatNumber(summary.avg_days_of_supply, 0)} d` : '—'} color="var(--brand-purple)" loading={sumLoading} />
+        <KPI label="High Stockout Risk" value={formatNumber(summary?.high_stockout_risk_items)} color="var(--color-danger)"  loading={sumLoading} sub="≥50% risk" />
+        <KPI label="Zero Stock Items" value={formatNumber(summary?.zero_stock_items)}            color="#991B1B"  loading={sumLoading} />
       </div>
 
       {/* Status breakdown + category stock */}
@@ -427,7 +456,7 @@ function InventoryTab() {
         <ChartCard title="Stock by Category" subtitle="Total units held per category" loading={catLoading} height={280}>
           <BarChart
             data={(catStock || []).map(d => ({ ...d, name: d.name?.length > 16 ? d.name.slice(0, 16) + '…' : d.name }))}
-            bars={[{ key: 'total_value', label: 'Stock Value (Rs.)', color: '#2563EB' }]}
+            bars={STOCK_BY_CATEGORY_BARS}
             xKey="name" height={280} horizontal
             formatXAxis={v => v >= 1000 ? `${(v/1000).toFixed(0)}K` : v}
           />
@@ -457,21 +486,23 @@ function InventoryTab() {
         <CardContent>
           {scatterLoading
             ? <SkeletonChart height={320} />
+            : !scatter?.length
+            ? <ChartEmptyState height={320} message="No risk data for this period" />
             : (
               <ResponsiveContainer width="100%" height={320}>
                 <ScatterChart margin={{ top: 10, right: 20, bottom: 20, left: 10 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" strokeOpacity={0.5} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" />
                   <XAxis
                     type="number" dataKey="x" name="Stockout Risk" domain={[0, 1]}
                     tickFormatter={v => `${(v * 100).toFixed(0)}%`}
-                    tick={{ fontSize: 11, fill: '#9ca3af' }} axisLine={false} tickLine={false}
-                    label={{ value: 'Stockout Risk →', position: 'insideBottom', offset: -12, fontSize: 11, fill: '#9ca3af' }}
+                    tick={{ fontSize: 11, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false}
+                    label={{ value: 'Stockout Risk →', position: 'insideBottom', offset: -12, fontSize: 11, fill: 'var(--text-muted)' }}
                   />
                   <YAxis
                     type="number" dataKey="y" name="Overstock Risk" domain={[0, 1]}
                     tickFormatter={v => `${(v * 100).toFixed(0)}%`}
-                    tick={{ fontSize: 11, fill: '#9ca3af' }} axisLine={false} tickLine={false} width={46}
-                    label={{ value: 'Overstock Risk →', angle: -90, position: 'insideLeft', fontSize: 11, fill: '#9ca3af' }}
+                    tick={{ fontSize: 11, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} width={46}
+                    label={{ value: 'Overstock Risk →', angle: -90, position: 'insideLeft', fontSize: 11, fill: 'var(--text-muted)' }}
                   />
                   <ZAxis range={[40, 80]} />
                   <Tooltip content={<ScatterTooltip />} />
@@ -497,7 +528,7 @@ function InventoryTab() {
       >
         <BarChart
           data={(turnover || []).map(d => ({ ...d, name: d.name?.length > 14 ? d.name.slice(0, 14) + '…' : d.name }))}
-          bars={[{ key: 'turnover_rate', label: 'Turnover Rate (×/yr)', color: '#22C55E' }]}
+          bars={TURNOVER_BARS}
           xKey="name" height={240}
         />
       </ChartCard>
@@ -511,6 +542,15 @@ function InventoryTab() {
               Low, critical, and out-of-stock items sorted by stockout risk
             </p>
           </div>
+          <ExportBtn
+            filename={`low-stock-${new Date().toISOString().slice(0,10)}`}
+            rows={(lowStock || []).map(item => ({
+              Product: item.name || `SKU ${item.sku_id}`, Category: item.category || '—',
+              Status: item.status, 'Current Stock': item.current_stock, 'Reorder Point': item.reorder_point,
+              'Safety Stock': item.safety_stock, 'Order Qty': item.recommended_order_qty,
+              'Stockout Risk %': item.stockout_risk != null ? (item.stockout_risk * 100).toFixed(1) : '',
+            }))}
+          />
         </CardHeader>
         <CardContent style={{ padding: 0 }}>
           {lsLoading
@@ -544,24 +584,24 @@ function InventoryTab() {
                           <td style={{ color: 'var(--text-muted)' }}>{item.category || '—'}</td>
                           <td>
                             <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold capitalize"
-                              style={{ background: `${color}18`, color, border: `1px solid ${color}30` }}>
+                              style={{ background: `color-mix(in srgb, ${color} 10%, transparent)`, color, border: `1px solid color-mix(in srgb, ${color} 19%, transparent)` }}>
                               {item.status?.replace('_', ' ')}
                             </span>
                           </td>
                           <td className="text-right num">{formatNumber(item.current_stock, 1)}</td>
-                          <td className="text-right num" style={{ color: '#F59E0B' }}>{formatNumber(item.reorder_point, 0)}</td>
-                          <td className="text-right num" style={{ color: '#2563EB' }}>{formatNumber(item.safety_stock, 0)}</td>
-                          <td className="text-right num font-semibold" style={{ color: '#EF4444' }}>
+                          <td className="text-right num" style={{ color: 'var(--brand-amber)' }}>{formatNumber(item.reorder_point, 0)}</td>
+                          <td className="text-right num" style={{ color: 'var(--brand-blue)' }}>{formatNumber(item.safety_stock, 0)}</td>
+                          <td className="text-right num font-semibold" style={{ color: 'var(--color-danger)' }}>
                             {item.recommended_order_qty > 0 ? formatNumber(item.recommended_order_qty) : '—'}
                           </td>
                           <td className="text-right">
                             <div className="flex items-center justify-end gap-2">
                               <div className="progress-micro w-14">
                                 <div className="progress-micro-fill"
-                                  style={{ width: `${riskPct}%`, background: parseFloat(riskPct) > 70 ? '#EF4444' : parseFloat(riskPct) > 40 ? '#F59E0B' : '#22C55E' }} />
+                                  style={{ width: `${riskPct}%`, background: parseFloat(riskPct) > 70 ? 'var(--color-danger)' : parseFloat(riskPct) > 40 ? 'var(--brand-amber)' : 'var(--color-success)' }} />
                               </div>
                               <span className="num text-[12px] font-semibold w-10 text-right"
-                                style={{ color: parseFloat(riskPct) > 70 ? '#EF4444' : parseFloat(riskPct) > 40 ? '#F59E0B' : '#22C55E' }}>
+                                style={{ color: parseFloat(riskPct) > 70 ? 'var(--color-danger)' : parseFloat(riskPct) > 40 ? 'var(--brand-amber)' : 'var(--color-success)' }}>
                                 {riskPct}%
                               </span>
                             </div>
@@ -615,7 +655,7 @@ function ForecastTab() {
     enabled: !!selectedSku,
   })
 
-  const MODEL_COLORS = { Prophet: '#8B5CF6', 'Random Forest': '#22C55E', LSTM: '#EF4444' }
+  const MODEL_COLORS = { Prophet: 'var(--brand-purple)', 'Random Forest': 'var(--color-success)', LSTM: 'var(--color-danger)' }
 
   return (
     <div className="space-y-5">
@@ -639,10 +679,7 @@ function ForecastTab() {
                 </div>
                 <BarChart
                   data={accuracy || []}
-                  bars={[
-                    { key: 'avg_mae',  label: 'MAE',  color: '#2563EB' },
-                    { key: 'avg_rmse', label: 'RMSE', color: '#F59E0B' },
-                  ]}
+                  bars={MODEL_ACCURACY_BARS}
                   xKey="model" height={180}
                 />
               </>
@@ -654,7 +691,7 @@ function ForecastTab() {
           <PieChart
             data={(coverage?.chart_data || []).filter(d => d.value > 0)}
             nameKey="name" valueKey="value" height={260} donut
-            colors={['#8B5CF6', '#22C55E', '#EF4444', '#94A3B8']}
+            colors={MODEL_COVERAGE_COLORS}
           />
         </ChartCard>
       </div>
@@ -672,11 +709,7 @@ function ForecastTab() {
           : (
             <BarChart
               data={(demandCat || []).map(d => ({ ...d, name: d.name?.length > 14 ? d.name.slice(0, 14) + '…' : d.name }))}
-              bars={[
-                { key: 'prophet', label: 'Prophet',       color: '#8B5CF6' },
-                { key: 'rf',      label: 'Random Forest', color: '#22C55E' },
-                { key: 'lstm',    label: 'LSTM',           color: '#EF4444' },
-              ]}
+              bars={DEMAND_BY_CATEGORY_BARS}
               xKey="name" height={260}
               formatYAxis={v => v >= 1000 ? `${(v/1000).toFixed(0)}K` : v}
             />
@@ -731,10 +764,7 @@ function ForecastTab() {
                 </div>
                 <LineChart
                   data={dvActual.series || []}
-                  lines={[
-                    { key: 'actual',   label: 'Actual',   color: '#2563EB' },
-                    { key: 'forecast', label: 'Forecast', color: '#8B5CF6' },
-                  ]}
+                  lines={ACTUAL_VS_FORECAST_LINES}
                   xKey="date" height={280}
                   formatXAxis={v => formatDate(v, 'MMM d')}
                 />
@@ -794,7 +824,7 @@ function ProductTab() {
   const allCategories = pivotData.length > 0
     ? Object.keys(pivotData[0]).filter(k => k !== 'label')
     : []
-  const catColors = ['#2563EB','#22C55E','#F59E0B','#EF4444','#8B5CF6','#06B6D4']
+  const catColors = ['var(--brand-blue)','var(--color-success)','var(--brand-amber)','var(--color-danger)','var(--brand-purple)','var(--brand-cyan)']
 
   return (
     <div className="space-y-5">
@@ -809,7 +839,7 @@ function ProductTab() {
         >
           <BarChart
             data={(catPerf || []).map(d => ({ ...d, name: d.name?.length > 14 ? d.name.slice(0, 14) + '…' : d.name }))}
-            bars={[{ key: 'revenue', label: 'Revenue (Rs.)', color: '#2563EB' }]}
+            bars={CATEGORY_PERF_BARS}
             xKey="name" height={300} horizontal
             formatXAxis={v => v >= 1000 ? `${(v/1000).toFixed(0)}K` : v}
           />
@@ -822,6 +852,13 @@ function ProductTab() {
               <CardTitle>Category Metrics</CardTitle>
               <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>Revenue, AOV, and share per category</p>
             </div>
+            <ExportBtn
+              filename={`category-performance-${new Date().toISOString().slice(0,10)}`}
+              rows={(catPerf || []).map(c => ({
+                Category: c.name, Revenue: c.revenue, Transactions: c.transactions,
+                'Avg Order Value': c.avg_order_value, 'Revenue Share %': c.revenue_pct,
+              }))}
+            />
           </CardHeader>
           <CardContent style={{ padding: 0 }}>
             {cpLoading
@@ -880,7 +917,7 @@ function ProductTab() {
             ...d,
             name: d.name?.length > 14 ? d.name.slice(0, 14) + '…' : (d.name || `SKU ${d.sku_id}`),
           }))}
-          bars={[{ key: 'velocity_per_day', label: 'Units/day', color: '#22C55E' }]}
+          bars={VELOCITY_BARS}
           xKey="name" height={280} horizontal
         />
       </ChartCard>
@@ -896,7 +933,7 @@ function ProductTab() {
         <BarChart
           data={(comparison || []).map(d => ({ ...d, name: d.name?.length > 14 ? d.name.slice(0, 14) + '…' : d.name }))}
           bars={[
-            { key: 'current_revenue',  label: `Current ${compDays}d`,  color: '#2563EB' },
+            { key: 'current_revenue',  label: `Current ${compDays}d`,  color: 'var(--brand-blue)' },
             { key: 'previous_revenue', label: `Previous ${compDays}d`, color: '#94A3B8' },
           ]}
           xKey="name" height={280}
@@ -921,7 +958,7 @@ function ProductTab() {
                 key: cat, label: cat, color: catColors[i % catColors.length],
               }))}
               xKey="label" height={280}
-              formatYAxis={v => `Rs.${v >= 1000 ? `${(v/1000).toFixed(0)}K` : v}`}
+              formatYAxis={v => formatRs(v)}
             />
           )
         }
@@ -965,10 +1002,7 @@ function ProductTab() {
             : (
               <AreaChart
                 data={skuTrend.series}
-                areas={[
-                  { key: 'revenue',  label: 'Revenue (Rs.)', color: '#2563EB' },
-                  { key: 'quantity', label: 'Quantity',       color: '#22C55E' },
-                ]}
+                areas={SKU_TREND_AREAS}
                 xKey="date" height={260}
                 formatXAxis={v => formatDate(v, 'MMM d')}
                 formatYAxis={v => v >= 1000 ? `${(v/1000).toFixed(0)}K` : v}
@@ -1001,7 +1035,7 @@ export default function AnalyticsPage() {
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <div className="flex items-center gap-2 mb-1.5">
-            <BarChart3 className="h-4 w-4" style={{ color: '#2563EB' }} />
+            <BarChart3 className="h-4 w-4" style={{ color: 'var(--brand-blue)' }} />
             <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>Analytics</span>
           </div>
           <h1 className="text-[24px] font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>Business Analytics</h1>
@@ -1036,17 +1070,7 @@ export default function AnalyticsPage() {
       </div>
 
       {/* Tab content */}
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={activeTab}
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -8 }}
-          transition={{ duration: 0.2 }}
-        >
-          <TabContent />
-        </motion.div>
-      </AnimatePresence>
+      <TabContent />
     </div>
   )
 }

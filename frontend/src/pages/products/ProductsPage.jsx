@@ -1,9 +1,8 @@
 ﻿import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Package, Plus, Search, Edit2, Trash2, X, Filter, Eye,
+  Package, Plus, Search, Edit2, Trash2, Filter, Eye,
   AlertTriangle, CheckCircle, XCircle, TrendingDown,
 } from 'lucide-react'
 import { useForm } from 'react-hook-form'
@@ -16,11 +15,19 @@ import { useToast } from '@/hooks/useToast'
 import { useRole } from '@/hooks/useRole'
 import { ImageUpload } from '@/components/common/ImageUpload'
 import { ErrorState } from '@/components/common/ErrorState'
+import { EmptyState } from '@/components/common/EmptyState'
 import { SkeletonTable } from '@/components/common/Skeleton'
-import { ConfirmDialog } from '@/components/common/Modal'
+import { Modal, ConfirmDialog } from '@/components/common/Modal'
+import { Input } from '@/components/common/Input'
+import { Select } from '@/components/common/Select'
+import { Textarea } from '@/components/common/Textarea'
 import { Pagination } from '@/components/common/Pagination'
 import { useSortable } from '@/hooks/useSortable'
+import { useDebounce } from '@/hooks/useDebounce'
 import { SortableTH } from '@/components/common/SortableTH'
+import { PageHeader } from '@/components/common/PageHeader'
+import { IconButton } from '@/components/common/IconButton'
+import { Button } from '@/components/common/Button'
 
 const schema = z.object({
   name:          z.string().min(2, 'Product name required'),
@@ -56,72 +63,6 @@ function StockBadge({ status }) {
   )
 }
 
-function Field({ label, error, children }) {
-  return (
-    <div>
-      <label className="block text-[11px] font-semibold uppercase tracking-widest mb-1.5"
-        style={{ color: 'var(--text-muted)' }}>{label}</label>
-      {children}
-      {error && <p className="text-[11px] mt-1" style={{ color: 'var(--error)' }}>{error}</p>}
-    </div>
-  )
-}
-
-function FInput({ error, ...props }) {
-  return (
-    <input
-      className="w-full px-3 py-2.5 rounded-lg text-[13px] outline-none"
-      style={{
-        background: 'var(--surface-muted)',
-        border: `1.5px solid ${error ? 'var(--error)' : 'var(--border)'}`,
-        color: 'var(--text-primary)',
-      }}
-      onFocus={e => { if (!error) e.target.style.borderColor = 'var(--brand)' }}
-      onBlur={e => { if (!error) e.target.style.borderColor = 'var(--border)' }}
-      {...props}
-    />
-  )
-}
-
-function FSelect({ error, ...props }) {
-  return (
-    <select
-      className="w-full px-3 py-2.5 rounded-lg text-[13px] outline-none"
-      style={{ background: 'var(--surface-muted)', border: `1.5px solid ${error ? 'var(--error)' : 'var(--border)'}`, color: 'var(--text-primary)' }}
-      {...props}
-    />
-  )
-}
-
-function Modal({ title, onClose, children }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,.6)', backdropFilter: 'blur(4px)' }}
-      onClick={e => e.target === e.currentTarget && onClose()}
-    >
-      <motion.div
-        initial={{ opacity: 0, scale: .95, y: 12 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: .95, y: 12 }}
-        className="w-full max-w-2xl rounded-2xl p-6 overflow-y-auto max-h-[90vh]"
-        style={{ background: 'var(--surface-card)', border: '1px solid var(--border)' }}
-      >
-        <div className="flex items-center justify-between mb-5">
-          <h3 className="text-[16px] font-bold" style={{ color: 'var(--text-primary)' }}>{title}</h3>
-          <button onClick={onClose}
-            className="h-7 w-7 rounded-md flex items-center justify-center"
-            style={{ color: 'var(--text-muted)', background: 'var(--surface-muted)' }}>
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-        {children}
-      </motion.div>
-    </motion.div>
-  )
-}
-
 function ProductForm({ defaultValues, suppliers, categories, onSubmit, isPending, submitLabel,
                         onImageSelect, onImageRemove, currentImage, imageUploading, apiError }) {
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm({
@@ -153,69 +94,31 @@ function ProductForm({ defaultValues, suppliers, categories, onSubmit, isPending
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Product Name *" error={errors.name?.message}>
-          <FInput placeholder="Rice (Basmati 5kg)" error={!!errors.name} {...register('name')} />
-        </Field>
-        <Field label="SKU *" error={errors.sku?.message}>
-          <FInput placeholder="RICE-5KG-001" error={!!errors.sku} {...register('sku')} />
-        </Field>
-        <Field label="Brand">
-          <FInput placeholder="Annapurna" {...register('brand')} />
-        </Field>
-        <Field label="Unit">
-          <FSelect {...register('unit')}>
-            {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
-          </FSelect>
-        </Field>
-        <Field label="Category *" error={errors.category?.message}>
-          <FSelect error={!!errors.category} {...register('category')}>
-            <option value="">-- Select Category --</option>
-            {categories.map(c => <option key={c._id} value={c._id}>{c.name}</option>)}
-          </FSelect>
-        </Field>
-        <Field label="Supplier">
-          <FSelect {...register('supplier')}>
-            <option value="">-- Select Supplier --</option>
-            {suppliers.map(s => <option key={s._id} value={s._id}>{s.name}</option>)}
-          </FSelect>
-        </Field>
-        <Field label="Buying Price (Rs) *" error={errors.buyingPrice?.message}>
-          <FInput type="number" min={0} step="0.01" placeholder="0.00" error={!!errors.buyingPrice} {...register('buyingPrice')} />
-        </Field>
-        <Field label="Selling Price (Rs) *" error={errors.sellingPrice?.message}>
-          <FInput type="number" min={0} step="0.01" placeholder="0.00" error={!!errors.sellingPrice} {...register('sellingPrice')} />
-        </Field>
-        <Field label="Current Stock">
-          <FInput type="number" min={0} {...register('currentStock')} />
-        </Field>
-        <Field label="Min Stock">
-          <FInput type="number" min={0} {...register('minStock')} />
-        </Field>
-        <Field label="Max Stock">
-          <FInput type="number" min={0} {...register('maxStock')} />
-        </Field>
-        <Field label="Reorder Level">
-          <FInput type="number" min={0} {...register('reorderLevel')} />
-        </Field>
+        <Input label="Product Name *" placeholder="Rice (Basmati 5kg)" error={errors.name?.message} {...register('name')} />
+        <Input label="SKU *" placeholder="RICE-5KG-001" error={errors.sku?.message} {...register('sku')} />
+        <Input label="Brand" placeholder="Annapurna" {...register('brand')} />
+        <Select label="Unit" options={UNITS.map(u => ({ value: u, label: u }))} {...register('unit')} />
+        <Select label="Category *" placeholder="-- Select Category --" error={errors.category?.message}
+          options={categories.map(c => ({ value: c._id, label: c.name }))} {...register('category')} />
+        <Select label="Supplier" placeholder="-- Select Supplier --"
+          options={suppliers.map(s => ({ value: s._id, label: s.name }))} {...register('supplier')} />
+        <Input label="Buying Price (Rs) *" type="number" min={0} step="0.01" placeholder="0.00" error={errors.buyingPrice?.message} {...register('buyingPrice')} />
+        <Input label="Selling Price (Rs) *" type="number" min={0} step="0.01" placeholder="0.00" error={errors.sellingPrice?.message} {...register('sellingPrice')} />
+        <Input label="Current Stock" type="number" min={0} {...register('currentStock')} />
+        <Input label="Min Stock" type="number" min={0} {...register('minStock')} />
+        <Input label="Max Stock" type="number" min={0} {...register('maxStock')} />
+        <Input label="Reorder Level" type="number" min={0} {...register('reorderLevel')} />
       </div>
-      <Field label="Description">
-        <textarea rows={2} placeholder="Optional product description…"
-          className="w-full px-3 py-2.5 rounded-lg text-[13px] outline-none resize-none"
-          style={{ background: 'var(--surface-muted)', border: '1.5px solid var(--border)', color: 'var(--text-primary)' }}
-          {...register('description')}
-        />
-      </Field>
+      <Textarea label="Description" rows={2} placeholder="Optional product description…" {...register('description')} />
       {apiError && (
-        <div className="px-3 py-2.5 rounded-lg text-[13px] font-medium text-center"
-          style={{ background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.3)', color: 'var(--error)' }}>
+        <div role="alert" className="px-3 py-2.5 rounded-lg text-[13px] font-medium text-center"
+          style={{ background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.3)', color: 'var(--brand-red)' }}>
           {apiError}
         </div>
       )}
-      <button type="submit" disabled={isPending || isSubmitting}
-        className="w-full py-2.5 rounded-xl text-[14px] font-bold text-white"
-        style={{ background: 'var(--brand-primary)', opacity: (isPending || isSubmitting) ? .7 : 1 }}>
+      <Button type="submit" className="w-full" disabled={isPending || isSubmitting} loading={isPending || isSubmitting}>
         {(isPending || isSubmitting) ? 'Saving…' : submitLabel}
-      </button>
+      </Button>
     </form>
   )
 }
@@ -238,11 +141,12 @@ export default function ProductsPage() {
   const removeImageRef            = useRef(false)
   const [pageSize, setPageSize]   = useState(20)
   const sort = useSortable('createdAt', 'desc')
+  const debouncedSearch = useDebounce(search, 300)
 
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: ['products', page, pageSize, search, stockFilter, catFilter, sort.sortBy, sort.sortDir],
+    queryKey: ['products', page, pageSize, debouncedSearch, stockFilter, catFilter, sort.sortBy, sort.sortDir],
     queryFn: () => productsService.getAll({
-      page, limit: pageSize, search, stockStatus: stockFilter, category: catFilter,
+      page, limit: pageSize, search: debouncedSearch, stockStatus: stockFilter, category: catFilter,
       sortBy: sort.sortBy, sortDir: sort.sortDir,
     }).then(r => r.data),
     staleTime: 30_000,
@@ -329,33 +233,30 @@ export default function ProductsPage() {
   return (
     <div className="space-y-6 pb-8">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-[22px] font-bold" style={{ color: 'var(--text-primary)' }}>Products</h1>
-          <p className="text-[13px] mt-1" style={{ color: 'var(--text-muted)' }}>
-            {total} products in catalog
-          </p>
-        </div>
-        {can('inventory_manager') && (
-          <button onClick={() => setCreate(true)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-[13px] font-bold text-white"
-            style={{ background: 'var(--brand-primary)', boxShadow: '0 4px 16px rgba(3,4,94,.4)' }}>
-            <Plus className="h-4 w-4" /> Add Product
-          </button>
+      <PageHeader
+        icon={Package}
+        eyebrow="Catalog"
+        title="Products"
+        subtitle={`${total} products in catalog`}
+        actions={can('inventory_manager') && (
+          <Button icon={Plus} onClick={() => setCreate(true)}>
+            Add Product
+          </Button>
         )}
-      </div>
+      />
 
       {/* Filters */}
       <div className="flex gap-3 flex-wrap">
         <div className="flex items-center gap-2 px-3 h-9 rounded-lg flex-1 min-w-48"
           style={{ background: 'var(--surface-card)', border: '1px solid var(--border)' }}>
           <Search className="h-3.5 w-3.5 shrink-0" style={{ color: 'var(--text-muted)' }} />
-          <input type="text" placeholder="Search by name, SKU or brand…" value={search}
+          <input type="text" placeholder="Search by name, SKU or brand…" aria-label="Search products by name, SKU, or brand" value={search}
             onChange={e => { setSearch(e.target.value); setPage(1) }}
             className="flex-1 bg-transparent text-[13px] outline-none"
             style={{ color: 'var(--text-primary)' }} />
         </div>
         <select value={stockFilter} onChange={e => { setStock(e.target.value); setPage(1) }}
+          aria-label="Filter by stock status"
           className="h-9 px-3 rounded-lg text-[13px] outline-none"
           style={{ background: 'var(--surface-card)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}>
           <option value="">All Stock</option>
@@ -365,6 +266,7 @@ export default function ProductsPage() {
           <option value="overstock">Overstock</option>
         </select>
         <select value={catFilter} onChange={e => { setCat(e.target.value); setPage(1) }}
+          aria-label="Filter by category"
           className="h-9 px-3 rounded-lg text-[13px] outline-none"
           style={{ background: 'var(--surface-card)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}>
           <option value="">All Categories</option>
@@ -381,9 +283,19 @@ export default function ProductsPage() {
       ) : isError ? (
         <ErrorState error={error} onRetry={refetch} />
       ) : products.length === 0 ? (
-        <div className="text-center py-16">
-          <Package className="h-12 w-12 mx-auto mb-3 opacity-20" style={{ color: 'var(--text-muted)' }} />
-          <p className="text-[14px]" style={{ color: 'var(--text-muted)' }}>No products found</p>
+        <div className="rounded-xl" style={{ background: 'var(--surface-card)', border: '1px solid var(--border)' }}>
+          <EmptyState
+            icon={Package}
+            title={search || stockFilter || catFilter ? 'No matching products' : 'No products yet'}
+            description={search || stockFilter || catFilter ? 'Try a different search or clear the filters above.' : 'Add your first product to start building the catalog.'}
+            action={
+              (search || stockFilter || catFilter) ? (
+                <Button variant="secondary" size="sm" onClick={() => { setSearch(''); setStock(''); setCat(''); setPage(1) }}>Clear filters</Button>
+              ) : can('inventory_manager') ? (
+                <Button size="sm" icon={Plus} onClick={() => setCreate(true)}>Add Product</Button>
+              ) : undefined
+            }
+          />
         </div>
       ) : (
         <div className="rounded-xl overflow-x-auto"
@@ -402,11 +314,8 @@ export default function ProductsPage() {
               </tr>
             </thead>
             <tbody>
-              {products.map((p, idx) => (
-                <motion.tr key={p._id}
-                  initial={{ opacity: 0, x: -8 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: idx * 0.03 }}
+              {products.map((p) => (
+                <tr key={p._id}
                   className="border-b last:border-b-0"
                   style={{ borderColor: 'var(--border)' }}
                   onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-muted)'}
@@ -415,7 +324,7 @@ export default function ProductsPage() {
                     <div className="flex items-center gap-2">
                       <div className="h-8 w-8 rounded-lg shrink-0 overflow-hidden"
                         style={{ background: 'rgba(37,99,235,.1)' }}>
-                        <img src={getProductImage(p)} alt={p.name}
+                        <img src={getProductImage(p)} alt={p.name} loading="lazy" decoding="async"
                           className="h-8 w-8 object-cover" onError={imgFallback} />
                       </div>
                       <div className="min-w-0">
@@ -451,38 +360,29 @@ export default function ProductsPage() {
                     {formatPrice(p.sellingPrice)}
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex gap-1.5">
-                      <button
+                    <div className="flex gap-1">
+                      <IconButton
+                        icon={Eye}
+                        label="View details"
+                        variant="primary"
                         onClick={() => navigate(`${prefix}/products/${p._id}`)}
-                        className="h-7 w-7 rounded-md flex items-center justify-center"
-                        style={{ color: '#2563EB' }}
-                        title="View details"
-                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(37,99,235,.1)'}
-                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                        <Eye className="h-3.5 w-3.5" />
-                      </button>
+                        size={14}
+                      />
                       {can('inventory_manager') && (
-                        <button onClick={() => setEdit(p)}
-                          className="h-7 w-7 rounded-md flex items-center justify-center"
-                          style={{ color: 'var(--text-muted)' }}
-                          onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-muted)'}
-                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                          <Edit2 className="h-3.5 w-3.5" />
-                        </button>
+                        <IconButton icon={Edit2} label="Edit product" onClick={() => setEdit(p)} size={14} />
                       )}
                       {isAdmin && (
-                        <button
+                        <IconButton
+                          icon={Trash2}
+                          label="Delete product"
+                          variant="danger"
                           onClick={() => setDeleteTarget(p)}
-                          className="h-7 w-7 rounded-md flex items-center justify-center"
-                          style={{ color: '#EF4444' }}
-                          onMouseEnter={e => e.currentTarget.style.background = 'rgba(239,68,68,.1)'}
-                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
+                          size={14}
+                        />
                       )}
                     </div>
                   </td>
-                </motion.tr>
+                </tr>
               ))}
             </tbody>
           </table>
@@ -510,40 +410,48 @@ export default function ProductsPage() {
       />
 
       {/* Modals */}
-      <AnimatePresence>
+      <Modal
+        open={creating}
+        width={680}
+        title="Add Product"
+        onClose={() => { setCreate(false); pendingImageRef.current = null; setCreateApiError('') }}
+      >
         {creating && (
-          <Modal title="Add Product" onClose={() => { setCreate(false); pendingImageRef.current = null; setCreateApiError('') }}>
-            <ProductForm
-              suppliers={suppliers}
-              categories={categories}
-              onSubmit={async (data) => { setCreateApiError(''); try { await createMutation.mutateAsync(data) } catch {} }}
-              isPending={createMutation.isPending}
-              submitLabel="Add Product"
-              onImageSelect={(f) => { pendingImageRef.current = f }}
-              onImageRemove={() => { pendingImageRef.current = null }}
-              apiError={createApiError}
-            />
-          </Modal>
+          <ProductForm
+            suppliers={suppliers}
+            categories={categories}
+            onSubmit={async (data) => { setCreateApiError(''); try { await createMutation.mutateAsync(data) } catch {} }}
+            isPending={createMutation.isPending}
+            submitLabel="Add Product"
+            onImageSelect={(f) => { pendingImageRef.current = f }}
+            onImageRemove={() => { pendingImageRef.current = null }}
+            apiError={createApiError}
+          />
         )}
+      </Modal>
+      <Modal
+        open={!!editing}
+        width={680}
+        title="Edit Product"
+        onClose={() => { setEdit(null); pendingImageRef.current = null; removeImageRef.current = false }}
+      >
         {editing && (
-          <Modal title="Edit Product" onClose={() => { setEdit(null); pendingImageRef.current = null; removeImageRef.current = false }}>
-            <ProductForm
-              defaultValues={editing}
-              suppliers={suppliers}
-              categories={categories}
-              onSubmit={async (d) => { try { await updateMutation.mutateAsync({ id: editing._id, data: d }) } catch {} }}
-              isPending={updateMutation.isPending}
-              submitLabel="Save Changes"
-              currentImage={editing.image ? `${BACKEND_URL}${editing.image}` : (editing.imageUrl || null)}
-              onImageSelect={(f) => { pendingImageRef.current = f; removeImageRef.current = false }}
-              onImageRemove={() => {
-                pendingImageRef.current = null
-                removeImageRef.current = true
-              }}
-            />
-          </Modal>
+          <ProductForm
+            defaultValues={editing}
+            suppliers={suppliers}
+            categories={categories}
+            onSubmit={async (d) => { try { await updateMutation.mutateAsync({ id: editing._id, data: d }) } catch {} }}
+            isPending={updateMutation.isPending}
+            submitLabel="Save Changes"
+            currentImage={editing.image ? `${BACKEND_URL}${editing.image}` : (editing.imageUrl || null)}
+            onImageSelect={(f) => { pendingImageRef.current = f; removeImageRef.current = false }}
+            onImageRemove={() => {
+              pendingImageRef.current = null
+              removeImageRef.current = true
+            }}
+          />
         )}
-      </AnimatePresence>
+      </Modal>
     </div>
   )
 }

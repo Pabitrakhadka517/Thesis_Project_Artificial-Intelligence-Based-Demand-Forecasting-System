@@ -3,7 +3,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { motion } from 'framer-motion'
 import {
   Scale, Plus, Search, Edit2, Trash2, RefreshCw,
   Lock, ToggleLeft, ToggleRight,
@@ -17,7 +16,9 @@ import { SkeletonTable } from '@/components/common/Skeleton'
 import { EmptyState } from '@/components/common/EmptyState'
 import { ErrorState } from '@/components/common/ErrorState'
 import { Pagination } from '@/components/common/Pagination'
+import { PageHeader } from '@/components/common/PageHeader'
 import { useToast } from '@/hooks/useToast'
+import { useDebounce } from '@/hooks/useDebounce'
 
 const UNIT_TYPES = ['weight', 'volume', 'count']
 
@@ -129,11 +130,12 @@ export default function UnitsPage() {
   const [modalOpen,  setModalOpen]  = useState(false)
   const [editItem,   setEditItem]   = useState(null)
   const [deleteItem, setDeleteItem] = useState(null)
+  const debouncedSearch = useDebounce(search, 300)
 
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ['units-page', page, pageSize, search, typeFilter],
+    queryKey: ['units-page', page, pageSize, debouncedSearch, typeFilter],
     queryFn: () => axiosInstance.get('/units', {
-      params: { page, limit: pageSize, search: search || undefined, unitType: typeFilter || undefined },
+      params: { page, limit: pageSize, search: debouncedSearch || undefined, unitType: typeFilter || undefined },
     }).then(r => r.data),
     keepPreviousData: true,
   })
@@ -223,36 +225,26 @@ export default function UnitsPage() {
 
   return (
     <div className="space-y-5 pb-6">
-      {/* Header */}
-      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
-        className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <Scale className="h-5 w-5" style={{ color: '#22C55E' }} />
-            <h1 className="text-[22px] font-bold" style={{ color: 'var(--text-primary)' }}>Units</h1>
-            <span className="text-[12px] font-semibold px-2 py-0.5 rounded-full"
-              style={{ background: 'rgba(34,197,94,.1)', color: '#22C55E' }}>
-              {total}
-            </span>
-          </div>
-          <p className="text-[13px]" style={{ color: 'var(--text-muted)' }}>
-            Manage measurement units. System units cannot be deleted.
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="secondary" size="sm" icon={RefreshCw} onClick={refetch}>Refresh</Button>
-          <Button size="sm" icon={Plus} onClick={openCreate}>Add Unit</Button>
-        </div>
-      </motion.div>
+      <PageHeader
+        icon={Scale}
+        eyebrow="Catalog"
+        title="Units"
+        subtitle={`${total} units · System units cannot be deleted`}
+        actions={
+          <>
+            <Button variant="secondary" size="sm" icon={RefreshCw} onClick={refetch}>Refresh</Button>
+            <Button size="sm" icon={Plus} onClick={openCreate}>Add Unit</Button>
+          </>
+        }
+      />
 
       {/* Stats */}
       {stats && (
-        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
-          className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           <StatCard label="Total"    value={stats.total}    color="#22C55E" />
           <StatCard label="Active"   value={stats.active}   color="#2563EB" />
           <StatCard label="Inactive" value={stats.inactive} color="#94A3B8" />
-        </motion.div>
+        </div>
       )}
 
       {/* Filters */}

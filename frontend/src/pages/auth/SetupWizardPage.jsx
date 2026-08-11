@@ -205,18 +205,6 @@ export default function SetupWizardPage() {
         className="hidden lg:flex flex-col justify-between w-[52%] relative overflow-hidden p-12"
         style={{ background: 'var(--brand-primary)' }}
       >
-        {/* Subtle grid */}
-        <div className="absolute inset-0 opacity-[0.07]"
-          style={{
-            backgroundImage: 'linear-gradient(rgba(255,255,255,.6) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.6) 1px,transparent 1px)',
-            backgroundSize:  '40px 40px',
-          }}
-        />
-        <div className="absolute top-1/4 left-1/4 h-64 w-64 rounded-full opacity-20 blur-3xl"
-          style={{ background: 'radial-gradient(circle,rgba(255,255,255,.7),transparent)' }} />
-        <div className="absolute bottom-1/3 right-1/4 h-48 w-48 rounded-full opacity-15 blur-3xl"
-          style={{ background: 'radial-gradient(circle,rgba(186,230,253,.6),transparent)' }} />
-
         {/* Logo */}
         <div className="relative flex items-center gap-3">
           <div className="h-10 w-10 rounded-xl flex items-center justify-center"
@@ -294,20 +282,20 @@ export default function SetupWizardPage() {
                 <div className="flex items-center gap-2">
                   <div className="h-6 w-6 rounded-full flex items-center justify-center text-[11px] font-bold transition-all"
                     style={{
-                      background: i <= step ? '#2563EB' : 'var(--surface-muted)',
+                      background: i <= step ? 'var(--brand-blue)' : 'var(--surface-muted)',
                       color:      i <= step ? '#fff'    : 'var(--text-muted)',
                       border:     i <= step ? 'none'    : '1.5px solid var(--border)',
                     }}>
                     {i < step ? <CheckCircle2 className="h-3.5 w-3.5" /> : i + 1}
                   </div>
                   <span className="text-[12px] font-semibold"
-                    style={{ color: i <= step ? '#2563EB' : 'var(--text-muted)' }}>
+                    style={{ color: i <= step ? 'var(--brand-blue)' : 'var(--text-muted)' }}>
                     {label}
                   </span>
                 </div>
                 {i < STEPS.length - 1 && (
                   <div className="w-8 h-px mx-1"
-                    style={{ background: i < step ? '#2563EB' : 'var(--border)' }} />
+                    style={{ background: i < step ? 'var(--brand-blue)' : 'var(--border)' }} />
                 )}
               </div>
             ))}

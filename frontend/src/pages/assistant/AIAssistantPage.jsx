@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import { useSelector } from 'react-redux'
 import {
   Bot, Send, Trash2, Download, Sparkles, Package,
@@ -130,7 +130,7 @@ function TypingIndicator() {
   return (
     <div className="flex items-start gap-3">
       <div className="h-8 w-8 rounded-full flex items-center justify-center shrink-0"
-        style={{ background: 'linear-gradient(135deg,#6D28D9,#8B5CF6)' }}>
+        style={{ background: '#7C3AED' }}>
         <Bot className="h-4 w-4 text-white" />
       </div>
       <div className="px-4 py-3 rounded-2xl rounded-tl-sm"
@@ -156,31 +156,22 @@ function ChatMessage({ msg }) {
 
   if (isUser) {
     return (
-      <motion.div
-        initial={{ opacity: 0, x: 20 }}
-        animate={{ opacity: 1, x: 0 }}
-        className="flex justify-end"
-      >
+      <div className="flex justify-end">
         <div className="max-w-[75%] px-4 py-3 rounded-2xl rounded-tr-sm text-[13px] leading-relaxed"
           style={{
-            background:  'linear-gradient(135deg,var(--brand-primary),#0353A4)',
+            background:  'var(--brand-primary)',
             color:       '#fff',
-            boxShadow:   '0 2px 8px rgba(3,4,94,.35)',
           }}>
           {msg.content}
         </div>
-      </motion.div>
+      </div>
     )
   }
 
   return (
-    <motion.div
-      initial={{ opacity: 0, x: -20 }}
-      animate={{ opacity: 1, x: 0 }}
-      className="flex items-start gap-3"
-    >
+    <div className="flex items-start gap-3">
       <div className="h-8 w-8 rounded-full flex items-center justify-center shrink-0 mt-0.5"
-        style={{ background: 'linear-gradient(135deg,#6D28D9,#8B5CF6)' }}>
+        style={{ background: '#7C3AED' }}>
         <Bot className="h-4 w-4 text-white" />
       </div>
       <div className="flex-1 min-w-0">
@@ -229,7 +220,7 @@ function ChatMessage({ msg }) {
           )}
         </div>
       </div>
-    </motion.div>
+    </div>
   )
 }
 
@@ -247,8 +238,7 @@ function InsightCard({ insight, onAsk }) {
   const Ic = s.icon
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+    <div
       className="rounded-xl p-3 cursor-pointer group transition-all"
       style={{ background: s.bg, border: `1px solid ${s.border}` }}
       onClick={() => onAsk(`Tell me more about: ${insight.title} — ${insight.product || ''}`)}
@@ -273,7 +263,7 @@ function InsightCard({ insight, onAsk }) {
           )}
         </div>
       </div>
-    </motion.div>
+    </div>
   )
 }
 
@@ -295,7 +285,7 @@ function QuickAction({ action, onClick }) {
   return (
     <button
       onClick={() => onClick(action.q)}
-      className="flex flex-col items-center gap-1.5 p-3 rounded-xl text-center transition-all hover:scale-105 active:scale-95"
+      className="flex flex-col items-center gap-1.5 p-3 rounded-xl text-center transition-colors"
       style={{
         background: action.bg,
         border:     `1px solid ${action.color}25`,
@@ -319,7 +309,7 @@ function EmptyChat({ onAsk }) {
   return (
     <div className="flex flex-col items-center justify-center h-full text-center px-6 py-10">
       <div className="h-16 w-16 rounded-2xl flex items-center justify-center mb-4"
-        style={{ background: 'linear-gradient(135deg,#6D28D9,#8B5CF6)', boxShadow: '0 8px 24px rgba(139,92,246,.35)' }}>
+        style={{ background: '#7C3AED' }}>
         <Bot className="h-8 w-8 text-white" />
       </div>
       <h2 className="text-[18px] font-bold mb-1" style={{ color: 'var(--text-primary)' }}>
@@ -499,7 +489,7 @@ export default function AIAssistantPage() {
       <div className="flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-xl flex items-center justify-center"
-            style={{ background: 'linear-gradient(135deg,#6D28D9,#8B5CF6)', boxShadow: '0 4px 14px rgba(139,92,246,.4)' }}>
+            style={{ background: '#7C3AED' }}>
             <Bot className="h-5 w-5 text-white" />
           </div>
           <div>
@@ -565,11 +555,9 @@ export default function AIAssistantPage() {
               <EmptyChat onAsk={handleQuickAsk} />
             )}
 
-            <AnimatePresence initial={false}>
-              {messages.map(msg => (
-                <ChatMessage key={msg.id || msg.timestamp} msg={msg} />
-              ))}
-            </AnimatePresence>
+            {messages.map(msg => (
+              <ChatMessage key={msg.id || msg.timestamp} msg={msg} />
+            ))}
 
             {isTyping && <TypingIndicator />}
             <div ref={bottomRef} />
@@ -587,6 +575,7 @@ export default function AIAssistantPage() {
                   onKeyDown={handleKeyDown}
                   rows={1}
                   disabled={isBusy}
+                  aria-label="Message to AI assistant"
                   placeholder="Ask about inventory, demand forecast, purchase decisions…"
                   className="w-full resize-none rounded-xl px-4 py-3 text-[13px] outline-none transition-all"
                   style={{
@@ -607,11 +596,9 @@ export default function AIAssistantPage() {
               <button
                 onClick={handleSend}
                 disabled={!input.trim() || isBusy}
+                aria-label={isBusy ? 'Sending…' : 'Send message'}
                 className="h-11 w-11 rounded-xl flex items-center justify-center shrink-0 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                style={{
-                  background: 'linear-gradient(135deg,#6D28D9,#8B5CF6)',
-                  boxShadow:  '0 2px 8px rgba(139,92,246,.4)',
-                }}>
+                style={{ background: '#7C3AED' }}>
                 {isBusy
                   ? <RefreshCw className="h-4 w-4 text-white animate-spin" />
                   : <Send className="h-4 w-4 text-white" />
@@ -645,11 +632,9 @@ export default function AIAssistantPage() {
             )}
 
             <div className="space-y-2">
-              <AnimatePresence>
-                {insights.map((ins, i) => (
-                  <InsightCard key={i} insight={ins} onAsk={handleQuickAsk} />
-                ))}
-              </AnimatePresence>
+              {insights.map((ins, i) => (
+                <InsightCard key={i} insight={ins} onAsk={handleQuickAsk} />
+              ))}
             </div>
           </div>
 
@@ -684,7 +669,7 @@ export default function AIAssistantPage() {
 
           {/* User role badge */}
           <div className="rounded-2xl p-4"
-            style={{ background: 'linear-gradient(135deg,rgba(109,40,217,.08),rgba(139,92,246,.04))', border: '1px solid rgba(139,92,246,.2)' }}>
+            style={{ background: 'rgba(124,58,237,.06)', border: '1px solid rgba(139,92,246,.2)' }}>
             <div className="flex items-center gap-2 mb-2">
               <Bot className="h-4 w-4" style={{ color: '#8B5CF6' }} />
               <p className="text-[12px] font-bold" style={{ color: '#8B5CF6' }}>Context</p>

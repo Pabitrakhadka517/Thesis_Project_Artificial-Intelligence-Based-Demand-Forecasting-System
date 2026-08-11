@@ -3,13 +3,18 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Building2, Bell, Cpu, Shield, Save } from 'lucide-react'
+import { Building2, Bell, Cpu, Shield, Save, Settings as SettingsIcon } from 'lucide-react'
 import axiosInstance from '@/api/axiosInstance'
 import { useToast } from '@/hooks/useToast'
 import { useRole } from '@/hooks/useRole'
 import { ImageUpload } from '@/components/common/ImageUpload'
 import { ChangePasswordForm } from '@/components/common/ChangePasswordForm'
 import { UnsavedBanner } from '@/components/common/UnsavedBanner'
+import { Input } from '@/components/common/Input'
+import { Select } from '@/components/common/Select'
+import { Textarea } from '@/components/common/Textarea'
+import { Button } from '@/components/common/Button'
+import { PageHeader } from '@/components/common/PageHeader'
 
 const TABS = [
   { key: 'company',       label: 'Company',      Icon: Building2, adminOnly: true  },
@@ -30,44 +35,6 @@ const companySchema = z.object({
 })
 
 // ── Shared UI components ──────────────────────────────────────────────────────
-function Field({ label, error, children }) {
-  return (
-    <div>
-      <label className="block text-[11px] font-semibold uppercase tracking-widest mb-1.5"
-        style={{ color: 'var(--text-muted)' }}>{label}</label>
-      {children}
-      {error && <p className="text-[11px] mt-1" style={{ color: 'var(--error)' }}>{error}</p>}
-    </div>
-  )
-}
-
-function FInput({ error, ...props }) {
-  return (
-    <input
-      className="w-full px-3 py-2.5 rounded-lg text-[13px] outline-none"
-      style={{
-        background: 'var(--surface-muted)',
-        border: `1.5px solid ${error ? 'var(--error)' : 'var(--border)'}`,
-        color: 'var(--text-primary)',
-      }}
-      onFocus={e => { if (!error) e.target.style.borderColor = 'var(--brand)' }}
-      onBlur={e => { if (!error) e.target.style.borderColor = 'var(--border)' }}
-      {...props}
-    />
-  )
-}
-
-function FSelect({ children, ...props }) {
-  return (
-    <select
-      className="w-full px-3 py-2.5 rounded-lg text-[13px] outline-none"
-      style={{ background: 'var(--surface-muted)', border: '1.5px solid var(--border)', color: 'var(--text-primary)' }}
-      {...props}>
-      {children}
-    </select>
-  )
-}
-
 function SectionCard({ title, description, children }) {
   return (
     <div className="rounded-xl p-6" style={{ background: 'var(--surface-card)', border: '1px solid var(--border)' }}>
@@ -89,9 +56,10 @@ function Toggle({ checked, onChange, label, description }) {
         {description && <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>{description}</p>}
       </div>
       <button type="button" onClick={() => onChange(!checked)}
+        role="switch" aria-checked={checked} aria-label={label}
         className="relative h-6 w-11 rounded-full transition-colors duration-200 shrink-0"
         style={{ background: checked ? 'var(--brand)' : 'var(--border)' }}>
-        <span className="absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white transition-transform duration-200"
+        <span aria-hidden="true" className="absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white transition-transform duration-200"
           style={{ transform: checked ? 'translateX(20px)' : 'translateX(0)' }} />
       </button>
     </div>
@@ -100,12 +68,9 @@ function Toggle({ checked, onChange, label, description }) {
 
 function SaveBtn({ isPending, label = 'Save Changes' }) {
   return (
-    <button type="submit" disabled={isPending}
-      className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-[13px] font-bold text-white mt-5"
-      style={{ background: 'var(--brand-primary)', opacity: isPending ? .7 : 1 }}>
-      <Save className="h-4 w-4" />
+    <Button type="submit" className="mt-5" icon={Save} disabled={isPending} loading={isPending}>
       {isPending ? 'Saving…' : label}
-    </button>
+    </Button>
   )
 }
 
@@ -224,14 +189,15 @@ function CompanyTab() {
               Supported formats: JPEG, PNG, WebP — max 5 MB.
             </p>
             {pendingLogo && !logoUploadMutation.isPending && (
-              <button
+              <Button
                 type="button"
+                size="sm"
+                className="mt-3"
+                icon={Save}
                 onClick={() => logoUploadMutation.mutate(pendingLogo)}
-                className="flex items-center gap-2 mt-3 px-4 py-2 rounded-lg text-[12px] font-bold text-white"
-                style={{ background: 'var(--brand-primary)' }}
               >
-                <Save className="h-3.5 w-3.5" /> Save Logo
-              </button>
+                Save Logo
+              </Button>
             )}
           </div>
         </div>
@@ -241,40 +207,20 @@ function CompanyTab() {
       <SectionCard title="Company Information" description="Basic business details used on invoices and reports">
         <form onSubmit={handleSubmit(saveMutation.mutate)} className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Company Name *" error={errors.companyName?.message}>
-              <FInput placeholder="Himalayan Wholesale Suppliers" error={!!errors.companyName} {...register('companyName')} />
-            </Field>
-            <Field label="Business Type">
-              <FInput placeholder="Wholesale / Retail" {...register('businessType')} />
-            </Field>
-            <Field label="Phone">
-              <FInput placeholder="+977-01-..." {...register('phone')} />
-            </Field>
-            <Field label="Email">
-              <FInput type="email" placeholder="info@company.com" {...register('email')} />
-            </Field>
-            <Field label="PAN / VAT Number">
-              <FInput placeholder="12345678" {...register('taxNumber')} />
-            </Field>
-            <Field label="Currency">
-              <FSelect {...register('currency')}>
-                <option value="NPR">NPR (Nepali Rupee)</option>
-                <option value="USD">USD</option>
-                <option value="INR">INR</option>
-              </FSelect>
-            </Field>
-            <Field label="Fiscal Year Start">
-              <FSelect {...register('fiscalYearStart')}>
-                {MONTHS_BS.map(m => <option key={m} value={m}>{m}</option>)}
-              </FSelect>
-            </Field>
+            <Input label="Company Name *" placeholder="Himalayan Wholesale Suppliers" error={errors.companyName?.message} {...register('companyName')} />
+            <Input label="Business Type" placeholder="Wholesale / Retail" {...register('businessType')} />
+            <Input label="Phone" placeholder="+977-01-..." {...register('phone')} />
+            <Input label="Email" type="email" placeholder="info@company.com" error={errors.email?.message} {...register('email')} />
+            <Input label="PAN / VAT Number" placeholder="12345678" {...register('taxNumber')} />
+            <Select label="Currency" {...register('currency')} options={[
+              { value: 'NPR', label: 'NPR (Nepali Rupee)' },
+              { value: 'USD', label: 'USD' },
+              { value: 'INR', label: 'INR' },
+            ]} />
+            <Select label="Fiscal Year Start" {...register('fiscalYearStart')}
+              options={MONTHS_BS.map(m => ({ value: m, label: m }))} />
           </div>
-          <Field label="Address">
-            <textarea rows={2} placeholder="Full business address…"
-              className="w-full px-3 py-2.5 rounded-lg text-[13px] outline-none resize-none"
-              style={{ background: 'var(--surface-muted)', border: '1.5px solid var(--border)', color: 'var(--text-primary)' }}
-              {...register('address')} />
-          </Field>
+          <Textarea label="Address" rows={2} placeholder="Full business address…" {...register('address')} />
           <SaveBtn isPending={saveMutation.isPending} />
           {isDirty && <UnsavedBanner />}
         </form>
@@ -395,20 +341,16 @@ function AITab() {
   return (
     <SectionCard title="AI Forecasting Configuration" description="Control how the AI demand prediction service operates">
       <div className="space-y-4">
-        <Field label="Default Forecast Model">
-          <FSelect value={cfg.defaultModel} onChange={e => setCfg(p => ({ ...p, defaultModel: e.target.value }))}>
-            {MODEL_OPTIONS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-          </FSelect>
-        </Field>
+        <Select label="Default Forecast Model" value={cfg.defaultModel}
+          onChange={e => setCfg(p => ({ ...p, defaultModel: e.target.value }))}
+          options={MODEL_OPTIONS} />
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Forecast Horizon (days)">
-            <FInput type="number" min={7} max={90} value={cfg.forecastDays}
-              onChange={e => setCfg(p => ({ ...p, forecastDays: parseInt(e.target.value) || 30 }))} />
-          </Field>
-          <Field label="Min Training Data (days)">
-            <FInput type="number" min={7} max={365} value={cfg.trainingThreshold}
-              onChange={e => setCfg(p => ({ ...p, trainingThreshold: parseInt(e.target.value) || 30 }))} />
-          </Field>
+          <Input label="Forecast Horizon (days)" type="number" min={7} max={90} value={cfg.forecastDays}
+            onChange={e => setCfg(p => ({ ...p, forecastDays: parseInt(e.target.value) || 30 }))}
+            hint={(cfg.forecastDays < 7 || cfg.forecastDays > 90) ? 'Recommended range: 7–90 days' : undefined} />
+          <Input label="Min Training Data (days)" type="number" min={7} max={365} value={cfg.trainingThreshold}
+            onChange={e => setCfg(p => ({ ...p, trainingThreshold: parseInt(e.target.value) || 30 }))}
+            hint={(cfg.trainingThreshold < 7 || cfg.trainingThreshold > 365) ? 'Recommended range: 7–365 days' : undefined} />
         </div>
         <Toggle
           checked={cfg.enableAutoForecast}
@@ -459,12 +401,12 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-6 pb-8">
-      <div>
-        <h1 className="text-[22px] font-bold" style={{ color: 'var(--text-primary)' }}>Settings</h1>
-        <p className="text-[13px] mt-1" style={{ color: 'var(--text-muted)' }}>
-          Manage system configuration and preferences
-        </p>
-      </div>
+      <PageHeader
+        icon={SettingsIcon}
+        eyebrow="Administration"
+        title="Settings"
+        subtitle="Manage system configuration and preferences"
+      />
 
       {/* Tabs */}
       <div className="flex gap-1 p-1 rounded-xl w-fit" style={{ background: 'var(--surface-muted)' }}>

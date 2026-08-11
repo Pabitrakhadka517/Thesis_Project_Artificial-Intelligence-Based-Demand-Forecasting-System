@@ -82,7 +82,7 @@ export default function ResetPasswordPage() {
           <div className="flex items-center justify-center mb-5">
             <div className="h-16 w-16 rounded-full flex items-center justify-center"
               style={{ background: 'rgba(217,119,6,.1)', border: '2px solid rgba(217,119,6,.25)' }}>
-              <Clock className="h-8 w-8" style={{ color: '#D97706' }} />
+              <Clock className="h-8 w-8" style={{ color: 'var(--brand-amber)' }} />
             </div>
           </div>
           <h3 className="text-[22px] font-bold mb-2" style={{ color: 'var(--text-primary)' }}>Link expired</h3>
@@ -94,7 +94,7 @@ export default function ResetPasswordPage() {
           </Link>
           <div className="mt-4">
             <Link to="/login" className="text-[13px] font-medium" style={{ color: 'var(--text-muted)' }}
-              onMouseEnter={e => e.currentTarget.style.color = '#2563EB'}
+              onMouseEnter={e => e.currentTarget.style.color = 'var(--brand-blue)'}
               onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}>
               Back to sign in
             </Link>
@@ -112,7 +112,7 @@ export default function ResetPasswordPage() {
         {/* Logo */}
         <div className="flex items-center gap-2.5 mb-8">
           <div className="h-9 w-9 rounded-xl flex items-center justify-center"
-            style={{ background: 'var(--brand-primary)', boxShadow: '0 4px 16px rgba(3,4,94,.35)' }}>
+            style={{ background: 'var(--brand-primary)' }}>
             <Zap className="h-4 w-4 text-white" strokeWidth={2.5} />
           </div>
           <span className="text-[17px] font-bold" style={{ color: 'var(--text-primary)' }}>{APP_NAME}</span>
@@ -180,7 +180,7 @@ export default function ResetPasswordPage() {
             <div className="flex items-center justify-center mb-5">
               <div className="h-16 w-16 rounded-full flex items-center justify-center"
                 style={{ background: 'rgba(22,163,74,.1)', border: '2px solid rgba(22,163,74,.25)' }}>
-                <CheckCircle className="h-8 w-8" style={{ color: '#16A34A' }} />
+                <CheckCircle className="h-8 w-8" style={{ color: 'var(--brand-green)' }} />
               </div>
             </div>
             <h3 className="text-[22px] font-bold mb-2" style={{ color: 'var(--text-primary)' }}>Password reset!</h3>
@@ -193,7 +193,7 @@ export default function ResetPasswordPage() {
         {!success && !isExpired && (
           <div className="mt-6 text-center">
             <Link to="/login" className="text-[13px] font-medium" style={{ color: 'var(--text-muted)' }}
-              onMouseEnter={e => e.currentTarget.style.color = '#2563EB'}
+              onMouseEnter={e => e.currentTarget.style.color = 'var(--brand-blue)'}
               onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}>
               Back to sign in
             </Link>
