@@ -1,5 +1,4 @@
 import { InboxIcon } from 'lucide-react'
-import { motion } from 'framer-motion'
 import { cn } from '@/utils'
 
 export function EmptyState({
@@ -8,16 +7,13 @@ export function EmptyState({
   description,
   action,
   className,
-  iconColor = '#94A3B8',
+  iconColor = 'var(--text-muted)',
   iconBg,
 }) {
   const bg = iconBg || 'var(--surface-muted)'
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
+    <div
       className={cn('flex flex-col items-center justify-center py-16 text-center px-6', className)}
     >
       <div
@@ -48,6 +44,6 @@ export function EmptyState({
       )}
 
       {action && <div className="mt-5">{action}</div>}
-    </motion.div>
+    </div>
   )
 }

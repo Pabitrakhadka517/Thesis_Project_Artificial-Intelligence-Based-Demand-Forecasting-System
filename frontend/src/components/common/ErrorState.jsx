@@ -11,7 +11,7 @@ export function ErrorState({ error, onRetry, title = 'Something went wrong' }) {
     <div className="flex flex-col items-center justify-center py-16 text-center">
       <div className="h-14 w-14 rounded-full flex items-center justify-center mb-4"
         style={{ background: 'rgba(239,68,68,.1)' }}>
-        <AlertCircle className="h-7 w-7" style={{ color: '#EF4444' }} />
+        <AlertCircle className="h-7 w-7" style={{ color: 'var(--brand-red)' }} />
       </div>
       <h3 className="text-base font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>
         {title}

@@ -35,7 +35,7 @@ export function TrainingProgress({ active = true, steps = DEFAULT_STEPS, stepDur
               className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold"
               style={{
                 background: done ? 'rgba(34,197,94,.12)' : current ? 'rgba(37,99,235,.12)' : 'var(--surface-muted)',
-                color:      done ? '#22C55E' : current ? '#2563EB' : 'var(--text-muted)',
+                color:      done ? 'var(--brand-green)' : current ? 'var(--brand-blue)' : 'var(--text-muted)',
               }}
             >
               {done

@@ -2,6 +2,7 @@ import { useEffect, useId, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X } from 'lucide-react'
 import { MOTION } from '@/constants'
+import { Button } from './Button'
 
 const FOCUSABLE = 'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])'
 
@@ -53,8 +54,7 @@ export function Modal({ open, onClose, title, children, width = 520, footer }) {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: MOTION.fast }}
-            className="absolute inset-0"
-            style={{ background: 'rgba(0,0,0,.55)', backdropFilter: 'blur(6px)' }}
+            className="absolute inset-0 overlay"
             onClick={onClose}
           />
           <motion.div
@@ -63,9 +63,9 @@ export function Modal({ open, onClose, title, children, width = 520, footer }) {
             aria-modal="true"
             aria-labelledby={titleId}
             tabIndex={-1}
-            initial={{ opacity: 0, y: 24, scale: 0.95 }}
+            initial={{ opacity: 0, y: 16, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 12, scale: 0.97 }}
+            exit={{ opacity: 0, y: 8, scale: 0.98 }}
             transition={{ duration: MOTION.base, ease: MOTION.ease }}
             className="relative w-full flex flex-col"
             style={{
@@ -74,7 +74,7 @@ export function Modal({ open, onClose, title, children, width = 520, footer }) {
               background: 'var(--surface-card)',
               border: '1px solid var(--border)',
               borderRadius: 'var(--r-xl)',
-              boxShadow: '0 30px 60px rgba(0,0,0,.25)',
+              boxShadow: 'var(--shadow-xl)',
             }}
           >
             {/* Header */}
@@ -125,21 +125,12 @@ export function ConfirmDialog({ open, onClose, onConfirm, title, description, co
         {description}
       </p>
       <div className="flex justify-end gap-2 mt-6">
-        <button
-          onClick={onClose}
-          className="px-4 py-2 rounded-lg text-[13px] font-semibold transition-colors"
-          style={{ background: 'var(--surface-muted)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}
-        >
+        <Button variant="secondary" onClick={onClose}>
           Cancel
-        </button>
-        <button
-          onClick={onConfirm}
-          disabled={loading}
-          className="px-4 py-2 rounded-lg text-[13px] font-semibold text-white transition-all disabled:opacity-50"
-          style={{ background: 'linear-gradient(135deg,#B91C1C,#EF4444)', boxShadow: '0 2px 8px rgba(239,68,68,.3)' }}
-        >
+        </Button>
+        <Button variant="danger" onClick={onConfirm} loading={loading}>
           {loading ? 'Deleting…' : confirmLabel}
-        </button>
+        </Button>
       </div>
     </Modal>
   )

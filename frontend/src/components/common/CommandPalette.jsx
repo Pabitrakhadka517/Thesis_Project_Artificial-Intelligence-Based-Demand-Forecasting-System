@@ -5,7 +5,7 @@ import {
   Search, X, LayoutDashboard, Package, TrendingUp, BarChart3, Bell,
   FileText, Settings, Users, Truck, ShoppingCart, Tag, Scale,
   ArrowRight, Lightbulb, ClipboardList, ShoppingBag, Receipt,
-  History, Cpu,
+  History, Cpu, Database, Warehouse,
 } from 'lucide-react'
 import { useDispatch } from 'react-redux'
 import { setFilters as setInventoryFilters } from '@/store/slices/inventorySlice'
@@ -18,7 +18,7 @@ function buildItems(prefix, isAdmin, isManager, isStaff) {
   // Everyone
   items.push(
     { label: 'Dashboard',  icon: LayoutDashboard, to: `${prefix}/dashboard`, group: 'Navigate' },
-    { label: 'Inventory',  icon: Package,         to: `${prefix}/inventory`, group: 'Navigate' },
+    { label: 'Inventory',  icon: Warehouse,       to: `${prefix}/inventory`, group: 'Navigate' },
     { label: 'Alerts',     icon: Bell,            to: `${prefix}/alerts`,    group: 'Navigate' },
   )
 
@@ -49,6 +49,7 @@ function buildItems(prefix, isAdmin, isManager, isStaff) {
       { label: 'Users & Roles',  icon: Users,         to: '/admin/users',          group: 'Admin' },
       { label: 'Audit Logs',     icon: ClipboardList, to: '/admin/audit-logs',     group: 'Admin' },
       { label: 'Stock Movements',icon: History,       to: '/admin/stock-movements', group: 'Admin' },
+      { label: 'Synthetic Data', icon: Database,      to: '/admin/synthetic-data', group: 'Admin' },
       { label: 'Settings',       icon: Settings,      to: '/admin/settings',       group: 'Admin' },
     )
   }
@@ -125,8 +126,7 @@ export function CommandPalette({ open, onClose }) {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: MOTION.fast }}
-            className="fixed inset-0 z-60"
-            style={{ background: 'rgba(0,0,0,.55)', backdropFilter: 'blur(4px)' }}
+            className="fixed inset-0 z-60 overlay"
             onClick={onClose}
           />
 

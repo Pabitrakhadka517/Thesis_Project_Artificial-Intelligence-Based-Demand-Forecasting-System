@@ -113,12 +113,12 @@ export function ImageUpload({
           sz.outer, radius,
           'relative overflow-hidden flex items-center justify-center shrink-0',
           'cursor-pointer select-none transition-all duration-150',
-          isDragging ? 'scale-105 ring-2 ring-offset-2' : '',
+          isDragging ? 'scale-105' : '',
           disabled || uploading ? 'cursor-not-allowed opacity-60' : 'hover:opacity-90',
         ].join(' ')}
         style={{
           background:  displayUrl ? 'transparent' : 'var(--surface-muted)',
-          border:      `2px dashed ${isError ? 'var(--error, #EF4444)' : isDragging ? '#2563EB' : 'var(--border)'}`,
+          border:      `2px dashed ${isError ? 'var(--brand-red)' : isDragging ? 'var(--brand-blue)' : 'var(--border)'}`,
           outline:     'none',
         }}
       >
@@ -199,7 +199,7 @@ export function ImageUpload({
             style={{
               background: 'rgba(239,68,68,.08)',
               border:     '1px solid rgba(239,68,68,.2)',
-              color:      '#EF4444',
+              color:      'var(--brand-red)',
             }}
           >
             <X className="h-3 w-3" /> Remove
@@ -216,7 +216,7 @@ export function ImageUpload({
 
       {/* ── Error message ── */}
       {isError && (
-        <p className="flex items-center gap-1 text-[11px]" style={{ color: 'var(--error, #EF4444)' }}>
+        <p className="flex items-center gap-1 text-[11px]" style={{ color: 'var(--brand-red)' }}>
           <AlertCircle className="h-3 w-3 shrink-0" />
           {error || localError}
         </p>
@@ -224,7 +224,7 @@ export function ImageUpload({
 
       {/* ── Success indicator (when preview is set and not uploading) ── */}
       {preview && !uploading && !isError && (
-        <p className="flex items-center gap-1 text-[10px]" style={{ color: '#10B981' }}>
+        <p className="flex items-center gap-1 text-[10px]" style={{ color: 'var(--brand-green)' }}>
           <CheckCircle2 className="h-3 w-3" /> Ready to upload
         </p>
       )}

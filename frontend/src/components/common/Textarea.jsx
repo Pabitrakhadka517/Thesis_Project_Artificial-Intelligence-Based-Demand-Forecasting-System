@@ -1,34 +1,39 @@
 import { cn } from '@/utils'
 import { forwardRef } from 'react'
 
-export const Select = forwardRef(function Select(
-  { className, label, error, options = [], placeholder, ...props },
+export const Textarea = forwardRef(function Textarea(
+  { className, label, error, hint, rows = 3, ...props },
   ref
 ) {
-  const selectId = props.id || (props.name ? `select-${props.name}` : undefined)
-  const errorId  = selectId ? `${selectId}-error` : undefined
+  const areaId  = props.id || (props.name ? `textarea-${props.name}` : undefined)
+  const errorId = areaId ? `${areaId}-error` : undefined
+  const hintId  = areaId ? `${areaId}-hint`  : undefined
   return (
     <div className={cn('space-y-1.5', className)}>
       {label && (
         <label
-          htmlFor={selectId}
+          htmlFor={areaId}
           className="block text-[12px] font-semibold uppercase tracking-wide"
           style={{ color: 'var(--text-muted)' }}
         >
           {label}
         </label>
       )}
-      <select
+      <textarea
         ref={ref}
-        id={selectId}
+        id={areaId}
+        rows={rows}
         aria-invalid={error ? 'true' : undefined}
-        aria-describedby={error ? errorId : undefined}
-        className="w-full text-[13px] outline-none transition-all appearance-none cursor-pointer"
+        aria-describedby={error ? errorId : (hint ? hintId : undefined)}
+        className={cn(
+          'w-full text-[13px] outline-none transition-all resize-y',
+          'disabled:opacity-50 disabled:cursor-not-allowed',
+        )}
         style={{
-          background: `var(--surface-input) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394A3B8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 10px center`,
+          background: 'var(--surface-input)',
           border: error ? '1.5px solid var(--brand-red)' : '1.5px solid var(--border)',
           borderRadius: 'var(--r-md)',
-          padding: '9px 32px 9px 12px',
+          padding: '9px 12px',
           color: 'var(--text-primary)',
         }}
         onFocus={e => {
@@ -40,18 +45,12 @@ export const Select = forwardRef(function Select(
           e.target.style.boxShadow = 'none'
         }}
         {...props}
-      >
-        {placeholder && (
-          <option value="">{placeholder}</option>
-        )}
-        {options.map((opt) => (
-          <option key={opt.value} value={opt.value}>
-            {opt.label}
-          </option>
-        ))}
-      </select>
+      />
       {error && (
         <p id={errorId} role="alert" className="text-[11px] font-medium" style={{ color: 'var(--brand-red)' }}>{error}</p>
+      )}
+      {hint && !error && (
+        <p id={hintId} className="text-[11px]" style={{ color: 'var(--text-muted)' }}>{hint}</p>
       )}
     </div>
   )

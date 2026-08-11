@@ -1,11 +1,11 @@
 import { cn } from '@/utils'
 
-export function Card({ className, children, glass = false, ...props }) {
+export function Card({ className, children, ...props }) {
   return (
     <div
-      className={cn(glass ? 'glass' : '', className)}
+      className={className}
       style={{
-        background: glass ? undefined : 'var(--surface-card)',
+        background: 'var(--surface-card)',
         border: '1px solid var(--border)',
         borderRadius: 'var(--r-lg)',
         boxShadow: 'var(--shadow-sm)',

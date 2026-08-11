@@ -1,28 +1,18 @@
 import { cn } from '@/utils'
+import { STOCK_STATUS_STYLES, ALERT_PRIORITY_STYLES } from '@/constants/statusColors'
 
 const BADGE_STYLES = {
   default:  { background: 'var(--surface-muted)', color: 'var(--text-secondary)', border: '1px solid var(--border)' },
-  primary:  { background: 'rgba(37,99,235,.1)',    color: '#2563EB', border: '1px solid rgba(37,99,235,.2)' },
-  success:  { background: 'rgba(34,197,94,.1)',    color: '#16A34A', border: '1px solid rgba(34,197,94,.2)' },
-  warning:  { background: 'rgba(245,158,11,.1)',   color: '#B45309', border: '1px solid rgba(245,158,11,.2)' },
-  danger:   { background: 'rgba(239,68,68,.1)',    color: '#DC2626', border: '1px solid rgba(239,68,68,.2)' },
-  info:     { background: 'rgba(6,182,212,.1)',    color: '#0E7490', border: '1px solid rgba(6,182,212,.2)' },
-  purple:   { background: 'rgba(139,92,246,.1)',   color: '#7C3AED', border: '1px solid rgba(139,92,246,.2)' },
-  ai:       { background: 'linear-gradient(135deg,rgba(109,40,217,.12),rgba(139,92,246,.12))', color: '#7C3AED', border: '1px solid rgba(139,92,246,.25)' },
+  primary:  { background: 'var(--tint-primary)',   color: 'var(--brand-blue)',  border: '1px solid var(--tint-primary-border)' },
+  success:  { background: 'var(--tint-success)',   color: 'var(--color-success)', border: '1px solid var(--tint-success-border)' },
+  warning:  { background: 'var(--tint-warning)',   color: 'var(--brand-amber)', border: '1px solid var(--tint-warning-border)' },
+  danger:   { background: 'var(--tint-danger)',    color: 'var(--color-danger)', border: '1px solid var(--tint-danger-border)' },
+  info:     { background: 'var(--tint-info)',      color: 'var(--color-info)',  border: '1px solid var(--tint-info-border)' },
+  purple:   { background: 'var(--tint-purple)',    color: 'var(--brand-purple)', border: '1px solid var(--tint-purple-border)' },
+  ai:       { background: 'var(--tint-purple)',    color: 'var(--brand-purple)', border: '1px solid var(--tint-purple-border)' },
 }
 
-const DARK_BADGE_STYLES = {
-  default:  { background: 'rgba(30,41,59,.8)',   color: '#94A3B8' },
-  primary:  { background: 'rgba(37,99,235,.15)',  color: '#60A5FA' },
-  success:  { background: 'rgba(34,197,94,.15)',  color: '#4ADE80' },
-  warning:  { background: 'rgba(245,158,11,.15)', color: '#FCD34D' },
-  danger:   { background: 'rgba(239,68,68,.15)',  color: '#F87171' },
-  info:     { background: 'rgba(6,182,212,.15)',  color: '#22D3EE' },
-  purple:   { background: 'rgba(139,92,246,.15)', color: '#A78BFA' },
-  ai:       { background: 'rgba(139,92,246,.15)', color: '#A78BFA' },
-}
-
-export function Badge({ children, className, variant = 'default', dot = false, ...props }) {
+export function Badge({ children, className, variant = 'default', dot = false, style: extraStyle, ...props }) {
   const s = BADGE_STYLES[variant] || BADGE_STYLES.default
   return (
     <span
@@ -36,6 +26,7 @@ export function Badge({ children, className, variant = 'default', dot = false, .
         fontSize: '11px',
         lineHeight: '18px',
         whiteSpace: 'nowrap',
+        ...extraStyle,
       }}
       {...props}
     >
@@ -50,27 +41,26 @@ export function Badge({ children, className, variant = 'default', dot = false, .
   )
 }
 
-const STATUS_MAP = {
-  healthy:      { variant: 'success',  label: 'Healthy',      dot: true },
-  low:          { variant: 'warning',  label: 'Low Stock',    dot: true },
-  critical:     { variant: 'danger',   label: 'Critical',     dot: true },
-  overstock:    { variant: 'primary',  label: 'Overstock',    dot: true },
-  out_of_stock: { variant: 'danger',   label: 'Out of Stock', dot: true },
-}
-
-const PRIORITY_MAP = {
-  low:      { variant: 'info',    label: 'Low',      dot: true },
-  medium:   { variant: 'warning', label: 'Medium',   dot: true },
-  high:     { variant: 'danger',  label: 'High',     dot: true },
-  critical: { variant: 'danger',  label: 'Critical', dot: true },
-}
+// Both badges below render directly from the canonical maps in
+// constants/statusColors.js (not the generic BADGE_STYLES variants above) so
+// the full 5-/4-way color distinction survives — e.g. "Out of Stock" reads as
+// a visibly more severe red than "Critical", and "High" alert priority stays
+// distinct from "Critical" instead of collapsing onto the same danger color.
 
 export function StockStatusBadge({ status }) {
-  const m = STATUS_MAP[status] || STATUS_MAP.healthy
-  return <Badge variant={m.variant} dot={m.dot}>{m.label}</Badge>
+  const m = STOCK_STATUS_STYLES[status] || STOCK_STATUS_STYLES.healthy
+  return (
+    <Badge style={{ background: m.tint, color: m.color, border: `1px solid ${m.tintBorder}` }} dot>
+      {m.label}
+    </Badge>
+  )
 }
 
 export function AlertPriorityBadge({ priority }) {
-  const m = PRIORITY_MAP[priority] || PRIORITY_MAP.medium
-  return <Badge variant={m.variant} dot={m.dot}>{m.label}</Badge>
+  const m = ALERT_PRIORITY_STYLES[priority] || ALERT_PRIORITY_STYLES.medium
+  return (
+    <Badge style={{ background: m.tint, color: m.color, border: `1px solid ${m.tintBorder}` }} dot>
+      {m.label}
+    </Badge>
+  )
 }

@@ -89,7 +89,7 @@ function PageBtn({ n, active, onClick }) {
       aria-current={active ? 'page' : undefined}
       className="h-8 w-8 rounded-lg text-sm font-medium"
       style={{
-        background: active ? '#2563EB' : 'transparent',
+        background: active ? 'var(--brand-blue)' : 'transparent',
         color: active ? '#fff' : 'var(--text-secondary)',
       }}
       onMouseEnter={e => { if (!active) e.currentTarget.style.background = 'var(--surface-muted)' }}

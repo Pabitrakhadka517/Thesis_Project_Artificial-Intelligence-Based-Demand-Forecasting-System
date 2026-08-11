@@ -3,11 +3,11 @@ import { Loader2 } from 'lucide-react'
 
 const VARIANTS = {
   primary: {
-    background: 'var(--brand-primary)',
+    background: 'var(--brand-blue)',
     color: '#fff',
     border: 'none',
-    boxShadow: '0 2px 8px rgba(3,4,94,.4)',
-    hover: { boxShadow: '0 4px 14px rgba(3,4,94,.5)', transform: 'translateY(-1px)' },
+    boxShadow: 'var(--shadow-xs)',
+    hover: { background: '#1D4ED8' },
   },
   secondary: {
     background: 'var(--surface-muted)',
@@ -16,10 +16,11 @@ const VARIANTS = {
     boxShadow: 'none',
   },
   danger: {
-    background: 'linear-gradient(135deg,#B91C1C,#EF4444)',
+    background: 'var(--brand-red)',
     color: '#fff',
     border: 'none',
-    boxShadow: '0 2px 8px rgba(239,68,68,.3)',
+    boxShadow: 'var(--shadow-xs)',
+    hover: { background: '#DC2626' },
   },
   ghost: {
     background: 'transparent',
@@ -34,16 +35,18 @@ const VARIANTS = {
     boxShadow: 'none',
   },
   success: {
-    background: 'linear-gradient(135deg,#15803D,#22C55E)',
+    background: 'var(--brand-green)',
     color: '#fff',
     border: 'none',
-    boxShadow: '0 2px 8px rgba(34,197,94,.3)',
+    boxShadow: 'var(--shadow-xs)',
+    hover: { background: '#16A34A' },
   },
   ai: {
-    background: 'linear-gradient(135deg,#6D28D9,#8B5CF6)',
+    background: '#7C3AED',
     color: '#fff',
     border: 'none',
-    boxShadow: '0 2px 8px rgba(139,92,246,.35)',
+    boxShadow: 'var(--shadow-xs)',
+    hover: { background: '#6D28D9' },
   },
 }
 

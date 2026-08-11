@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import {
   ResponsiveContainer,
   BarChart as ReBarChart,
@@ -10,66 +11,12 @@ import {
   Cell,
 } from 'recharts'
 import { CHART_COLORS } from '@/constants'
+import { ChartTooltip as CustomTooltip } from './ChartTooltip'
+import { ChartEmptyState } from './ChartEmptyState'
 
 const defaultColors = Object.values(CHART_COLORS)
 
-function CustomTooltip({ active, payload, label, formatX, formatY }) {
-  if (!active || !payload?.length) return null
-  return (
-    <div style={{
-      background: 'var(--surface-card)',
-      border: '1px solid var(--border)',
-      borderRadius: '10px',
-      padding: '10px 14px',
-      boxShadow: 'var(--shadow-lg)',
-      fontSize: '12px',
-      minWidth: '130px',
-    }}>
-      {label != null && (
-        <p style={{
-          color: 'var(--text-muted)',
-          marginBottom: '8px',
-          fontSize: '11px',
-          fontWeight: 600,
-          borderBottom: '1px solid var(--border-subtle)',
-          paddingBottom: '6px',
-        }}>
-          {formatX ? formatX(label) : label}
-        </p>
-      )}
-      {payload.map((entry, i) => (
-        <div key={i} style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          marginBottom: i < payload.length - 1 ? '4px' : 0,
-        }}>
-          <span style={{
-            display: 'inline-block',
-            width: '8px',
-            height: '8px',
-            borderRadius: '2px',
-            background: entry.fill || entry.color,
-            flexShrink: 0,
-          }} />
-          <span style={{ color: 'var(--text-secondary)', flex: 1 }}>{entry.name}</span>
-          <span style={{
-            color: 'var(--text-primary)',
-            fontWeight: 700,
-            fontVariantNumeric: 'tabular-nums',
-            marginLeft: '4px',
-          }}>
-            {formatY
-              ? formatY(entry.value)
-              : entry.value != null ? Number(entry.value).toLocaleString() : '—'}
-          </span>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-export function BarChart({
+export const BarChart = memo(function BarChart({
   data = [],
   bars = [],
   xKey = 'label',
@@ -79,8 +26,11 @@ export function BarChart({
   formatXAxis,
   formatYAxis,
   colorByIndex = false,
+  emptyMessage,
 }) {
   const layout = horizontal ? 'vertical' : 'horizontal'
+
+  if (data.length === 0) return <ChartEmptyState height={height} message={emptyMessage} />
 
   return (
     <ResponsiveContainer width="100%" height={height}>
@@ -143,13 +93,15 @@ export function BarChart({
           cursor={{ fill: 'var(--surface-muted)', opacity: 0.5 }}
         />
 
-        <Legend
-          wrapperStyle={{
-            fontSize: '11px',
-            paddingTop: '10px',
-            color: 'var(--text-secondary)',
-          }}
-        />
+        {bars.length > 1 && (
+          <Legend
+            wrapperStyle={{
+              fontSize: '11px',
+              paddingTop: '10px',
+              color: 'var(--text-secondary)',
+            }}
+          />
+        )}
 
         {bars.map((bar, i) => {
           const color = bar.color || defaultColors[i % defaultColors.length]
@@ -175,4 +127,4 @@ export function BarChart({
       </ReBarChart>
     </ResponsiveContainer>
   )
-}
+})

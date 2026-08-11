@@ -38,7 +38,7 @@ export function RolePermissionsPanel() {
               <ul className="space-y-1">
                 {role.perms.map(p => (
                   <li key={p} className="flex items-start gap-1.5 text-[11px]" style={{ color: 'var(--text-secondary)' }}>
-                    <Check className="h-3 w-3 mt-0.5 shrink-0" style={{ color: '#22C55E' }} />
+                    <Check className="h-3 w-3 mt-0.5 shrink-0" style={{ color: 'var(--brand-green)' }} />
                     {p}
                   </li>
                 ))}

@@ -1,18 +1,17 @@
-﻿import { useState, useEffect, useRef } from 'react'
-import { motion } from 'framer-motion'
+﻿import { useState, useEffect, useRef, memo } from 'react'
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import { cn, formatNumber } from '@/utils'
 
 const ACCENT = {
-  blue:   { top: 'linear-gradient(90deg,var(--brand-primary),#2563EB)', icon: 'linear-gradient(135deg,var(--brand-primary),#2563EB)', iconColor: '#BFDBFE', glow: 'rgba(37,99,235,.20)',  solid: '#2563EB' },
-  green:  { top: 'linear-gradient(90deg,#15803D,#22C55E)', icon: 'linear-gradient(135deg,#166534,#22C55E)', iconColor: '#BBF7D0', glow: 'rgba(34,197,94,.18)',   solid: '#22C55E' },
-  purple: { top: 'linear-gradient(90deg,#6D28D9,#8B5CF6)', icon: 'linear-gradient(135deg,#5B21B6,#8B5CF6)', iconColor: '#DDD6FE', glow: 'rgba(139,92,246,.20)', solid: '#8B5CF6' },
-  amber:  { top: 'linear-gradient(90deg,#B45309,#F59E0B)', icon: 'linear-gradient(135deg,#92400E,#F59E0B)', iconColor: '#FDE68A', glow: 'rgba(245,158,11,.18)',  solid: '#F59E0B' },
-  red:    { top: 'linear-gradient(90deg,#B91C1C,#EF4444)', icon: 'linear-gradient(135deg,#991B1B,#EF4444)', iconColor: '#FECACA', glow: 'rgba(239,68,68,.20)',  solid: '#EF4444' },
-  cyan:   { top: 'linear-gradient(90deg,#0E7490,#06B6D4)', icon: 'linear-gradient(135deg,#155E75,#06B6D4)', iconColor: '#A5F3FC', glow: 'rgba(6,182,212,.18)',   solid: '#06B6D4' },
-  indigo: { top: 'linear-gradient(90deg,#4338CA,#6366F1)', icon: 'linear-gradient(135deg,#3730A3,#6366F1)', iconColor: '#C7D2FE', glow: 'rgba(99,102,241,.20)', solid: '#6366F1' },
-  teal:   { top: 'linear-gradient(90deg,#0F766E,#14B8A6)', icon: 'linear-gradient(135deg,#134E4A,#2DD4BF)', iconColor: '#99F6E4', glow: 'rgba(20,184,166,.18)',  solid: '#14B8A6' },
-  orange: { top: 'linear-gradient(90deg,#C2410C,#F97316)', icon: 'linear-gradient(135deg,#9A3412,#F97316)', iconColor: '#FED7AA', glow: 'rgba(249,115,22,.20)', solid: '#F97316' },
+  blue:   { solid: '#2563EB' },
+  green:  { solid: '#16A34A' },
+  purple: { solid: '#7C3AED' },
+  amber:  { solid: '#B45309' },
+  red:    { solid: '#DC2626' },
+  cyan:   { solid: '#0E7490' },
+  indigo: { solid: '#4338CA' },
+  teal:   { solid: '#0F766E' },
+  orange: { solid: '#C2410C' },
 }
 
 function useCountUp(end, duration = 1000) {
@@ -75,7 +74,7 @@ function Skeleton() {
   )
 }
 
-export function KPICard({
+export const KPICard = memo(function KPICard({
   title,
   value,
   unit,
@@ -112,10 +111,7 @@ export function KPICard({
       : formatNumber(raw)
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.25 }}
+    <div
       className={cn('group relative overflow-hidden', className)}
       style={{
         background: 'var(--surface-card)',
@@ -124,27 +120,19 @@ export function KPICard({
         padding: '20px',
         paddingTop: '24px',
         boxShadow: 'var(--shadow-card)',
-        transition: 'box-shadow .2s ease, transform .2s ease',
+        transition: 'box-shadow .2s ease',
         cursor: 'default',
       }}
       onMouseEnter={e => {
-        e.currentTarget.style.boxShadow = `0 8px 28px ${accent.glow}, 0 4px 12px rgba(0,0,0,.06)`
-        e.currentTarget.style.transform = 'translateY(-2px)'
+        e.currentTarget.style.boxShadow = 'var(--shadow-md)'
       }}
       onMouseLeave={e => {
         e.currentTarget.style.boxShadow = 'var(--shadow-card)'
-        e.currentTarget.style.transform = 'none'
       }}
     >
-      {/* Gradient top accent bar */}
+      {/* Flat top accent line */}
       <div
         className="absolute top-0 left-0 right-0 h-0.75 pointer-events-none"
-        style={{ background: accent.top }}
-      />
-
-      {/* Background glow blob */}
-      <div
-        className="absolute -right-8 -top-8 h-32 w-32 rounded-full opacity-[.07] blur-3xl pointer-events-none"
         style={{ background: accent.solid }}
       />
 
@@ -156,7 +144,7 @@ export function KPICard({
             {title}
           </p>
           <p
-            className="text-[28px] font-bold leading-none num tracking-tight value-updated"
+            className="text-[28px] font-bold leading-none num tracking-tight"
             style={{ color: 'var(--text-primary)' }}
           >
             {displayValue}
@@ -173,15 +161,15 @@ export function KPICard({
 
         {Icon && (
           <div
-            className="rounded-xl flex items-center justify-center shrink-0"
+            className="flex items-center justify-center shrink-0"
             style={{
-              background: accent.icon,
-              width: '44px',
-              height: '44px',
-              boxShadow: `0 4px 14px ${accent.glow}`,
+              background: `${accent.solid}14`,
+              borderRadius: 'var(--r-md)',
+              width: '40px',
+              height: '40px',
             }}
           >
-            <Icon style={{ width: '20px', height: '20px', color: accent.iconColor }} />
+            <Icon style={{ width: '18px', height: '18px', color: accent.solid }} />
           </div>
         )}
       </div>
@@ -210,6 +198,6 @@ export function KPICard({
           </span>
         )}
       </div>
-    </motion.div>
+    </div>
   )
-}
+})

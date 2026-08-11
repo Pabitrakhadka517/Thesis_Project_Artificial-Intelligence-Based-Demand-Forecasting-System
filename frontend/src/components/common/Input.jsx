@@ -6,6 +6,8 @@ export const Input = forwardRef(function Input(
   ref
 ) {
   const inputId = props.id || (props.name ? `input-${props.name}` : undefined)
+  const errorId = inputId ? `${inputId}-error` : undefined
+  const hintId  = inputId ? `${inputId}-hint`  : undefined
   return (
     <div className={cn('space-y-1.5', className)}>
       {label && (
@@ -29,6 +31,8 @@ export const Input = forwardRef(function Input(
         <input
           ref={ref}
           id={inputId}
+          aria-invalid={error ? 'true' : undefined}
+          aria-describedby={error ? errorId : (hint ? hintId : undefined)}
           className={cn(
             'w-full text-[13px] outline-none transition-all',
             'disabled:opacity-50 disabled:cursor-not-allowed',
@@ -36,23 +40,19 @@ export const Input = forwardRef(function Input(
           style={{
             background: 'var(--surface-input)',
             border: error
-              ? '1.5px solid #EF4444'
+              ? '1.5px solid var(--brand-red)'
               : '1.5px solid var(--border)',
-            borderRadius: '8px',
+            borderRadius: 'var(--r-md)',
             padding: `9px ${rightElement ? '34px' : '12px'} 9px ${Icon ? '34px' : '12px'}`,
             color: 'var(--text-primary)',
           }}
           onFocus={e => {
-            if (!error) {
-              e.target.style.borderColor = '#2563EB'
-              e.target.style.boxShadow = '0 0 0 3px rgba(37,99,235,.12)'
-            }
+            e.target.style.borderColor = error ? 'var(--brand-red)' : 'var(--brand-blue)'
+            e.target.style.boxShadow = error ? 'var(--focus-ring-danger)' : 'var(--focus-ring)'
           }}
           onBlur={e => {
-            if (!error) {
-              e.target.style.borderColor = 'var(--border)'
-              e.target.style.boxShadow = 'none'
-            }
+            e.target.style.borderColor = error ? 'var(--brand-red)' : 'var(--border)'
+            e.target.style.boxShadow = 'none'
           }}
           {...props}
         />
@@ -63,10 +63,10 @@ export const Input = forwardRef(function Input(
         )}
       </div>
       {error && (
-        <p className="text-[11px] font-medium" style={{ color: '#EF4444' }}>{error}</p>
+        <p id={errorId} role="alert" className="text-[11px] font-medium" style={{ color: 'var(--brand-red)' }}>{error}</p>
       )}
       {hint && !error && (
-        <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>{hint}</p>
+        <p id={hintId} className="text-[11px]" style={{ color: 'var(--text-muted)' }}>{hint}</p>
       )}
     </div>
   )

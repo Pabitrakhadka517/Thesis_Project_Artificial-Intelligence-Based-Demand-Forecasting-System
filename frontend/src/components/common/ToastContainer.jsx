@@ -2,12 +2,13 @@ import { useSelector, useDispatch } from 'react-redux'
 import { AnimatePresence, motion } from 'framer-motion'
 import { X, CheckCircle, AlertCircle, Info, AlertTriangle } from 'lucide-react'
 import { selectNotifications, removeNotification } from '@/store/slices/uiSlice'
+import { MOTION } from '@/constants'
 
 const ICON_COLOR = {
-  success: '#22C55E',
-  error:   '#EF4444',
-  warning: '#EAB308',
-  default: '#3B82F6',
+  success: 'var(--color-success)',
+  error:   'var(--color-danger)',
+  warning: 'var(--color-warning)',
+  default: 'var(--brand-blue)',
 }
 
 const ICONS = {
@@ -36,13 +37,16 @@ export function ToastContainer() {
             <motion.div
               key={n.id}
               role={n.variant === 'error' ? 'alert' : 'status'}
-              initial={{ opacity: 0, x: 60 }}
+              initial={{ opacity: 0, x: 24 }}
               animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 60 }}
-              className="pointer-events-auto flex items-start gap-3 p-4 rounded-xl shadow-lg"
+              exit={{ opacity: 0, x: 24 }}
+              transition={{ duration: MOTION.base, ease: MOTION.ease }}
+              className="pointer-events-auto flex items-start gap-3 p-4"
               style={{
                 background: 'var(--surface-card)',
                 border: '1px solid var(--border)',
+                borderRadius: 'var(--r-lg)',
+                boxShadow: 'var(--shadow-lg)',
               }}
             >
               <Icon className="h-5 w-5 shrink-0 mt-0.5" style={{ color: iconColor }} />

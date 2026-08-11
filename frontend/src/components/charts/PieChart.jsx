@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import {
   ResponsiveContainer,
   PieChart as RePieChart,
@@ -7,6 +8,8 @@ import {
   Legend,
 } from 'recharts'
 import { CHART_COLORS } from '@/constants'
+import { PieChartTooltip as CustomTooltip } from './ChartTooltip'
+import { ChartEmptyState } from './ChartEmptyState'
 
 const defaultColors = Object.values(CHART_COLORS)
 
@@ -32,56 +35,20 @@ function renderCustomLabel({ cx, cy, midAngle, innerRadius, outerRadius, percent
   )
 }
 
-function CustomTooltip({ active, payload }) {
-  if (!active || !payload?.length) return null
-  const entry = payload[0]
-  return (
-    <div style={{
-      background: 'var(--surface-card)',
-      border: '1px solid var(--border)',
-      borderRadius: '10px',
-      padding: '10px 14px',
-      boxShadow: 'var(--shadow-lg)',
-      fontSize: '12px',
-      minWidth: '120px',
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <span style={{
-          display: 'inline-block',
-          width: '10px',
-          height: '10px',
-          borderRadius: '50%',
-          background: entry.payload?.fill || entry.color,
-          flexShrink: 0,
-        }} />
-        <span style={{ color: 'var(--text-secondary)', flex: 1 }}>{entry.name}</span>
-        <span style={{
-          color: 'var(--text-primary)',
-          fontWeight: 700,
-          fontVariantNumeric: 'tabular-nums',
-          marginLeft: '4px',
-        }}>
-          {entry.value != null ? Number(entry.value).toLocaleString() : '—'}
-        </span>
-      </div>
-      {entry.payload?.pct != null && (
-        <p style={{ color: 'var(--text-muted)', fontSize: '11px', marginTop: '3px', textAlign: 'right' }}>
-          {entry.payload.pct}%
-        </p>
-      )}
-    </div>
-  )
-}
 
-export function PieChart({
+export const PieChart = memo(function PieChart({
   data = [],
   nameKey = 'name',
   valueKey = 'value',
   height = 280,
   donut = false,
   colors = defaultColors,
+  emptyMessage,
+  formatValue,
 }) {
   const innerRadius = donut ? '52%' : 0
+
+  if (data.length === 0) return <ChartEmptyState height={height} message={emptyMessage} />
 
   return (
     <ResponsiveContainer width="100%" height={height}>
@@ -111,7 +78,7 @@ export function PieChart({
           ))}
         </Pie>
 
-        <Tooltip content={<CustomTooltip />} />
+        <Tooltip content={<CustomTooltip formatValue={formatValue} />} />
 
         <Legend
           wrapperStyle={{
@@ -126,4 +93,4 @@ export function PieChart({
       </RePieChart>
     </ResponsiveContainer>
   )
-}
+})
