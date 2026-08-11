@@ -53,15 +53,19 @@ export const FORECAST_HORIZONS = [
   { value: 'yearly', label: 'Yearly' },
 ]
 
+// Values kept numerically identical to CHART_PALETTE (constants/statusColors.js)
+// so a chart's default series colors match every other chart in the app —
+// previously drifted (#3b82f6 vs #2563EB etc.), which made e.g. "primary blue"
+// render as two visibly different shades depending on which chart you looked at.
 export const CHART_COLORS = {
-  primary: '#3b82f6',
-  success: '#22c55e',
-  warning: '#f59e0b',
-  danger: '#ef4444',
-  info: '#06b6d4',
-  purple: '#8b5cf6',
-  pink: '#ec4899',
-  indigo: '#6366f1',
+  primary: '#2563EB',
+  success: '#16A34A',
+  warning: '#F59E0B',
+  purple:  '#8B5CF6',
+  info:    '#06B6D4',
+  indigo:  '#6366F1',
+  teal:    '#14B8A6',
+  danger:  '#DC2626',
 }
 
 export const PAGINATION_PAGE_SIZES = [10, 20, 50, 100]

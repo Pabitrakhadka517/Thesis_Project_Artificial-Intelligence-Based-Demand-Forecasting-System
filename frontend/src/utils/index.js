@@ -7,7 +7,7 @@ export const BACKEND_URL = import.meta.env.VITE_API_URL
   ? import.meta.env.VITE_API_URL.replace('/api/v1', '').replace(/\/$/, '')
   : 'http://localhost:5000'
 
-const DEFAULT_IMG = `${BACKEND_URL}/product-images/default-product.jpg`
+const DEFAULT_IMG = `${BACKEND_URL}/product-images/default-product.png`
 
 /**
  * Return the full image URL for a product.
@@ -64,17 +64,18 @@ export function formatRs(value, { abbreviate = true } = {}) {
   return `Rs. ${n.toLocaleString()}`
 }
 
-// Canonical stock-status color/label map — single source of truth. Was
-// previously redefined independently across Products/Inventory/ProductDetail
-// pages with drifting hex values (e.g. "healthy" was #10B981 in some files
-// and #22C55E in others for the same semantic state).
-export const STOCK_STATUS = {
-  out_of_stock: { label: 'Out of Stock', color: '#EF4444', bg: 'rgba(239,68,68,.1)' },
-  critical:     { label: 'Critical',     color: '#F59E0B', bg: 'rgba(245,158,11,.1)' },
-  low:          { label: 'Low Stock',    color: '#F59E0B', bg: 'rgba(245,158,11,.1)' },
-  healthy:      { label: 'Healthy',      color: '#10B981', bg: 'rgba(16,185,129,.1)' },
-  overstock:    { label: 'Overstock',    color: '#6366F1', bg: 'rgba(99,102,241,.1)' },
-}
+// Stock-status color/label map consumed by Products/Inventory/ProductDetail
+// pages. Values are derived from constants/statusColors.js (the single
+// canonical source, also used by Badge.jsx's StockStatusBadge) rather than
+// redefined here, so this and the badge component can't drift apart again.
+import { STOCK_STATUS_STYLES } from '@/constants/statusColors'
+
+export const STOCK_STATUS = Object.fromEntries(
+  Object.entries(STOCK_STATUS_STYLES).map(([key, s]) => [
+    key,
+    { label: s.label, color: s.color, bg: s.tint },
+  ])
+)
 
 export function formatNumber(value, decimals = 0) {
   if (value == null) return '—'
