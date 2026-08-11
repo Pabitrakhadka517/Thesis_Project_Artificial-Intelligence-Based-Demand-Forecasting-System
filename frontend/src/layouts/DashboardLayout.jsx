@@ -8,6 +8,7 @@ import { ToastContainer } from '@/components/common/ToastContainer'
 import { CommandPalette } from '@/components/common/CommandPalette'
 import { setUnreadCount } from '@/store/slices/alertSlice'
 import { alertService } from '@/services/alertService'
+import { MOTION } from '@/constants'
 
 export function DashboardLayout() {
   const dispatch   = useDispatch()
@@ -53,10 +54,10 @@ export function DashboardLayout() {
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
               key={location.pathname}
-              initial={{ opacity: 0, y: 8 }}
+              initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 0.18, ease: [0.4, 0, 0.2, 1] }}
+              transition={{ duration: MOTION.base, ease: MOTION.ease }}
               style={{ padding: 'clamp(12px, 4vw, 24px)', minHeight: '100%' }}
             >
               <Outlet />

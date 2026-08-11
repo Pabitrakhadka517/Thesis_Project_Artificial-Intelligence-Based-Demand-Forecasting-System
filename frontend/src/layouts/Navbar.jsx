@@ -21,7 +21,8 @@ import { useRole } from '@/hooks/useRole'
 import { getInitials } from '@/utils'
 import { selectUnreadCount } from '@/store/slices/alertSlice'
 import { alertService } from '@/services/alertService'
-import { APP_NAME } from '@/constants'
+import { APP_NAME, MOTION } from '@/constants'
+import { ALERT_PRIORITY_STYLES } from '@/constants/statusColors'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -36,11 +37,11 @@ function timeAgo(dateStr) {
   return `${Math.floor(h / 24)}d ago`
 }
 
-const SEVERITY_META = {
-  critical: { color: '#EF4444', Icon: AlertCircle },
-  high:     { color: '#F59E0B', Icon: AlertTriangle },
-  medium:   { color: '#2563EB', Icon: Info },
-  low:      { color: '#06B6D4', Icon: Info },
+const SEVERITY_ICON = {
+  critical: AlertCircle,
+  high:     AlertTriangle,
+  medium:   Info,
+  low:      Info,
 }
 
 const SEGMENT_LABELS = {
@@ -75,17 +76,38 @@ function Breadcrumb() {
   const ROLE_LABELS = { admin: 'Admin', manager: 'Manager', staff: 'Staff' }
   const rolePrefix = ROLE_LABELS[segments[0]] || null
   const pageLabel  = SEGMENT_LABELS[segments[1]] || SEGMENT_LABELS[segments[0]] || 'Page'
+  const dashboardTo = segments[0] ? `/${segments[0]}/dashboard` : '/'
+  const crumbStyle = {
+    color: 'var(--text-muted)',
+    transition: 'color .12s',
+  }
   return (
-    <div className="hidden md:flex items-center gap-1.5 text-sm">
-      <span style={{ color: 'var(--text-muted)' }}>{APP_NAME}</span>
+    <div className="hidden sm:flex items-center gap-1.5 text-sm min-w-0">
+      <Link
+        to={dashboardTo}
+        style={crumbStyle}
+        className="shrink-0"
+        onMouseEnter={e => e.currentTarget.style.color = 'var(--text-primary)'}
+        onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
+      >
+        {APP_NAME}
+      </Link>
       {rolePrefix && (
         <>
-          <Sep className="h-3.5 w-3.5" style={{ color: 'var(--text-muted)' }} />
-          <span style={{ color: 'var(--text-muted)' }}>{rolePrefix}</span>
+          <Sep className="h-3.5 w-3.5 shrink-0" style={{ color: 'var(--text-muted)' }} />
+          <Link
+            to={dashboardTo}
+            style={crumbStyle}
+            className="shrink-0"
+            onMouseEnter={e => e.currentTarget.style.color = 'var(--text-primary)'}
+            onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
+          >
+            {rolePrefix}
+          </Link>
         </>
       )}
-      <Sep className="h-3.5 w-3.5" style={{ color: 'var(--text-muted)' }} />
-      <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>{pageLabel}</span>
+      <Sep className="h-3.5 w-3.5 shrink-0" style={{ color: 'var(--text-muted)' }} />
+      <span className="font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{pageLabel}</span>
     </div>
   )
 }
@@ -121,7 +143,7 @@ function NotificationPopover({ open, onClose, alertsPath }) {
           initial={{ opacity: 0, y: -6, scale: 0.97 }}
           animate={{ opacity: 1, y: 0,  scale: 1 }}
           exit={{ opacity: 0, y: -6, scale: 0.97 }}
-          transition={{ duration: 0.14, ease: [0.4, 0, 0.2, 1] }}
+          transition={{ duration: MOTION.fast, ease: MOTION.ease }}
           className="absolute right-0 top-full mt-2 w-80 rounded-xl z-50"
           style={{
             background: 'var(--surface-card)',
@@ -167,7 +189,8 @@ function NotificationPopover({ open, onClose, alertsPath }) {
               </div>
             ) : (
               alerts.map(alert => {
-                const { color, Icon } = SEVERITY_META[alert.priority] || SEVERITY_META.medium
+                const Icon = SEVERITY_ICON[alert.priority] || SEVERITY_ICON.medium
+                const { color, tint } = ALERT_PRIORITY_STYLES[alert.priority] || ALERT_PRIORITY_STYLES.medium
                 return (
                   <Link
                     key={alert._id}
@@ -180,7 +203,7 @@ function NotificationPopover({ open, onClose, alertsPath }) {
                   >
                     <div
                       className="h-7 w-7 rounded-full flex items-center justify-center shrink-0 mt-0.5"
-                      style={{ background: `${color}18` }}
+                      style={{ background: tint }}
                     >
                       <Icon className="h-3.5 w-3.5" style={{ color }} />
                     </div>
@@ -253,7 +276,7 @@ function UserDropdown({ open, onClose, user, profilePath, settingsPath, isAdmin,
           initial={{ opacity: 0, y: -6, scale: 0.97 }}
           animate={{ opacity: 1, y: 0,  scale: 1 }}
           exit={{ opacity: 0, y: -6, scale: 0.97 }}
-          transition={{ duration: 0.14, ease: [0.4, 0, 0.2, 1] }}
+          transition={{ duration: MOTION.fast, ease: MOTION.ease }}
           className="absolute right-0 top-full mt-2 w-56 rounded-xl z-50"
           style={{
             background: 'var(--surface-card)',
@@ -272,9 +295,9 @@ function UserDropdown({ open, onClose, user, profilePath, settingsPath, isAdmin,
             <span
               className="inline-flex items-center mt-2 px-2 py-0.5 rounded-full text-[10px] font-semibold"
               style={{
-                background: 'rgba(37,99,235,.1)',
+                background: 'var(--tint-primary)',
                 color: 'var(--brand-blue)',
-                border: '1px solid rgba(37,99,235,.2)',
+                border: '1px solid var(--tint-primary-border)',
               }}
             >
               {ROLE_LABELS[user?.role] || user?.role}
@@ -314,8 +337,8 @@ function UserDropdown({ open, onClose, user, profilePath, settingsPath, isAdmin,
             <button
               onClick={() => { onClose(); logout() }}
               className="w-full flex items-center gap-2.5 px-4 py-2 text-[13px] transition-colors"
-              style={{ color: '#EF4444' }}
-              onMouseEnter={e => e.currentTarget.style.background = 'rgba(239,68,68,.06)'}
+              style={{ color: 'var(--color-danger)' }}
+              onMouseEnter={e => e.currentTarget.style.background = 'var(--tint-danger)'}
               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
             >
               <LogOut className="h-4 w-4 shrink-0" />
@@ -442,7 +465,7 @@ export function Navbar({ onOpenCommandPalette }) {
         style={{
           background: searchFocused ? 'var(--surface-card)' : 'var(--surface-muted)',
           border: `1px solid ${searchFocused ? 'var(--brand-blue)' : 'var(--border)'}`,
-          boxShadow: searchFocused ? '0 0 0 3px rgba(37,99,235,.12)' : 'none',
+          boxShadow: searchFocused ? 'var(--focus-ring)' : 'none',
         }}
       >
         <Search className="h-3.5 w-3.5 shrink-0" style={{ color: 'var(--text-muted)' }} />
@@ -457,22 +480,19 @@ export function Navbar({ onOpenCommandPalette }) {
           className="flex-1 bg-transparent text-[13px] outline-none min-w-0"
           style={{ color: 'var(--text-primary)' }}
         />
-        <AnimatePresence>
-          {query ? (
-            <motion.button
-              initial={{ opacity: 0, scale: .8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: .8 }}
-              type="button" onClick={() => setQuery('')}
-              style={{ color: 'var(--text-muted)' }}
-            >
-              <X className="h-3.5 w-3.5" />
-            </motion.button>
-          ) : (
-            <kbd className="hidden lg:inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-mono border"
-              style={{ color: 'var(--text-muted)', borderColor: 'var(--border)', background: 'var(--surface-muted)' }}>
-              <Command className="h-2.5 w-2.5" />K
-            </kbd>
-          )}
-        </AnimatePresence>
+        {query ? (
+          <button
+            type="button" onClick={() => setQuery('')}
+            style={{ color: 'var(--text-muted)' }}
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        ) : (
+          <kbd className="hidden lg:inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-mono border"
+            style={{ color: 'var(--text-muted)', borderColor: 'var(--border)', background: 'var(--surface-muted)' }}>
+            <Command className="h-2.5 w-2.5" />K
+          </kbd>
+        )}
       </form>
 
       <div className="flex-1" />
@@ -488,18 +508,9 @@ export function Navbar({ onOpenCommandPalette }) {
           title={isDark ? 'Light mode' : 'Dark mode'}
           aria-label="Toggle theme"
         >
-          <AnimatePresence mode="wait" initial={false}>
-            <motion.span
-              key={isDark ? 'sun' : 'moon'}
-              initial={{ rotate: -90, opacity: 0 }}
-              animate={{ rotate: 0, opacity: 1 }}
-              exit={{ rotate: 90, opacity: 0 }}
-              transition={{ duration: .15 }}
-              className="flex items-center justify-center"
-            >
-              {isDark ? <Sun className="h-4.5 w-4.5" /> : <Moon className="h-4.5 w-4.5" />}
-            </motion.span>
-          </AnimatePresence>
+          <span className="flex items-center justify-center">
+            {isDark ? <Sun className="h-4.5 w-4.5" /> : <Moon className="h-4.5 w-4.5" />}
+          </span>
         </button>
 
         {/* Notification bell */}
@@ -520,8 +531,8 @@ export function Navbar({ onOpenCommandPalette }) {
               {unreadCount > 0 && (
                 <motion.span
                   initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }}
-                  className="absolute -top-0.5 -right-0.5 h-4 w-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white pulse-red"
-                  style={{ background: '#EF4444' }}
+                  className="absolute -top-0.5 -right-0.5 h-4 w-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white"
+                  style={{ background: 'var(--brand-red)' }}
                 >
                   {unreadCount > 9 ? '9+' : unreadCount}
                 </motion.span>
@@ -550,7 +561,7 @@ export function Navbar({ onOpenCommandPalette }) {
           >
             <div
               className="h-8 w-8 rounded-full flex items-center justify-center text-[13px] font-semibold text-white shrink-0"
-              style={{ background: 'var(--brand-primary)', boxShadow: '0 2px 8px rgba(3,4,94,.4)' }}
+              style={{ background: 'var(--brand-primary)' }}
             >
               {getInitials(user?.fullName || user?.email || 'U')}
             </div>
