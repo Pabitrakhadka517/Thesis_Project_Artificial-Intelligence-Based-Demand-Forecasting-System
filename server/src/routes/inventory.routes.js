@@ -9,6 +9,7 @@ const { managerOrAdmin } = require('../middleware/authorize')
 const { success, error, paginated } = require('../utils/response')
 
 const AI_BASE = process.env.AI_SERVICE_URL || 'http://localhost:8000'
+const AI_SERVICE_API_KEY = process.env.AI_SERVICE_API_KEY || ''
 
 router.use(protect)
 
@@ -25,7 +26,8 @@ router.get('/enriched', async (req, res) => {
     if (supplier) params.supplier = supplier
     if (status)   params.status   = status
 
-    const response = await axios.get(`${AI_BASE}/inventory/enriched`, { params, timeout: 15000 })
+    const response = await axios.get(`${AI_BASE}/inventory/enriched`, { params, timeout: 15000,
+      headers: { 'X-Internal-Api-Key': AI_SERVICE_API_KEY } })
     return res.status(response.status).json(response.data)
   } catch (err) {
     if (err.response) return res.status(err.response.status).json(err.response.data)

@@ -4,6 +4,7 @@ const Prediction = require('../models/Prediction')
 const { success, error, paginated } = require('../utils/response')
 
 const AI_BASE    = process.env.AI_SERVICE_URL || 'http://localhost:8000'
+const AI_SERVICE_API_KEY = process.env.AI_SERVICE_API_KEY || ''
 const CACHE_TTL  = 6 * 60 * 60 * 1000   // 6 hours in ms
 const AI_TIMEOUT = 120_000               // 2 min (Prophet can be slow)
 
@@ -12,7 +13,7 @@ const AI_TIMEOUT = 120_000               // 2 min (Prophet can be slow)
 async function callAI(path, method = 'GET', data = null) {
   try {
     const res = await axios({ method, url: `${AI_BASE}${path}`, data, timeout: AI_TIMEOUT,
-      headers: { 'Content-Type': 'application/json' } })
+      headers: { 'Content-Type': 'application/json', 'X-Internal-Api-Key': AI_SERVICE_API_KEY } })
     return { data: res.data, offline: false }
   } catch (err) {
     if (err.code === 'ECONNREFUSED' || err.code === 'ETIMEDOUT' ||

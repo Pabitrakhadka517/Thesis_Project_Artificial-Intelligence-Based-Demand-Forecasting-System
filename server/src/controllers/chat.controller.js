@@ -3,6 +3,7 @@ const ChatHistory = require('../models/ChatHistory')
 const { success, error } = require('../utils/response')
 
 const AI_BASE    = process.env.AI_SERVICE_URL || 'http://localhost:8000'
+const AI_SERVICE_API_KEY = process.env.AI_SERVICE_API_KEY || ''
 const AI_TIMEOUT = 90_000   // 90 s — LLM calls can be slow
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -15,8 +16,9 @@ async function callAI(path, method = 'GET', data = null, role = 'staff') {
       data,
       timeout: AI_TIMEOUT,
       headers: {
-        'Content-Type': 'application/json',
-        'X-User-Role':  role,
+        'Content-Type':       'application/json',
+        'X-User-Role':        role,
+        'X-Internal-Api-Key': AI_SERVICE_API_KEY,
       },
     })
     return { data: res.data, offline: false }
