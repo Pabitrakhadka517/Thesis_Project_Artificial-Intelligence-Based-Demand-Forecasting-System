@@ -15,7 +15,9 @@ const AuditLog      = require('../models/AuditLog')
 const Notification  = require('../models/Notification')
 const Setting       = require('../models/Setting')
 
-const DB_NAME = 'stockwise'
+const DB_NAME      = 'stockwise'
+const COMPANY_NAME = 'Himalayan Wholesale Suppliers'
+const DAYS         = 365   // one full year — long enough to cover the entire Nepali festival cycle once
 
 async function connectDB() {
   await mongoose.connect(process.env.MONGO_URI, { dbName: DB_NAME })
@@ -29,37 +31,78 @@ function daysAgo(n, hour = 10, min = 0) {
   d.setHours(hour, min, 0, 0)
   return d
 }
+function daysFromNow(n, hour = 10, min = 0) {
+  const d = new Date()
+  d.setDate(d.getDate() + n)
+  d.setHours(hour, min, 0, 0)
+  return d
+}
 
 function rand(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min }
 function pick(arr)       { return arr[Math.floor(Math.random() * arr.length)] }
-function inv(n)          { return `INV-${String(n).padStart(6, '0')}` }
-function po(n)           { return `PO-${String(n).padStart(6, '0')}` }
+function inv(n)          { return `INV-${String(n).padStart(5, '0')}` }
+function po(n)           { return `PO-${String(n).padStart(5, '0')}` }
+function fmt(n)          { return Math.round(n).toLocaleString('en-IN') }
 
-// ── Nepal festival dates (in our 90-day window ending 2026-06-26) ─────────────
-// 2026-03-28 → 2026-06-26
-const festivalMultipliers = {
-  '2026-03-29': 1.6,   // Ram Navami
-  '2026-03-30': 1.8,   // Eid al-Fitr (approximate)
-  '2026-04-02': 1.5,   // Chaite Dashain
-  '2026-04-03': 1.8,   // Chaite Dashain eve (big shopping day)
-  '2026-04-13': 2.5,   // Nepali New Year Eve (Ghode Jatra/Chaitra Purnima)
-  '2026-04-14': 2.8,   // Nepali New Year (Baisakh 1)
-  '2026-04-15': 1.6,   // Post-NY stockup
-  '2026-05-22': 1.5,   // Buddha Purnima Eve
-  '2026-05-23': 1.9,   // Buddha Purnima
-  '2026-06-01': 1.4,   // Ganga Dussehra
+// ── Nepal demand seasonality ──────────────────────────────────────────────────
+// Monthly multiplier, index 0=Jan..11=Dec — Dashain/Tihar month (Oct) dominates,
+// monsoon (Jul/Aug) is the yearly slack period. Matches the pattern already used
+// by the synthetic-data generator (synthetic.controller.js) so both datasets
+// behave consistently.
+const MONTHLY_MUL = [0.95, 0.90, 1.05, 1.10, 1.05, 0.90, 0.80, 0.75, 0.90, 2.20, 1.60, 1.00]
+
+// Day-of-week multiplier, 0=Sun..6=Sat. Nepali grocery/kirana wholesalers commonly
+// trade all 7 days — Saturday (the official weekly holiday) is when retail
+// shopkeepers themselves are busiest serving walk-in customers, so it is their
+// heaviest restocking day, not a quiet one.
+const DOW_MUL = [0.90, 1.00, 0.95, 0.95, 1.10, 1.20, 1.40]
+
+// Festival windows — year-aware so the simulation stays correct regardless of
+// which year "today" falls in (a single hardcoded date table breaks silently
+// once the calendar moves past it).
+const CHHATH  = { 2021: [[11, 8, 11]], 2022: [[10, 30, 31], [11, 1, 3]], 2023: [[11, 19, 22]], 2024: [[11, 7, 10]], 2025: [[10, 27, 30]], 2026: [[11, 15, 18]] }
+const DASHAIN = { 2021: [10, 6, 16], 2022: [9, 26, null, 10, 1, 6], 2023: [10, 14, 24], 2024: [10, 2, 12], 2025: [9, 22, null, 10, 1, 2], 2026: [10, 11, 21] }
+const TIHAR   = { 2021: [10, 30, null, 11, 1, 4], 2022: [10, 26, 30], 2023: [11, 12, 16], 2024: [11, 1, 5], 2025: [10, 20, 24], 2026: [11, 8, 12] }
+const HOLI    = { 2021: [3, 28, 30], 2022: [3, 17, 19], 2023: [3, 7, 9], 2024: [3, 24, 26], 2025: [3, 13, 15], 2026: [3, 2, 4] }
+
+function inRange(m, d, spec) {
+  if (!spec) return false
+  if (spec.length === 3) return m === spec[0] && d >= spec[1] && d <= spec[2]
+  return (m === spec[0] && d >= spec[1]) || (m === spec[3] && d >= spec[4] && d <= spec[5])
 }
 
-// Saturday in Nepal = public holiday → very low wholesale traffic
-// (day of week: 0=Sun, 1=Mon, ... 6=Sat)
+function getNepalFestival(date) {
+  const y = date.getFullYear(), m = date.getMonth() + 1, d = date.getDate()
+  if (m === 1 && d >= 13 && d <= 16) return { name: 'maghe_sankranti', label: 'Maghe Sankranti', mul: 1.6 }
+  if (m === 2 && d >= 15 && d <= 22) return { name: 'shivaratri', label: 'Shivaratri', mul: 1.3 }
+  const h = HOLI[y]
+  if (h && m === h[0] && d >= h[1] && d <= h[2]) return { name: 'holi', label: 'Holi', mul: 1.8 }
+  if (m === 4 && d >= 13 && d <= 16) return { name: 'nepali_new_year', label: 'Nepali New Year', mul: 1.7 }
+  if (m === 5 && d >= 14 && d <= 17) return { name: 'buddha_jayanti', label: 'Buddha Jayanti', mul: 1.2 }
+  if ((m === 8 && d >= 28) || (m === 9 && d <= 6)) return { name: 'teej', label: 'Teej', mul: 2.0 }
+  if (m === 9 && d >= 10 && d <= 17) return { name: 'indra_jatra', label: 'Indra Jatra', mul: 1.3 }
+  if (inRange(m, d, DASHAIN[y])) return { name: 'dashain', label: 'Dashain', mul: 3.5 }
+  if (inRange(m, d, TIHAR[y]))   return { name: 'tihar', label: 'Tihar', mul: 2.8 }
+  const cw = CHHATH[y] || []
+  if (cw.some(([cm, cd1, cd2]) => m === cm && d >= cd1 && d <= cd2)) return { name: 'chhath', label: 'Chhath', mul: 1.5 }
+  if (m === 12 && d >= 24 && d <= 26) return { name: 'christmas', label: 'Christmas', mul: 1.1 }
+  if ((m === 12 && d >= 30) || (m === 1 && d <= 2)) return { name: 'new_year', label: 'New Year', mul: 1.2 }
+  return null
+}
+
 function dayMultiplier(date) {
-  const iso = date.toISOString().slice(0, 10)
-  if (festivalMultipliers[iso]) return festivalMultipliers[iso]
-  const dow = date.getDay()
-  if (dow === 6) return 0.15    // Saturday (public holiday in Nepal)
-  if (dow === 5) return 0.75    // Friday (half day before holiday)
-  if (dow === 0) return 1.25    // Sunday (first working day after holiday, restock rush)
-  return 1.0
+  const festival = getNepalFestival(date)
+  const total = MONTHLY_MUL[date.getMonth()] * DOW_MUL[date.getDay()] * (festival ? festival.mul : 1.0)
+  return { total, festival }
+}
+
+async function bulkInsert(Model, docs, label) {
+  if (docs.length === 0) return
+  console.log(`  Inserting ${docs.length} ${label}...`)
+  const CHUNK = 2000
+  for (let i = 0; i < docs.length; i += CHUNK) {
+    await Model.insertMany(docs.slice(i, i + CHUNK), { ordered: false })
+  }
 }
 
 // ─── 1. USERS ─────────────────────────────────────────────────────────────────
@@ -86,7 +129,7 @@ async function seedUsers() {
 // ─── 2. SETTINGS ──────────────────────────────────────────────────────────────
 async function seedSettings() {
   const settings = [
-    { key: 'company.name',     value: 'Himalayan Wholesale Suppliers', group: 'company', label: 'Company Name' },
+    { key: 'company.name',     value: COMPANY_NAME,                   group: 'company', label: 'Company Name' },
     { key: 'company.industry', value: 'Wholesale Grocery',             group: 'company', label: 'Industry' },
     { key: 'company.address',  value: 'Kalimati, Kathmandu 44600',     group: 'company', label: 'Address' },
     { key: 'company.phone',    value: '01-4101234',                    group: 'company', label: 'Phone' },
@@ -186,24 +229,100 @@ async function seedSuppliers() {
   return map
 }
 
-// ─── 6. PRODUCTS (80) ─────────────────────────────────────────────────────────
+// ─── 6. PRODUCTS (79) ─────────────────────────────────────────────────────────
+// Demand weight (relative sales frequency), brand (only for genuinely branded
+// packaged goods — bulk staples like rice/dal/spices are sold generically at
+// wholesale, matching real Nepali distribution practice), and storage location
+// are applied as an enrichment pass keyed by SKU/category so the base product
+// list below stays readable.
+const DEMAND_WEIGHT = {
+  'RICE-BASMATI-5KG': 9, 'RICE-IR36-25KG': 6, 'RICE-CHINI-5KG': 7, 'WHEAT-ATTA-10KG': 9,
+  'DAAL-MUNG-1KG': 7, 'DAAL-MASUR-1KG': 7, 'DAAL-CHANA-1KG': 6, 'DAAL-TOOR-1KG': 5,
+  'CORN-MAIZE-5KG': 3, 'CHICKPEA-1KG': 4,
+  'OIL-MUSTARD-1L': 9, 'OIL-MUSTARD-5L': 5, 'OIL-SUNFLR-1L': 8, 'OIL-SUNFLR-5L': 4,
+  'OIL-GHEE-500G': 5, 'OIL-VANASPATI-1KG': 6,
+  'SPICE-CUMIN-100G': 7, 'SPICE-CHILI-100G': 8, 'SPICE-GMSAL-50G': 6, 'SPICE-TURMR-100G': 8,
+  'SPICE-CORIAN-100G': 7, 'SPICE-CARDM-50G': 3,
+  'SUGAR-WHITE-1KG': 9, 'SUGAR-WHITE-5KG': 6, 'JAGGERY-500G': 5, 'HONEY-500G': 3,
+  'SALT-IODIZED-1KG': 9, 'SALT-ROCK-1KG': 4, 'KETCHUP-1KG': 5, 'VINEGAR-500ML': 4,
+  'MILKPOW-FULL-500G': 6, 'MILKPOW-SKIM-500G': 4, 'BUTTER-200G': 5, 'CHEESE-200G': 4,
+  'TEA-ILAM-250G': 8, 'TEA-CTC-500G': 7, 'TEA-GREEN-100G': 3, 'COFFEE-INST-50G': 6,
+  'HORLICKS-500G': 5, 'OVALTINE-500G': 3,
+  'COKE-330ML-12PK': 7, 'SPRITE-330ML-12PK': 6, 'PEPSI-330ML-12PK': 6, 'JUICE-MANGO-1L': 6, 'NIMBU-500ML': 5,
+  'NOODLE-WAIW-75G': 9, 'NOODLE-MAGI-70G': 9, 'VERMICL-200G': 4, 'MACARONI-500G': 4,
+  'BISCUIT-PRLG-800G': 9, 'BISCUIT-MARIE-400G': 6, 'BISCUIT-GOOD-200G': 5, 'CHIPS-KURKURE-30G': 7,
+  'NAMKEEN-MIX-200G': 5, 'POPCORN-100G': 3,
+  'SOAP-LIVELY-75G': 8, 'SOAP-LIFEBUOY-75G': 8, 'SOAP-DISH-500ML': 7, 'DETGNT-TIDE-1KG': 7,
+  'DETGNT-ARIEL-500G': 5, 'SANITIZER-500ML': 4,
+  'SHAMPOO-HNS-340ML': 5, 'TOOTHP-COLG-150G': 8, 'TOOTHBRSH-MED': 6, 'LOTION-VASLN-200ML': 4,
+  'FLOUR-MAIDA-5KG': 7, 'FLOUR-BESAN-1KG': 6, 'FLOUR-RICE-1KG': 4, 'CORN-STARCH-500G': 3,
+  'TOMATO-PASTE-200G': 5, 'MANGO-PICKLE-500G': 5, 'STRAWBERRY-JAM-500G': 3, 'SOYA-SAUCE-300ML': 4,
+  'FLOOR-CLN-500ML': 5, 'TOILET-CLN-500ML': 5, 'SURFCE-SPRAY-400ML': 3, 'NAPHTHALENE-100G': 4,
+  'SCRUBBER-STEEL': 3, 'DUSTBIN-10L': 2,
+}
+
+const BRAND = {
+  'COFFEE-INST-50G': 'Nestlé', 'HORLICKS-500G': 'GSK Consumer Healthcare', 'OVALTINE-500G': 'Associated British Foods',
+  'COKE-330ML-12PK': 'Coca-Cola Company', 'SPRITE-330ML-12PK': 'Coca-Cola Company', 'PEPSI-330ML-12PK': 'PepsiCo',
+  'JUICE-MANGO-1L': 'Real (Dabur)', 'NOODLE-WAIW-75G': 'Wai Wai (CG Foods)', 'NOODLE-MAGI-70G': 'Nestlé',
+  'BISCUIT-PRLG-800G': 'Parle Products', 'BISCUIT-MARIE-400G': 'Britannia', 'BISCUIT-GOOD-200G': 'Britannia',
+  'CHIPS-KURKURE-30G': 'PepsiCo', 'SOAP-LIVELY-75G': 'Unilever Nepal', 'SOAP-LIFEBUOY-75G': 'Unilever',
+  'SOAP-DISH-500ML': 'Hindustan Unilever (Vim)', 'DETGNT-TIDE-1KG': 'Procter & Gamble', 'DETGNT-ARIEL-500G': 'Procter & Gamble',
+  'SHAMPOO-HNS-340ML': 'Procter & Gamble', 'TOOTHP-COLG-150G': 'Colgate-Palmolive', 'TOOTHBRSH-MED': 'Colgate-Palmolive',
+  'LOTION-VASLN-200ML': 'Unilever (Vaseline)', 'MILKPOW-FULL-500G': 'Amul (GCMMF)', 'MILKPOW-SKIM-500G': 'Amul (GCMMF)',
+  'BUTTER-200G': 'Amul (GCMMF)', 'CHEESE-200G': 'Amul (GCMMF)', 'SANITIZER-500ML': 'Dettol (Reckitt)',
+}
+
+const STORAGE_BY_CATEGORY = {
+  'Grains & Pulses':    'Warehouse A – Bulk Grains Section',
+  'Edible Oils':        'Warehouse A – Liquids & Oils Rack',
+  'Spices & Masala':    'Warehouse B – Spices Shelf',
+  'Sugar & Sweeteners': 'Warehouse A – Sugar & Sweeteners Rack',
+  'Salt & Condiments':  'Warehouse B – Condiments Shelf',
+  'Dairy Products':     'Cold Storage Unit 1',
+  'Beverages':          'Warehouse B – Beverages Shelf',
+  'Soft Drinks':        'Warehouse C – Soft Drinks Storage',
+  'Noodles & Pasta':    'Warehouse B – Noodles & Pasta Shelf',
+  'Biscuits & Snacks':  'Warehouse B – Snacks Shelf',
+  'Soap & Detergent':   'Warehouse C – Soap & Detergent Rack',
+  'Personal Care':      'Warehouse C – Personal Care Shelf',
+  'Flours & Starches':  'Warehouse A – Flours Section',
+  'Canned & Preserved': 'Warehouse B – Canned Goods Shelf',
+  'Cleaning Products':  'Warehouse C – Cleaning Supplies Rack',
+}
+
+// Genuinely perishable in this catalog — processed dairy with a finite (if long) shelf life.
+// Bulk staples/spices/oils/ghee are shelf-stable and correctly left non-perishable.
+const PERISHABLE_SKUS = new Set(['MILKPOW-FULL-500G', 'MILKPOW-SKIM-500G', 'BUTTER-200G', 'CHEESE-200G'])
+
+function enrichProducts(specs, catNameById) {
+  return specs.map((s, i) => {
+    const catName = catNameById[String(s.category)]
+    const enriched = {
+      ...s,
+      barcode: `894${String(i + 1).padStart(10, '0')}`,
+      storageLocation: STORAGE_BY_CATEGORY[catName] || 'Warehouse A – General Storage',
+    }
+    if (BRAND[s.sku]) enriched.brand = BRAND[s.sku]
+    if (PERISHABLE_SKUS.has(s.sku)) {
+      enriched.isPerishable = true
+      // One perishable SKU is deliberately near-expiry so the 'expiry' alert type
+      // has a real, demonstrable example rather than only ever firing by chance.
+      enriched.expiryDate = s.sku === 'CHEESE-200G' ? daysFromNow(rand(8, 18)) : daysFromNow(rand(90, 270))
+    }
+    return enriched
+  })
+}
+
 async function seedProducts(cats, sups) {
   const C = cats
   const S = sups
-  const NFC    = S['Nepal Food Corporation']
-  const HIM    = S['Himalayan Traders Pvt']
-  const EVR    = S['Everest Supplies Ltd']
-  const BAG    = S['Bagmati Agro Products']
-  const POK    = S['Pokhara Agro Mart']
-  const JNK    = S['Janakpur Wholesale Hub']
-  const BIR    = S['Biratnagar Trade Center']
-  const CHI    = S['Chitwan Food Mart']
-  const KSF    = S['Kathmandu Soap Factory']
-  const TSC    = S['Terai Spice Company']
-  const SUM    = S['Summit Beverages']
-  const DAI    = S['Valley Dairy Co-op']
+  const NFC = S['Nepal Food Corporation'], HIM = S['Himalayan Traders Pvt'], EVR = S['Everest Supplies Ltd']
+  const BAG = S['Bagmati Agro Products'],  POK = S['Pokhara Agro Mart'],     JNK = S['Janakpur Wholesale Hub']
+  const BIR = S['Biratnagar Trade Center'],CHI = S['Chitwan Food Mart'],     KSF = S['Kathmandu Soap Factory']
+  const TSC = S['Terai Spice Company'],    SUM = S['Summit Beverages'],      DAI = S['Valley Dairy Co-op']
 
-  const specs = [
+  const rawSpecs = [
     // ── Grains & Pulses ──────────────────────────────────────────────────────
     { sku:'RICE-BASMATI-5KG',  name:'Basmati Rice 5kg Bag',        category:C['Grains & Pulses'],   supplier:NFC,  unit:'bag',  buyingPrice:480,  sellingPrice:580,  currentStock:150, minStock:20, maxStock:300, reorderLevel:40,  leadTimeDays:3,  description:'Long grain aromatic basmati rice' },
     { sku:'RICE-IR36-25KG',    name:'IR-36 Rice 25kg Sack',        category:C['Grains & Pulses'],   supplier:NFC,  unit:'bag',  buyingPrice:1850, sellingPrice:2200, currentStock:80,  minStock:10, maxStock:150, reorderLevel:20,  leadTimeDays:3  },
@@ -214,7 +333,7 @@ async function seedProducts(cats, sups) {
     { sku:'DAAL-CHANA-1KG',    name:'Chana Dal 1kg',               category:C['Grains & Pulses'],   supplier:HIM,  unit:'kg',   buyingPrice:115,  sellingPrice:148,  currentStock:60,  minStock:15, maxStock:150, reorderLevel:25,  leadTimeDays:3  },
     { sku:'DAAL-TOOR-1KG',     name:'Toor Dal 1kg',                category:C['Grains & Pulses'],   supplier:BAG,  unit:'kg',   buyingPrice:130,  sellingPrice:168,  currentStock:55,  minStock:10, maxStock:150, reorderLevel:20,  leadTimeDays:4  },
     { sku:'CORN-MAIZE-5KG',    name:'Yellow Maize 5kg',            category:C['Grains & Pulses'],   supplier:JNK,  unit:'bag',  buyingPrice:220,  sellingPrice:275,  currentStock:40,  minStock:10, maxStock:120, reorderLevel:15,  leadTimeDays:10 },
-    { sku:'CHICKPEA-1KG',      name:'White Chickpea 1kg',          category:C['Grains & Pulses'],   supplier:BAG,  unit:'kg',   buyingPrice:140,  sellingPrice:178,  currentStock:45,  minStock:10, maxStock:120, reorderLevel:20,  leadTimeDays:4  },
+    { sku:'CHICKPEA-1KG',      name:'White Chickpea 1kg',          category:C['Grains & Pulses'],   supplier:POK,  unit:'kg',   buyingPrice:140,  sellingPrice:178,  currentStock:45,  minStock:10, maxStock:120, reorderLevel:20,  leadTimeDays:14 },
 
     // ── Edible Oils ──────────────────────────────────────────────────────────
     { sku:'OIL-MUSTARD-1L',    name:'Mustard Oil 1 Liter',         category:C['Edible Oils'],       supplier:EVR,  unit:'L',    buyingPrice:215,  sellingPrice:265,  currentStock:110, minStock:20, maxStock:250, reorderLevel:40,  leadTimeDays:5  },
@@ -276,7 +395,7 @@ async function seedProducts(cats, sups) {
     { sku:'BISCUIT-MARIE-400G',name:'Marie Gold Biscuits 400g',   category:C['Biscuits & Snacks'], supplier:EVR,  unit:'pk',   buyingPrice:72,   sellingPrice:100,  currentStock:120, minStock:20, maxStock:250, reorderLevel:40,  leadTimeDays:5  },
     { sku:'BISCUIT-GOOD-200G', name:'Good Day Butter Biscuits 200g',category:C['Biscuits & Snacks'],supplier:EVR, unit:'pk',   buyingPrice:45,   sellingPrice:68,   currentStock:100, minStock:15, maxStock:200, reorderLevel:30,  leadTimeDays:5  },
     { sku:'CHIPS-KURKURE-30G', name:'Kurkure 30g',                category:C['Biscuits & Snacks'], supplier:EVR,  unit:'pcs',  buyingPrice:12,   sellingPrice:20,   currentStock:300, minStock:50, maxStock:600, reorderLevel:80,  leadTimeDays:5  },
-    { sku:'NAMKEEN-MIX-200G',  name:'Mixed Namkeen 200g',         category:C['Biscuits & Snacks'], supplier:BAG,  unit:'pk',   buyingPrice:52,   sellingPrice:78,   currentStock:80,  minStock:15, maxStock:200, reorderLevel:30,  leadTimeDays:4  },
+    { sku:'NAMKEEN-MIX-200G',  name:'Mixed Namkeen 200g',         category:C['Biscuits & Snacks'], supplier:BIR,  unit:'pk',   buyingPrice:52,   sellingPrice:78,   currentStock:80,  minStock:15, maxStock:200, reorderLevel:30,  leadTimeDays:12 },
     { sku:'POPCORN-100G',      name:'Microwave Popcorn 100g',     category:C['Biscuits & Snacks'], supplier:EVR,  unit:'pcs',  buyingPrice:48,   sellingPrice:72,   currentStock:60,  minStock:10, maxStock:150, reorderLevel:20,  leadTimeDays:5  },
 
     // ── Soap & Detergent ─────────────────────────────────────────────────────
@@ -314,6 +433,10 @@ async function seedProducts(cats, sups) {
     { sku:'DUSTBIN-10L',       name:'Plastic Dustbin 10 Liter',   category:C['Cleaning Products'], supplier:BAG,  unit:'pcs',  buyingPrice:145,  sellingPrice:198,  currentStock:30,  minStock:5,  maxStock:80,  reorderLevel:10,  leadTimeDays:4  },
   ]
 
+  const catNameById = {}
+  Object.entries(C).forEach(([name, id]) => { catNameById[String(id)] = name })
+  const specs = enrichProducts(rawSpecs, catNameById)
+
   const map = {}
   const existing = await Product.find({})
   existing.forEach(p => { map[p.sku] = { _id: p._id, ...p.toObject() } })
@@ -325,25 +448,27 @@ async function seedProducts(cats, sups) {
   }
   specs.forEach(s => {
     if (!map[s.sku]) return
-    // ensure specs metadata is in map
     map[s.sku] = { ...s, _id: map[s.sku]._id }
   })
   console.log(`  ✓ ${Object.keys(map).length} products`)
   return map  // map[sku] = product doc
 }
 
-// ─── 7. SIMULATE 90-DAY HISTORY ──────────────────────────────────────────────
+// ─── 7. SIMULATE FULL-YEAR HISTORY ────────────────────────────────────────────
 async function seedHistory(prodMap, supMap, userIds) {
-  const salesExist    = await Sale.countDocuments()
-  const purchExist    = await Purchase.countDocuments()
+  const salesExist = await Sale.countDocuments()
+  const purchExist = await Purchase.countDocuments()
   if (salesExist > 0 && purchExist > 0) {
     console.log(`  - Sales (${salesExist}) and purchases (${purchExist}) already exist, skipping history`)
-    return
+    return null
   }
 
-  const TODAY     = new Date(); TODAY.setHours(0, 0, 0, 0)
-  const DAYS      = 90
-  const START_DAY = DAYS  // we'll count down from DAYS to 1
+  const TODAY = new Date(); TODAY.setHours(0, 0, 0, 0)
+  const START_DAY = DAYS
+
+  const supplierDocs = await Supplier.find({})
+  const supplierById = {}
+  supplierDocs.forEach(s => { supplierById[String(s._id)] = s })
 
   // Track in-memory stock levels for simulation
   const stock = {}
@@ -351,216 +476,216 @@ async function seedHistory(prodMap, supMap, userIds) {
   skus.forEach(sku => { stock[sku] = prodMap[sku].currentStock || 0 })
 
   // Accumulators
-  const saleDocs       = []
-  const purchaseDocs   = []
-  const movementDocs   = []
-  const alertDocs      = []
-  const notifDocs      = []
-  const auditDocs      = []
+  const saleDocs     = []
+  const purchaseDocs = []
+  const movementDocs = []
+  const alertDocs    = []
+  const auditDocs    = []
 
-  let saleSeq    = 0
-  let purchSeq   = 0
+  let saleSeq  = 0
+  let purchSeq = 0
 
   const adminId   = userIds['admin']
   const managerId = userIds['inventory_manager']
   const staffId   = userIds['staff']
-  const supIds    = Object.values(supMap)
+  const allSkus   = skus.filter(s => prodMap[s])
 
-  // Choose which products to focus on (high-turnover ones)
-  const highTurnover = ['RICE-BASMATI-5KG','RICE-IR36-25KG','WHEAT-ATTA-10KG',
-    'DAAL-MUNG-1KG','DAAL-MASUR-1KG','OIL-MUSTARD-1L','OIL-SUNFLR-1L',
-    'SUGAR-WHITE-1KG','SALT-IODIZED-1KG','TEA-ILAM-250G','TEA-CTC-500G',
-    'NOODLE-WAIW-75G','NOODLE-MAGI-70G','BISCUIT-PRLG-800G','SOAP-LIVELY-75G',
-    'SOAP-LIFEBUOY-75G','DETGNT-TIDE-1KG','TOOTHP-COLG-150G','FLOUR-MAIDA-5KG',
-    'MILKPOW-FULL-500G']
-  const allSkus = skus.filter(s => prodMap[s])
+  // Weighted sales pool — every product can sell, staples proportionally far more often.
+  const weightedPool = []
+  for (const sku of allSkus) {
+    const w = DEMAND_WEIGHT[sku] || 3
+    for (let i = 0; i < w; i++) weightedPool.push(sku)
+  }
+  const topWeighted = Object.entries(DEMAND_WEIGHT).sort((a, b) => b[1] - a[1]).slice(0, 20).map(([sku]) => sku)
 
-  // Pre-schedule purchase deliveries (180 total over 90 days → 2/day avg)
-  // Some days get 0, some get 4–5. Cluster around 7-day cycles.
+  // Open-alert tracker mirroring the DB's own partial-unique index: at most one
+  // OPEN (unacknowledged) alert per (product, type) at any time.
+  const openAlert = {}
+
+  // Pre-schedule ~180 restock "delivery days" over the year (roughly twice a week,
+  // clustered, with some randomness on top).
   const deliveryDays = new Set()
   for (let d = START_DAY; d >= 5; d--) {
-    if (d % 7 === 0 || d % 7 === 1) deliveryDays.add(d)  // roughly twice a week
+    if (d % 7 === 0 || d % 7 === 1) deliveryDays.add(d)
   }
-  // Add 30 random extra days
-  while (deliveryDays.size < 50) {
-    deliveryDays.add(rand(5, START_DAY))
-  }
+  while (deliveryDays.size < 180) deliveryDays.add(rand(5, START_DAY))
+
+  const customers = [
+    'Hari Grocery Store', 'Ram Kirana', 'Shrestha Mart', 'Bhanu Suppliers',
+    'Thapa Tarkari Pasal', 'Suresh Kirana', 'Laxmi Departmental Store',
+    'Dev Wholesale', 'Puja Provision', 'Anita General Store', 'Basnet Kirana Pasal',
+    'New Everest Grocery', 'Milan Provision Store', 'Walk-in Customer',
+    null, null, // anonymous
+  ]
+
+  // Stats accumulated for downstream, data-derived notifications (no fabricated numbers).
+  let totalRevenueAll = 0, revenueLast30 = 0, revenuePrev30 = 0
+  let dailyRevenueSum = 0, activeSaleDays = 0
+  const productRevenue = {}
+  let peakFestival = null
 
   for (let d = START_DAY; d >= 1; d--) {
     const date = new Date(TODAY)
     date.setDate(TODAY.getDate() - d)
+    const { total: mult, festival } = dayMultiplier(date)
 
-    const mult = dayMultiplier(date)
-
-    // ── Purchases on delivery days ──────────────────────────────────────────
-    if (deliveryDays.has(d) && purchSeq < 180) {
-      // Find low-stock SKUs to restock
+    // ── Purchases on delivery days, grouped by each product's real supplier ──
+    if (deliveryDays.has(d) && purchSeq < 900) {
       const needRestock = allSkus
         .filter(sku => prodMap[sku] && stock[sku] <= (prodMap[sku].reorderLevel || 30))
-        .slice(0, rand(2, 5))
-
-      // Even on non-low days, buy top movers proactively
-      const topPick = highTurnover
+        .sort(() => 0.5 - Math.random())
+        .slice(0, rand(3, 7))
+      const topPick = topWeighted
         .filter(s => prodMap[s] && !needRestock.includes(s))
         .slice(0, rand(1, 3))
+      const restockSkus = [...new Set([...needRestock, ...topPick])]
+      if (restockSkus.length === 0) restockSkus.push(pick(topWeighted))
 
-      const restockSkus = [...new Set([...needRestock, ...topPick])].slice(0, rand(3, 7))
-      if (restockSkus.length === 0) restockSkus.push(pick(highTurnover))
-
-      const supId  = pick(supIds)
-      const items  = []
-      let subtotal = 0
-
+      const bySupplier = {}
       for (const sku of restockSkus) {
-        if (!prodMap[sku]) continue
-        const p     = prodMap[sku]
-        const maxS  = p.maxStock || 200
-        const curS  = stock[sku]
-        const qty   = Math.max(rand(20, 60), maxS - curS)
-        const price = p.buyingPrice
-
-        items.push({
-          product:     p._id,
-          productName: p.name,
-          sku,
-          quantity:    qty,
-          buyingPrice: price,
-          total:       qty * price,
-        })
-        subtotal   += qty * price
-        stock[sku] += qty
-
-        movementDocs.push({
-          product:     p._id,
-          productName: p.name,
-          type:        'purchase',
-          quantity:    qty,
-          stockBefore: stock[sku] - qty,
-          stockAfter:  stock[sku],
-          reference:   po(purchSeq + 1),
-          notes:       'Purchase received',
-          recordedBy:  managerId,
-          date:        new Date(date),
-        })
+        const p = prodMap[sku]
+        if (!p || !p.supplier) continue
+        const key = String(p.supplier)
+        if (!bySupplier[key]) bySupplier[key] = []
+        bySupplier[key].push(sku)
       }
 
-      if (items.length > 0) {
-        purchSeq++
+      for (const [supId, supSkus] of Object.entries(bySupplier)) {
+        if (purchSeq >= 900) break
+        const supplier = supplierById[supId]
+        const leadTime = (supplier && supplier.leadTimeDays) || 5
+        // Real lead time drives delivery date, with natural variance (occasionally late).
+        const deliverDays = Math.max(1, Math.round(leadTime * (0.6 + Math.random() * 0.9)))
         const delDate = new Date(date)
-        delDate.setDate(delDate.getDate() + rand(1, 3))
+        delDate.setDate(delDate.getDate() + deliverDays)
+        const received = delDate <= TODAY
+
+        const purchaseId = new mongoose.Types.ObjectId()
+        const items = []
+        const localMovements = []
+        let subtotal = 0
+
+        for (const sku of supSkus) {
+          const p = prodMap[sku]
+          const maxS = p.maxStock || 200
+          const curS = stock[sku]
+          const qty  = Math.max(rand(20, 60), maxS - curS)
+          const price = p.buyingPrice
+
+          items.push({ product: p._id, productName: p.name, sku, quantity: qty, buyingPrice: price, total: qty * price })
+          subtotal += qty * price
+
+          if (received) {
+            const before = stock[sku]
+            stock[sku] += qty
+            if (stock[sku] > 0) delete openAlert[`${sku}::out_of_stock`]
+            if (stock[sku] > (p.reorderLevel || 20)) delete openAlert[`${sku}::low_stock`]
+            localMovements.push({
+              product: p._id, productName: p.name, type: 'purchase',
+              quantity: qty, stockBefore: before, stockAfter: stock[sku],
+              referenceType: 'Purchase', referenceId: purchaseId,
+              notes: 'Purchase received', recordedBy: managerId, date: new Date(date),
+            })
+          }
+        }
+        if (items.length === 0) continue
+
+        purchSeq++
+        localMovements.forEach(m => { m.reference = po(purchSeq) })
+        movementDocs.push(...localMovements)
+
+        const discount = (subtotal > 20000 && Math.random() < 0.3) ? Math.round(subtotal * rand(2, 6) / 100) : 0
+        const grandTotal = subtotal - discount
+
         purchaseDocs.push({
+          _id: purchaseId,
           purchaseNumber: po(purchSeq),
-          supplier:       supId,
-          items,
-          subtotal,
-          discount:       0,
-          grandTotal:     subtotal,
-          paymentStatus:  pick(['paid', 'paid', 'partial', 'pending']),
-          paymentMethod:  pick(['bank_transfer', 'cash', 'cheque', 'credit']),
-          purchaseDate:   new Date(date),
-          deliveryDate:   delDate,
-          status:         'received',
-          recordedBy:     managerId,
-          createdAt:      new Date(date),
-          updatedAt:      new Date(date),
+          supplier: supId,
+          items, subtotal, discount, grandTotal,
+          paymentStatus: received ? pick(['paid', 'paid', 'partial', 'pending']) : pick(['pending', 'pending', 'partial']),
+          paymentMethod: pick(['bank_transfer', 'cash', 'cheque', 'credit']),
+          purchaseDate: new Date(date),
+          deliveryDate: delDate,
+          status: received ? 'received' : 'ordered',
+          notes: received ? undefined : 'In transit from supplier',
+          recordedBy: managerId,
+          createdAt: new Date(date),
+          updatedAt: new Date(date),
         })
       }
     }
 
     // ── Sales for the day ───────────────────────────────────────────────────
-    if (mult <= 0.20) continue  // Saturday — no sales
+    const numInv = Math.max(2, Math.round(rand(9, 16) * Math.min(mult, 4)))
+    let dayRevenue = 0
 
-    const baseSalesPerDay = 7  // 600 over 90 days ≈ 6.7/day
-    const salesCount = Math.max(1, Math.round(baseSalesPerDay * mult + rand(-2, 2)))
-
-    const customers = [
-      'Hari Grocery Store','Ram Kirana','Shrestha Mart','Bhanu Suppliers',
-      'Thapa Tarkari Pasal','Suresh Kirana','Laxmi Departmental Store',
-      'Dev Wholesale','Puja Provision','Anita General Store','Walk-in Customer',
-      null, null,  // anonymous
-    ]
-
-    for (let s = 0; s < salesCount && saleSeq < 600; s++) {
-      // How many items in this sale
+    for (let s = 0; s < numInv && saleSeq < 20000; s++) {
       const numItems = rand(1, 6)
-      const pool = [...highTurnover, ...allSkus.slice(0, 20)]
-        .filter(sku => prodMap[sku] && stock[sku] > 0)
-      if (pool.length === 0) continue
+      const candidates = weightedPool.filter(sku => prodMap[sku] && stock[sku] > 0)
+      if (candidates.length === 0) continue
 
-      const chosen = [...new Set(pool.sort(() => 0.5 - Math.random()).slice(0, numItems))]
+      const chosen = [...new Set(candidates.sort(() => 0.5 - Math.random()).slice(0, numItems * 3))].slice(0, numItems)
+      const saleId = new mongoose.Types.ObjectId()
       const items  = []
       let subtotal = 0
 
       for (const sku of chosen) {
-        const p    = prodMap[sku]
+        const p = prodMap[sku]
         if (!p) continue
         const avail = stock[sku]
         if (avail <= 0) continue
 
-        const festBoost = mult > 1.5 ? rand(2, 4) : 1
-        const qty  = Math.min(avail, rand(1, 5) * festBoost)
-        const price = p.sellingPrice
-        const discount = qty >= 10 ? Math.round(price * 0.05) : 0  // wholesale bulk discount
+        const unitCap    = (p.unit === 'bag' || p.unit === 'ctn') ? 6 : (p.unit === 'kg' || p.unit === 'L') ? 10 : 15
+        const festBoost  = mult > 1.5 ? rand(2, 4) : 1
+        const qty        = Math.min(avail, rand(1, unitCap) * festBoost)
+        const price      = p.sellingPrice
+        const bulkOff    = qty >= 10 ? Math.round(price * 0.05) : 0
+        const unitPrice  = price - bulkOff
 
         items.push({
-          product:     p._id,
-          productName: p.name,
-          sku,
-          quantity:    qty,
-          unitPrice:   price - discount,
-          total:       qty * (price - discount),
+          product: p._id, productName: p.name, sku,
+          quantity: qty, unitPrice, buyingPrice: p.buyingPrice, total: qty * unitPrice,
         })
-        subtotal += qty * (price - discount)
+        subtotal += qty * unitPrice
+        productRevenue[sku] = (productRevenue[sku] || 0) + qty * unitPrice
 
-        const before    = stock[sku]
-        stock[sku]     -= qty
+        const before = stock[sku]
+        stock[sku]  -= qty
 
         movementDocs.push({
-          product:     p._id,
-          productName: p.name,
-          type:        'sale',
-          quantity:    -qty,
-          stockBefore: before,
-          stockAfter:  stock[sku],
-          reference:   inv(saleSeq + 1),
-          notes:       `Sale`,
-          recordedBy:  s % 3 === 0 ? staffId : adminId,
-          date:        new Date(date),
+          product: p._id, productName: p.name, type: 'sale',
+          quantity: -qty, stockBefore: before, stockAfter: stock[sku],
+          referenceType: 'Sale', referenceId: saleId,
+          reference: inv(saleSeq + 1), notes: 'Sale', recordedBy: s % 5 === 0 ? managerId : (s % 3 === 0 ? staffId : adminId),
+          date: new Date(date),
         })
 
-        // Check alert thresholds
         const reorder = p.reorderLevel || 20
         if (stock[sku] <= 0) {
-          alertDocs.push({
-            type:        'out_of_stock',
-            priority:    'critical',
-            title:       `Out of Stock: ${p.name}`,
-            message:     `${p.name} (${sku}) ran out of stock on ${date.toDateString()}.`,
-            product:     p._id,
-            productName: p.name,
-            isRead:      d > 7,
-            isAcknowledged: d > 14,
-            createdAt:   new Date(date),
-          })
-          notifDocs.push({
-            user:    managerId,
-            title:   `Out of Stock: ${p.name}`,
-            message: `${p.name} is out of stock. Immediate reorder needed.`,
-            type:    'error',
-            isRead:  d > 7,
-            createdAt: new Date(date),
-          })
-        } else if (stock[sku] <= reorder) {
-          if (rand(0, 1) === 0) {  // don't create duplicate alerts, sample ~50%
+          const key = `${sku}::out_of_stock`
+          if (!openAlert[key]) {
+            openAlert[key] = true
             alertDocs.push({
-              type:     'low_stock',
+              type: 'out_of_stock', priority: 'critical',
+              title: `Out of Stock: ${p.name}`,
+              message: `${p.name} (${sku}) ran out of stock on ${date.toDateString()}.`,
+              product: p._id, productName: p.name,
+              isRead: d > 3, isAcknowledged: d > 7,
+              metadata: { currentStock: 0, reorderLevel: reorder },
+              createdAt: new Date(date),
+            })
+          }
+        } else if (stock[sku] <= reorder) {
+          const key = `${sku}::low_stock`
+          if (!openAlert[key]) {
+            openAlert[key] = true
+            alertDocs.push({
+              type: 'low_stock',
               priority: stock[sku] <= reorder * 0.5 ? 'high' : 'medium',
-              title:    `Low Stock: ${p.name}`,
-              message:  `${p.name} has ${stock[sku]} units left. Reorder level: ${reorder}.`,
-              product:  p._id,
-              productName: p.name,
-              isRead:   d > 3,
-              isAcknowledged: d > 7,
+              title: `Low Stock: ${p.name}`,
+              message: `${p.name} has ${stock[sku]} units left. Reorder level: ${reorder}.`,
+              product: p._id, productName: p.name,
+              isRead: d > 5, isAcknowledged: d > 10,
               metadata: { currentStock: stock[sku], reorderLevel: reorder },
               createdAt: new Date(date),
             })
@@ -574,128 +699,188 @@ async function seedHistory(prodMap, supMap, userIds) {
       const hour = rand(8, 18)
       const saleDate = new Date(date); saleDate.setHours(hour, rand(0, 59), 0, 0)
       const customer = pick(customers)
+      const loyaltyDiscount = (subtotal > 5000 && Math.random() < 0.25) ? Math.round(subtotal * rand(1, 4) / 100) : 0
+      const grandTotal = subtotal - loyaltyDiscount
 
       saleDocs.push({
+        _id: saleId,
         invoiceNumber: inv(saleSeq),
         items,
-        subtotal,
-        discount:      0,
-        tax:           0,
-        grandTotal:    subtotal,
-        paymentMethod: pick(['cash','cash','cash','qr','card','credit']),
-        customerName:  customer,
-        status:        'completed',
-        saleDate:      saleDate,
-        recordedBy:    s % 3 === 0 ? staffId : adminId,
-        createdAt:     saleDate,
-        updatedAt:     saleDate,
+        subtotal, discount: loyaltyDiscount, tax: 0, grandTotal,
+        paymentMethod: pick(['cash', 'cash', 'cash', 'qr', 'card', 'credit']),
+        customerName: customer,
+        status: 'completed',
+        saleDate,
+        recordedBy: s % 5 === 0 ? managerId : (s % 3 === 0 ? staffId : adminId),
+        createdAt: saleDate,
+        updatedAt: saleDate,
       })
+      dayRevenue += grandTotal
 
       auditDocs.push({
-        userEmail:  s % 3 === 0 ? 'sita@himalayan.np' : 'admin@himalayan.np',
-        action:     'CREATE_SALE',
-        resource:   'Sale',
+        userEmail: s % 3 === 0 ? 'sita@himalayan.np' : 'admin@himalayan.np',
+        action: 'CREATE_SALE',
+        resource: 'Sale',
         resourceId: inv(saleSeq),
-        details:    { invoiceNumber: inv(saleSeq), grandTotal: subtotal, itemCount: items.length },
-        status:     'success',
-        createdAt:  saleDate,
+        details: { invoiceNumber: inv(saleSeq), grandTotal, itemCount: items.length },
+        status: 'success',
+        createdAt: saleDate,
       })
+    }
+
+    totalRevenueAll += dayRevenue
+    if (dayRevenue > 0) { dailyRevenueSum += dayRevenue; activeSaleDays++ }
+    if (d <= 30) revenueLast30 += dayRevenue
+    else if (d <= 60) revenuePrev30 += dayRevenue
+    if (festival && (!peakFestival || mult > peakFestival.mult)) {
+      peakFestival = { name: festival.name, label: festival.label, mult, dayRevenue }
     }
   }
 
-  // Add some pending / supplier-delayed purchase orders at the end
-  const pendingSupItems = highTurnover.slice(0, 4)
-  for (const sku of pendingSupItems) {
+  // Trailing supplier-delayed purchase orders — realistic "still waiting" state.
+  const pendingSkus = topWeighted.slice(0, 4)
+  const samplePendingPO = []
+  for (const sku of pendingSkus) {
     const p = prodMap[sku]
-    if (!p) continue
+    if (!p || !p.supplier) continue
     purchSeq++
     const qty = rand(50, 100)
+    const supplier = supplierById[String(p.supplier)]
+    const poNumber = po(purchSeq)
     purchaseDocs.push({
-      purchaseNumber: po(purchSeq),
-      supplier:       pick(supIds),
+      purchaseNumber: poNumber,
+      supplier: p.supplier,
       items: [{ product: p._id, productName: p.name, sku, quantity: qty, buyingPrice: p.buyingPrice, total: qty * p.buyingPrice }],
-      subtotal:    qty * p.buyingPrice,
-      discount:    0,
-      grandTotal:  qty * p.buyingPrice,
+      subtotal: qty * p.buyingPrice,
+      discount: 0,
+      grandTotal: qty * p.buyingPrice,
       paymentStatus: 'pending',
       paymentMethod: 'credit',
       purchaseDate: daysAgo(rand(2, 5)),
-      deliveryDate: daysAgo(-rand(2, 7)),  // future delivery
-      status:       'ordered',
-      notes:        'Supplier delayed — follow up required',
-      recordedBy:   managerId,
+      deliveryDate: daysFromNow(rand(2, 7)),
+      status: 'ordered',
+      notes: 'Supplier delayed — follow up required',
+      recordedBy: managerId,
     })
     alertDocs.push({
-      type:     'supplier_delay',
+      type: 'supplier_delay',
       priority: 'medium',
-      title:    `Supplier Delay: ${p.name}`,
-      message:  `PO ${po(purchSeq)} delivery is pending. Contact supplier.`,
+      title: `Supplier Delay: ${p.name}`,
+      message: `PO ${poNumber} from ${supplier ? supplier.name : 'supplier'} is overdue. Contact supplier.`,
+      product: p._id,
       productName: p.name,
-      isRead:   false,
+      isRead: false,
       isAcknowledged: false,
+      metadata: { purchaseNumber: poNumber, supplierName: supplier ? supplier.name : null },
     })
+    samplePendingPO.push({ number: poNumber, supplierName: supplier ? supplier.name : 'Supplier' })
   }
 
   // Bulk-insert everything
-  console.log(`  Inserting ${saleDocs.length} sales...`)
-  if (saleDocs.length > 0)    await Sale.insertMany(saleDocs, { ordered: false })
+  await bulkInsert(Sale, saleDocs, 'sales')
+  await bulkInsert(Purchase, purchaseDocs, 'purchases')
+  await bulkInsert(StockMovement, movementDocs, 'stock movements')
+  await bulkInsert(Alert, alertDocs, 'alerts')
+  await bulkInsert(AuditLog, auditDocs, 'audit logs')
 
-  console.log(`  Inserting ${purchaseDocs.length} purchases...`)
-  if (purchaseDocs.length > 0) await Purchase.insertMany(purchaseDocs, { ordered: false })
-
-  console.log(`  Inserting ${movementDocs.length} stock movements...`)
-  if (movementDocs.length > 0) await StockMovement.insertMany(movementDocs, { ordered: false })
-
-  console.log(`  Inserting ${alertDocs.length} alerts...`)
-  if (alertDocs.length > 0)   await Alert.insertMany(alertDocs, { ordered: false })
-
-  console.log(`  Inserting ${notifDocs.length} notifications...`)
-  if (notifDocs.length > 0)   await Notification.insertMany(notifDocs, { ordered: false })
-
-  console.log(`  Inserting ${auditDocs.length} audit logs...`)
-  if (auditDocs.length > 0)   await AuditLog.insertMany(auditDocs, { ordered: false })
-
-  // Update current stock on Product documents to match simulation
+  // Reconcile Product.currentStock with the simulated ledger.
   console.log('  Updating product stock levels...')
-  const bulkOps = Object.entries(stock).map(([sku, qty]) => {
+  const productBulkOps = Object.entries(stock).map(([sku, qty]) => {
     if (!prodMap[sku]) return null
-    return {
-      updateOne: {
-        filter: { _id: prodMap[sku]._id },
-        update: { $set: { currentStock: Math.max(0, qty) } },
-      },
-    }
+    return { updateOne: { filter: { _id: prodMap[sku]._id }, update: { $set: { currentStock: Math.max(0, qty) } } } }
   }).filter(Boolean)
-  if (bulkOps.length > 0) await Product.bulkWrite(bulkOps)
+  if (productBulkOps.length > 0) await Product.bulkWrite(productBulkOps)
+
+  // Reconcile Supplier.totalPurchases / lastOrderDate against the purchases just created —
+  // these are denormalized fields the schema says should track the real ledger.
+  console.log('  Updating supplier totals...')
+  const supplierTotals = {}
+  for (const pdoc of purchaseDocs) {
+    const key = String(pdoc.supplier)
+    if (!supplierTotals[key]) supplierTotals[key] = { total: 0, lastDate: pdoc.purchaseDate }
+    supplierTotals[key].total += pdoc.grandTotal
+    if (pdoc.purchaseDate > supplierTotals[key].lastDate) supplierTotals[key].lastDate = pdoc.purchaseDate
+  }
+  const supplierBulkOps = Object.entries(supplierTotals).map(([supId, agg]) => ({
+    updateOne: { filter: { _id: supId }, update: { $set: { totalPurchases: Math.round(agg.total), lastOrderDate: agg.lastDate } } },
+  }))
+  if (supplierBulkOps.length > 0) await Supplier.bulkWrite(supplierBulkOps)
 
   console.log(`  ✓ ${saleDocs.length} sales, ${purchaseDocs.length} purchases, ${movementDocs.length} movements, ${alertDocs.length} alerts`)
+
+  const topEntry = Object.entries(productRevenue).sort((a, b) => b[1] - a[1])[0]
+  return {
+    totalRevenue: Math.round(totalRevenueAll),
+    revenueLast30: Math.round(revenueLast30),
+    revenuePrev30: Math.round(revenuePrev30),
+    totalPurchaseSpend: Math.round(purchaseDocs.reduce((s, p) => s + p.grandTotal, 0)),
+    purchaseOrderCount: purchaseDocs.length,
+    saleCount: saleDocs.length,
+    topProductName: topEntry ? (prodMap[topEntry[0]]?.name || topEntry[0]) : null,
+    avgDailyRevenue: activeSaleDays ? Math.round(dailyRevenueSum / activeSaleDays) : 0,
+    peakFestival,
+    samplePendingPO: samplePendingPO[0] || null,
+  }
 }
 
 // ─── 8. FINAL ALERTS FOR CURRENT STATE ────────────────────────────────────────
 async function seedCurrentAlerts() {
-  // Create alerts for products currently below reorder level
-  const lowProds = await Product.find({
-    isActive: true,
-    $expr: { $lt: ['$currentStock', '$reorderLevel'] }
-  })
-
   const alertBatch = []
-  for (const p of lowProds) {
-    const exists = await Alert.findOne({ product: p._id, isAcknowledged: false })
-    if (exists) continue
 
+  // Low stock / out of stock — products currently at or below reorder level.
+  const lowProds = await Product.find({ isActive: true, $expr: { $lt: ['$currentStock', '$reorderLevel'] } })
+  for (const p of lowProds) {
+    const type = p.currentStock <= 0 ? 'out_of_stock' : 'low_stock'
+    const exists = await Alert.findOne({ product: p._id, type, isAcknowledged: false })
+    if (exists) continue
     alertBatch.push({
-      type:     p.currentStock <= 0 ? 'out_of_stock' : 'low_stock',
+      type,
       priority: p.currentStock <= 0 ? 'critical' : p.currentStock <= p.reorderLevel * 0.5 ? 'high' : 'medium',
-      title:    p.currentStock <= 0 ? `Out of Stock: ${p.name}` : `Low Stock: ${p.name}`,
-      message:  p.currentStock <= 0
+      title: p.currentStock <= 0 ? `Out of Stock: ${p.name}` : `Low Stock: ${p.name}`,
+      message: p.currentStock <= 0
         ? `${p.name} (${p.sku}) is out of stock. Immediate restocking required.`
         : `${p.name} has ${p.currentStock} units left (reorder at ${p.reorderLevel}).`,
-      product:     p._id,
-      productName: p.name,
-      isRead:      false,
-      isAcknowledged: false,
-      metadata:    { currentStock: p.currentStock, reorderLevel: p.reorderLevel },
+      product: p._id, productName: p.name,
+      isRead: false, isAcknowledged: false,
+      metadata: { currentStock: p.currentStock, reorderLevel: p.reorderLevel },
+    })
+  }
+
+  // Overstock — mirrors the Product.stockStatus virtual's own definition (>= 90% of maxStock).
+  const overstocked = await Product.find({
+    isActive: true, maxStock: { $gt: 0 },
+    $expr: { $gte: ['$currentStock', { $multiply: ['$maxStock', 0.9] }] },
+  })
+  for (const p of overstocked) {
+    const exists = await Alert.findOne({ product: p._id, type: 'overstock', isAcknowledged: false })
+    if (exists) continue
+    alertBatch.push({
+      type: 'overstock',
+      priority: 'low',
+      title: `Overstock: ${p.name}`,
+      message: `${p.name} has ${p.currentStock} units on hand, close to its ${p.maxStock}-unit max. Consider pausing reorders or running a promotion.`,
+      product: p._id, productName: p.name,
+      isRead: false, isAcknowledged: false,
+      metadata: { currentStock: p.currentStock, maxStock: p.maxStock },
+    })
+  }
+
+  // Expiry — perishables within 21 days of their expiry date.
+  const expiring = await Product.find({
+    isActive: true, isPerishable: true, expiryDate: { $exists: true, $lte: daysFromNow(21) },
+  })
+  for (const p of expiring) {
+    const exists = await Alert.findOne({ product: p._id, type: 'expiry', isAcknowledged: false })
+    if (exists) continue
+    const daysLeft = Math.max(0, Math.ceil((p.expiryDate - new Date()) / 86400000))
+    alertBatch.push({
+      type: 'expiry',
+      priority: daysLeft <= 7 ? 'critical' : daysLeft <= 14 ? 'high' : 'medium',
+      title: `Expiring Soon: ${p.name}`,
+      message: `${p.name} (${p.sku}) expires in ${daysLeft} day${daysLeft === 1 ? '' : 's'}. Prioritize selling remaining stock.`,
+      product: p._id, productName: p.name,
+      isRead: false, isAcknowledged: false,
+      metadata: { expiryDate: p.expiryDate, daysLeft },
     })
   }
 
@@ -706,7 +891,7 @@ async function seedCurrentAlerts() {
 }
 
 // ─── 9. NOTIFICATIONS FOR ADMIN ───────────────────────────────────────────────
-async function seedNotifications(userIds) {
+async function seedNotifications(userIds, stats) {
   const adminId = userIds['admin']
   const existing = await Notification.countDocuments({ user: adminId })
   if (existing > 5) {
@@ -714,31 +899,65 @@ async function seedNotifications(userIds) {
     return
   }
 
+  const lowCount = await Product.countDocuments({ isActive: true, $expr: { $lt: ['$currentStock', '$reorderLevel'] }, currentStock: { $gt: 0 } })
+  const oosCount = await Product.countDocuments({ isActive: true, currentStock: { $lte: 0 } })
+
   const msgs = [
-    { title: 'Welcome to StockWise!',           message: 'Your Himalayan Wholesale Suppliers account is ready. Start by reviewing your inventory.', type: 'success', isRead: true  },
-    { title: 'Daily Stock Report',               message: 'Today\'s stock summary: 12 low-stock items, 3 out of stock. Review alerts.', type: 'warning', isRead: true  },
-    { title: 'Monthly Revenue Milestone',        message: 'Congratulations! This month revenue crossed NPR 5 Lakhs.', type: 'success', isRead: true  },
-    { title: 'New Purchase Orders Created',      message: '4 purchase orders placed today totaling NPR 87,400.', type: 'info', isRead: false },
-    { title: 'Supplier Delay Alert',             message: 'Nepal Food Corporation delivery for PO-000048 is 2 days overdue.', type: 'warning', isRead: false },
-    { title: 'System Backup Complete',           message: 'Nightly database backup completed successfully.', type: 'success', isRead: false },
-    { title: 'New Staff Account Created',        message: 'Sita Maharjan has been added as staff. Review access permissions.', type: 'info', isRead: true  },
-    { title: 'Festival Sales Boost',            message: 'Nepali New Year sales were 180% of normal. Top seller: Rice 5kg.', type: 'info', isRead: true  },
+    { title: 'Welcome to StockWise!', message: `Your ${COMPANY_NAME} account is ready. Start by reviewing your inventory.`, type: 'success', isRead: true },
+    { title: 'Daily Stock Report', message: `Today's stock summary: ${lowCount} low-stock items, ${oosCount} out of stock. Review alerts.`, type: 'warning', isRead: true },
   ]
+
+  if (stats) {
+    const momPct = stats.revenuePrev30 > 0 ? Math.round((stats.revenueLast30 / stats.revenuePrev30 - 1) * 100) : null
+    if (stats.revenueLast30 > 0) {
+      msgs.push({
+        title: 'Revenue Update — Last 30 Days',
+        message: `Revenue over the last 30 days was NPR ${fmt(stats.revenueLast30)}${momPct != null ? ` (${momPct >= 0 ? '+' : ''}${momPct}% vs the prior 30 days)` : ''}.`,
+        type: 'success', isRead: true,
+      })
+    }
+    if (stats.purchaseOrderCount > 0) {
+      msgs.push({
+        title: 'Purchase Orders This Year',
+        message: `${stats.purchaseOrderCount} purchase orders placed over the past year, totaling NPR ${fmt(stats.totalPurchaseSpend)}.`,
+        type: 'info', isRead: false,
+      })
+    }
+    if (stats.samplePendingPO) {
+      msgs.push({
+        title: 'Supplier Delay Alert',
+        message: `${stats.samplePendingPO.supplierName} delivery for ${stats.samplePendingPO.number} is overdue.`,
+        type: 'warning', isRead: false,
+      })
+    }
+    if (stats.peakFestival && stats.avgDailyRevenue > 0) {
+      const pct = Math.round((stats.peakFestival.dayRevenue / stats.avgDailyRevenue) * 100)
+      msgs.push({
+        title: `${stats.peakFestival.label} Sales Boost`,
+        message: `${stats.peakFestival.label} sales reached NPR ${fmt(stats.peakFestival.dayRevenue)} in a single day — about ${pct}% of the average daily figure.${stats.topProductName ? ` Top seller: ${stats.topProductName}.` : ''}`,
+        type: 'info', isRead: true,
+      })
+    }
+  }
+
+  msgs.push(
+    { title: 'System Backup Complete',    message: 'Nightly database backup completed successfully.', type: 'success', isRead: false },
+    { title: 'New Staff Account Created', message: 'Sita Maharjan has been added as staff. Review access permissions.', type: 'info', isRead: true },
+  )
 
   await Notification.insertMany(msgs.map(m => ({ ...m, user: adminId })), { ordered: false })
   console.log(`  ✓ ${msgs.length} notifications`)
 }
 
 // ─── 10. AUDIT LOGS FOR SETUP ─────────────────────────────────────────────────
-async function seedSetupAuditLogs(userIds) {
-  const adminId = userIds['admin']
+async function seedSetupAuditLogs() {
   const existing = await AuditLog.countDocuments()
   if (existing > 0) return  // history seeder already inserted plenty
 
   await AuditLog.insertMany([
-    { userEmail:'admin@himalayan.np', action:'SETUP_COMPLETE', resource:'Setting', details:{ message:'Company setup wizard completed' }, status:'success', createdAt: daysAgo(91) },
-    { userEmail:'admin@himalayan.np', action:'CREATE_USER',    resource:'User', details:{ email:'ram@himalayan.np', role:'inventory_manager' }, status:'success', createdAt: daysAgo(90) },
-    { userEmail:'admin@himalayan.np', action:'CREATE_USER',    resource:'User', details:{ email:'sita@himalayan.np', role:'staff' }, status:'success', createdAt: daysAgo(90) },
+    { userEmail:'admin@himalayan.np', action:'SETUP_COMPLETE', resource:'Setting', details:{ message:'Company setup wizard completed' }, status:'success', createdAt: daysAgo(DAYS + 2) },
+    { userEmail:'admin@himalayan.np', action:'CREATE_USER',    resource:'User', details:{ email:'ram@himalayan.np', role:'inventory_manager' }, status:'success', createdAt: daysAgo(DAYS + 1) },
+    { userEmail:'admin@himalayan.np', action:'CREATE_USER',    resource:'User', details:{ email:'sita@himalayan.np', role:'staff' }, status:'success', createdAt: daysAgo(DAYS + 1) },
     { userEmail:'admin@himalayan.np', action:'LOGIN',          resource:'Auth', details:{ ip:'192.168.1.10' }, status:'success', createdAt: daysAgo(1) },
     { userEmail:'ram@himalayan.np',   action:'LOGIN',          resource:'Auth', details:{ ip:'192.168.1.11' }, status:'success', createdAt: daysAgo(1) },
     { userEmail:'sita@himalayan.np',  action:'LOGIN',          resource:'Auth', details:{ ip:'192.168.1.12' }, status:'success', createdAt: daysAgo(1) },
@@ -788,19 +1007,22 @@ async function seed() {
   console.log('\n▸ Products')
   const prodMap = await seedProducts(cats, sups)
 
-  console.log('\n▸ 90-Day Historical Simulation')
-  await seedHistory(prodMap, sups, userIds)
+  console.log(`\n▸ ${DAYS}-Day Historical Simulation`)
+  const stats = await seedHistory(prodMap, sups, userIds)
 
   console.log('\n▸ Current-State Alerts')
   await seedCurrentAlerts()
 
   console.log('\n▸ Notifications')
-  await seedNotifications(userIds)
+  await seedNotifications(userIds, stats)
 
   console.log('\n▸ Setup Audit Logs')
-  await seedSetupAuditLogs(userIds)
+  await seedSetupAuditLogs()
 
   console.log('\n✅ Seed complete!\n')
+  if (stats) {
+    console.log(`   ${fmt(stats.saleCount)} sales · ${fmt(stats.purchaseOrderCount)} purchase orders · NPR ${fmt(stats.totalRevenue)} total revenue simulated over ${DAYS} days\n`)
+  }
   console.log('┌─────────────────────────────────────────────┐')
   console.log('│  Himalayan Wholesale Suppliers — Login Creds │')
   console.log('├──────────────────────┬──────────────────────┤')
