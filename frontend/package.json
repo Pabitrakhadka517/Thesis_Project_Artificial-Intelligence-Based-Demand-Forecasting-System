@@ -1,5 +1,5 @@
 {
-  "name": "frontend",
+  "name": "stockwise-frontend",
   "private": true,
   "version": "0.0.0",
   "description": "StockWise — React frontend for the AI-based demand forecasting and inventory optimization system",
