@@ -1,5 +1,5 @@
 ﻿import { useState } from 'react'
-import { NavLink } from 'react-router-dom'
+import { NavLink, Link } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -262,7 +262,8 @@ function SidebarContent({ collapsed }) {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* ── Logo ── */}
-      <div
+      <Link
+        to={`${prefix}/dashboard`}
         className={cn(
           'flex items-center gap-2 border-b shrink-0',
           collapsed ? 'justify-center px-0 py-4' : 'px-5 py-4.5'
@@ -288,7 +289,7 @@ function SidebarContent({ collapsed }) {
             </motion.div>
           )}
         </AnimatePresence>
-      </div>
+      </Link>
 
       {/* ── Role badge ── */}
       {!collapsed && (

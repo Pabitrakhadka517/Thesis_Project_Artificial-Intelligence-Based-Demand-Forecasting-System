@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { useDispatch } from 'react-redux'
 import { useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
@@ -210,14 +210,14 @@ export default function SetupWizardPage() {
         style={{ background: 'var(--brand-primary)' }}
       >
         {/* Logo */}
-        <div className="relative flex items-center gap-2">
+        <Link to="/" className="relative flex items-center gap-2">
           <img src={logoIconWhite} className="h-10 w-10 object-contain" alt="" />
           <div>
             <p className="text-white font-bold text-[18px] tracking-tight">{APP_NAME}</p>
             <p className="text-[10px] font-semibold uppercase tracking-widest"
               style={{ color: 'rgba(219,234,254,.65)' }}>Inventory Intelligence</p>
           </div>
-        </div>
+        </Link>
 
         {/* Headline */}
         <div className="relative space-y-4">
@@ -256,10 +256,10 @@ export default function SetupWizardPage() {
         <div className="w-full max-w-md space-y-8">
 
           {/* Mobile logo */}
-          <div className="flex lg:hidden items-center gap-1.5 mb-4">
+          <Link to="/" className="flex lg:hidden items-center gap-1.5 mb-4">
             <img src={isDark ? logoIconWhite : logoIcon} className="h-9 w-9 object-contain" alt="" />
             <p className="font-bold text-[17px]" style={{ color: isDark ? '#FFFFFF' : 'var(--brand-primary)' }}>{APP_NAME}</p>
-          </div>
+          </Link>
 
           {/* Header */}
           <div>

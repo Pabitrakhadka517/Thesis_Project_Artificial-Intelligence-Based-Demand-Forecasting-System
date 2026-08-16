@@ -51,13 +51,13 @@ export default function LoginPage() {
         style={{ background: 'var(--brand-primary)' }}
       >
         {/* Logo */}
-        <div className="relative flex items-center gap-2">
+        <Link to="/" className="relative flex items-center gap-2">
           <img src={logoIconWhite} className="h-10 w-10 object-contain" alt="" />
           <div>
             <span className="text-white text-[18px] font-bold tracking-tight">{APP_NAME}</span>
             <p className="text-[11px] font-medium" style={{ color: 'rgba(219,234,254,.7)' }}>Enterprise Analytics Platform</p>
           </div>
-        </div>
+        </Link>
 
         {/* Hero text */}
         <div className="relative space-y-6">
@@ -104,10 +104,10 @@ export default function LoginPage() {
           className="w-full max-w-100"
         >
           {/* Mobile logo */}
-          <div className="lg:hidden flex items-center gap-1.5 mb-8">
+          <Link to="/" className="lg:hidden flex items-center gap-1.5 mb-8">
             <img src={isDark ? logoIconWhite : logoIcon} className="h-9 w-9 object-contain" alt="" />
             <span className="text-[17px] font-bold" style={{ color: isDark ? '#FFFFFF' : 'var(--brand-primary)' }}>{APP_NAME}</span>
-          </div>
+          </Link>
 
           <h2 className="text-[28px] font-bold mb-1" style={{ color: 'var(--text-primary)' }}>Welcome back</h2>
           <p className="text-[14px] mb-8" style={{ color: 'var(--text-muted)' }}>

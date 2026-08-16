@@ -57,10 +57,10 @@ export default function ForgotPasswordPage() {
         }}
       >
         {/* Logo */}
-        <div className="flex items-center gap-1.5 mb-8">
+        <Link to="/" className="flex items-center gap-1.5 mb-8">
           <img src={isDark ? logoIconWhite : logoIcon} className="h-9 w-9 object-contain" alt="" />
           <span className="text-[17px] font-bold" style={{ color: isDark ? '#FFFFFF' : 'var(--brand-primary)' }}>{APP_NAME}</span>
-        </div>
+        </Link>
 
         {!submitted ? (
           <>

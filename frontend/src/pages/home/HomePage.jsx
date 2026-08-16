@@ -347,10 +347,10 @@ function Navbar() {
         className="fixed top-0 inset-x-0 z-50"
         style={navBase}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
+          <Link to="/" className="flex items-center gap-1.5">
             <img src={isDark ? logoIconWhite : logoIcon} className="h-7 w-7 object-contain" alt="" />
             <span className="font-bold text-[15px] tracking-tight" style={{ color: isDark ? '#FFFFFF' : T.navy }}>{APP_NAME}</span>
-          </div>
+          </Link>
 
           <nav className="hidden lg:flex items-center gap-0.5">
             {LINKS.map(({ label, href }) => (
@@ -1013,10 +1013,10 @@ function Footer() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-14 pb-8">
         <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-8 mb-10">
           <div className="lg:col-span-2">
-            <div className="flex items-center gap-1.5 mb-4">
+            <Link to="/" className="flex items-center gap-1.5 mb-4">
               <img src={isDark ? logoIconWhite : logoIcon} className="h-7 w-7 object-contain" alt="" />
               <span className="font-bold text-[15px]" style={{ color: isDark ? '#FFFFFF' : T.navy }}>{APP_NAME}</span>
-            </div>
+            </Link>
             <p className="text-[12.5px] leading-relaxed mb-4 max-w-xs" style={{ color: T.textMuted }}>
               AI-based demand forecasting and inventory optimization for wholesale
               grocery stores in Kathmandu Valley.
