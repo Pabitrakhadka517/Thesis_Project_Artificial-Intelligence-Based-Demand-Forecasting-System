@@ -188,6 +188,7 @@
     border-right: 1px solid rgba(255,255,255,.1);
   }
   .dark .sidebar-bg {
+    background: var(--brand-navy);
     border-right: 1px solid rgba(255,255,255,.08);
   }
   .sidebar-item {
