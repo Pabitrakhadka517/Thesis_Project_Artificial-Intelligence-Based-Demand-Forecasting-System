@@ -119,7 +119,7 @@
     --surface-muted: #132035;
     --surface-input: #0F1E32;
     --surface-hover: #162438;
-    --sidebar-surface: #0D1A2D;
+    --sidebar-surface: var(--brand-primary);
 
     --text-primary:   #E2E8F0;
     --text-secondary: #8FA3BE;
