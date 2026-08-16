@@ -11,111 +11,88 @@ const { isOverstocked, queueUpsert } = require('../utils/stockAlerts')
 const SALES_SORTABLE_FIELDS = { saleDate: 'saleDate', grandTotal: 'grandTotal', invoiceNumber: 'invoiceNumber' }
 
 exports.getSales = async (req, res) => {
-  try {
-    const { startDate, endDate, status, search, sortBy, sortDir } = req.query
-    const page  = Math.max(1, parseInt(req.query.page)  || 1)
-    const limit = Math.min(Math.max(1, parseInt(req.query.limit) || 20), 100)
-    const skip  = (page - 1) * limit
-    const sortField = SALES_SORTABLE_FIELDS[sortBy] || 'saleDate'
-    const sortOrder  = sortDir === 'asc' ? 1 : -1
-    const query = {}
+  const { startDate, endDate, status, search, sortBy, sortDir } = req.query
+  const page  = Math.max(1, parseInt(req.query.page)  || 1)
+  const limit = Math.min(Math.max(1, parseInt(req.query.limit) || 20), 100)
+  const skip  = (page - 1) * limit
+  const sortField = SALES_SORTABLE_FIELDS[sortBy] || 'saleDate'
+  const sortOrder  = sortDir === 'asc' ? 1 : -1
+  const query = {}
 
-    if (startDate || endDate) {
-      query.saleDate = {}
-      if (startDate) query.saleDate.$gte = new Date(startDate)
-      if (endDate)   query.saleDate.$lte = new Date(endDate + 'T23:59:59')
-    }
-    if (status) query.status = status
-    if (search) {
-      const safe = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-      const re = new RegExp(safe, 'i')
-      query.$or = [{ invoiceNumber: re }, { customerName: re }]
-    }
-
-    const [sales, total] = await Promise.all([
-      Sale.find(query).populate('recordedBy', 'fullName email').sort({ [sortField]: sortOrder }).skip(skip).limit(limit),
-      Sale.countDocuments(query),
-    ])
-
-    return paginated(res, { data: sales, total, page, limit })
-  } catch (err) {
-    console.error('[Sales] getSales Error:', err)
-    return res.status(500).json({ success: false, message: 'Failed to fetch sales.', timestamp: new Date() })
+  if (startDate || endDate) {
+    query.saleDate = {}
+    if (startDate) query.saleDate.$gte = new Date(startDate)
+    if (endDate)   query.saleDate.$lte = new Date(endDate + 'T23:59:59')
   }
+  if (status) query.status = status
+  if (search) {
+    const safe = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const re = new RegExp(safe, 'i')
+    query.$or = [{ invoiceNumber: re }, { customerName: re }]
+  }
+
+  const [sales, total] = await Promise.all([
+    Sale.find(query).populate('recordedBy', 'fullName email').sort({ [sortField]: sortOrder }).skip(skip).limit(limit),
+    Sale.countDocuments(query),
+  ])
+
+  return paginated(res, { data: sales, total, page, limit })
 }
 
 exports.getSale = async (req, res) => {
-  try {
-    const sale = await Sale.findById(req.params.id).populate('recordedBy', 'fullName email')
-    if (!sale) return error(res, 'Sale not found', 404)
-    return success(res, { sale })
-  } catch (err) {
-    console.error('[Sales] getSale Error:', err)
-    return res.status(err.statusCode || 500).json({
-      success: false, message: err.statusCode ? err.message : 'Failed to fetch sale.', timestamp: new Date(),
-    })
-  }
+  const sale = await Sale.findById(req.params.id).populate('recordedBy', 'fullName email')
+  if (!sale) return error(res, 'Sale not found', 404)
+  return success(res, { sale })
 }
 
 exports.createSale = async (req, res) => {
-  try {
-    const { validationResult } = require('express-validator')
-    const errs = validationResult(req)
-    if (!errs.isEmpty()) return error(res, 'Validation failed', 400, errs.array())
+  const { validationResult } = require('express-validator')
+  const errs = validationResult(req)
+  if (!errs.isEmpty()) return error(res, 'Validation failed', 400, errs.array())
 
-    const { items, customerName, customerPhone, paymentMethod, discount = 0, tax = 0, notes } = req.body
+  const { items, customerName, customerPhone, paymentMethod, discount = 0, tax = 0, notes } = req.body
 
-    if (!items?.length) return error(res, 'Sale must have at least one item', 400)
+  if (!items?.length) return error(res, 'Sale must have at least one item', 400)
 
-    // Reject orders with the same product listed twice — quantities should be
-    // combined by the caller before submission.
-    const seenIds = new Set()
-    for (const item of items) {
-      const id = item.product?.toString()
-      if (seenIds.has(id)) {
-        return error(res, 'Duplicate product in sale — combine quantities instead of listing the same product twice', 400)
-      }
-      seenIds.add(id)
+  // Reject orders with the same product listed twice — quantities should be
+  // combined by the caller before submission.
+  const seenIds = new Set()
+  for (const item of items) {
+    const id = item.product?.toString()
+    if (seenIds.has(id)) {
+      return error(res, 'Duplicate product in sale — combine quantities instead of listing the same product twice', 400)
     }
-
-    // Batch all product lookups into a single round trip (avoids N+1 queries).
-    const productIds = items.map(i => i.product)
-    const products   = await Product.find({ _id: { $in: productIds } }).lean()
-    const productMap = Object.fromEntries(products.map(p => [p._id.toString(), p]))
-
-    const enriched = []
-    for (const item of items) {
-      const product = productMap[item.product?.toString()]
-      if (!product) return error(res, `Product not found: ${item.product}`, 404)
-      if (product.currentStock < item.quantity) {
-        return error(res, `Insufficient stock for "${product.name}" (available: ${product.currentStock})`, 400)
-      }
-      enriched.push({ product, item })
-    }
-
-    const { sale, alertChecks } = await _executeSaleOperation(enriched, {
-      customerName, customerPhone, paymentMethod, discount, tax, notes,
-      recordedBy: req.user._id, staffName: req.user.fullName,
-    })
-
-    // Advisory alerts — best-effort so alert failures never block a completed sale.
-    for (const { product, stockAfter } of alertChecks) {
-      await _createStockAlertIfNeeded(product, stockAfter).catch((alertErr) =>
-        console.warn(`[Sales] Alert creation failed for ${product.name}:`, alertErr.message)
-      )
-    }
-
-    return created(res, { sale }, 'Sale recorded successfully')
-  } catch (err) {
-    console.error('[Sales] createSale Error:', err)
-    const statusCode = err.statusCode || 500
-    return res.status(statusCode).json({
-      success:   false,
-      message:   statusCode < 500 ? err.message : 'Failed to record sale. Please try again.',
-      timestamp: new Date(),
-      ...(process.env.NODE_ENV === 'development' && { details: err.message }),
-    })
+    seenIds.add(id)
   }
+
+  // Batch all product lookups into a single round trip (avoids N+1 queries).
+  const productIds = items.map(i => i.product)
+  const products   = await Product.find({ _id: { $in: productIds } }).lean()
+  const productMap = Object.fromEntries(products.map(p => [p._id.toString(), p]))
+
+  const enriched = []
+  for (const item of items) {
+    const product = productMap[item.product?.toString()]
+    if (!product) return error(res, `Product not found: ${item.product}`, 404)
+    if (product.currentStock < item.quantity) {
+      return error(res, `Insufficient stock for "${product.name}" (available: ${product.currentStock})`, 400)
+    }
+    enriched.push({ product, item })
+  }
+
+  const { sale, alertChecks } = await _executeSaleOperation(enriched, {
+    customerName, customerPhone, paymentMethod, discount, tax, notes,
+    recordedBy: req.user._id, staffName: req.user.fullName,
+  })
+
+  // Advisory alerts — best-effort so alert failures never block a completed sale.
+  for (const { product, stockAfter } of alertChecks) {
+    await _createStockAlertIfNeeded(product, stockAfter).catch((alertErr) =>
+      console.warn(`[Sales] Alert creation failed for ${product.name}:`, alertErr.message)
+    )
+  }
+
+  return created(res, { sale }, 'Sale recorded successfully')
 }
 
 // ── Sale execution (no session required) ─────────────────────────────────────
@@ -278,126 +255,105 @@ async function _createStockAlertIfNeeded(product, currentStock) {
 }
 
 exports.voidSale = async (req, res) => {
-  try {
-    const existing = await Sale.findById(req.params.id)
-    if (!existing)                       return error(res, 'Sale not found', 404)
-    if (existing.status === 'void')      return error(res, 'Sale is already voided', 400)
-    if (existing.status === 'refunded')  return error(res, 'A refunded sale cannot be voided — stock was already restored during the refund', 400)
+  const existing = await Sale.findById(req.params.id)
+  if (!existing)                       return error(res, 'Sale not found', 404)
+  if (existing.status === 'void')      return error(res, 'Sale is already voided', 400)
+  if (existing.status === 'refunded')  return error(res, 'A refunded sale cannot be voided — stock was already restored during the refund', 400)
 
-    // Atomically flip status to 'void'.
-    const voided = await Sale.findByIdAndUpdate(
-      req.params.id,
-      { status: 'void' },
+  // Atomically flip status to 'void'.
+  const voided = await Sale.findByIdAndUpdate(
+    req.params.id,
+    { status: 'void' },
+    { new: true }
+  )
+
+  // Restore stock for each line item and record the reversal movement.
+  // Each findByIdAndUpdate is atomic at the document level; no session needed.
+  const movementDocs = []
+  for (const item of existing.items) {
+    const updated = await Product.findByIdAndUpdate(
+      item.product,
+      { $inc: { currentStock: item.quantity } },
       { new: true }
     )
+    if (!updated) continue // product deleted after sale — skip
 
-    // Restore stock for each line item and record the reversal movement.
-    // Each findByIdAndUpdate is atomic at the document level; no session needed.
-    const movementDocs = []
-    for (const item of existing.items) {
-      const updated = await Product.findByIdAndUpdate(
-        item.product,
-        { $inc: { currentStock: item.quantity } },
-        { new: true }
-      )
-      if (!updated) continue // product deleted after sale — skip
-
-      movementDocs.push({
-        product:       item.product,
-        productName:   item.productName,
-        type:          'return',
-        quantity:      item.quantity,
-        stockBefore:   updated.currentStock - item.quantity,
-        stockAfter:    updated.currentStock,
-        reference:     existing.invoiceNumber,
-        referenceId:   existing._id,
-        referenceType: 'Sale',
-        notes:         `Stock restored — sale ${existing.invoiceNumber} voided`,
-        recordedBy:    req.user._id,
-      })
-    }
-
-    if (movementDocs.length) {
-      await StockMovement.create(movementDocs).catch((err) =>
-        console.error('[Sales] voidSale movement creation failed (non-fatal):', err.message)
-      )
-    }
-
-    // Auto-resolve stale low_stock / out_of_stock alerts for products whose
-    // stock was just restored.
-    const restoredIds = existing.items.map(i => i.product)
-    Alert.updateMany(
-      { product: { $in: restoredIds }, type: { $in: ['low_stock', 'out_of_stock'] }, isAcknowledged: false },
-      { $set: { isAcknowledged: true, acknowledgedAt: new Date() } }
-    ).catch(() => {})
-
-    AuditLog.create({
-      user: req.user._id, userEmail: req.user.email,
-      action: 'SALE_VOIDED', resource: 'Sale', resourceId: existing._id.toString(),
-      details: { invoiceNumber: existing.invoiceNumber, grandTotal: existing.grandTotal },
-      status: 'success',
-    }).catch(() => {})
-
-    return success(res, { sale: voided }, 'Sale voided and stock restored')
-  } catch (err) {
-    console.error('[Sales] voidSale Error:', err)
-    const statusCode = err.statusCode || 500
-    return res.status(statusCode).json({
-      success:   false,
-      message:   statusCode < 500 ? err.message : 'Failed to void sale. Please try again.',
-      timestamp: new Date(),
-      ...(process.env.NODE_ENV === 'development' && { details: err.message }),
+    movementDocs.push({
+      product:       item.product,
+      productName:   item.productName,
+      type:          'return',
+      quantity:      item.quantity,
+      stockBefore:   updated.currentStock - item.quantity,
+      stockAfter:    updated.currentStock,
+      reference:     existing.invoiceNumber,
+      referenceId:   existing._id,
+      referenceType: 'Sale',
+      notes:         `Stock restored — sale ${existing.invoiceNumber} voided`,
+      recordedBy:    req.user._id,
     })
   }
+
+  if (movementDocs.length) {
+    await StockMovement.create(movementDocs).catch((err) =>
+      console.error('[Sales] voidSale movement creation failed (non-fatal):', err.message)
+    )
+  }
+
+  // Auto-resolve stale low_stock / out_of_stock alerts for products whose
+  // stock was just restored.
+  const restoredIds = existing.items.map(i => i.product)
+  Alert.updateMany(
+    { product: { $in: restoredIds }, type: { $in: ['low_stock', 'out_of_stock'] }, isAcknowledged: false },
+    { $set: { isAcknowledged: true, acknowledgedAt: new Date() } }
+  ).catch(() => {})
+
+  AuditLog.create({
+    user: req.user._id, userEmail: req.user.email,
+    action: 'SALE_VOIDED', resource: 'Sale', resourceId: existing._id.toString(),
+    details: { invoiceNumber: existing.invoiceNumber, grandTotal: existing.grandTotal },
+    status: 'success',
+  }).catch(() => {})
+
+  return success(res, { sale: voided }, 'Sale voided and stock restored')
 }
 
 exports.getSalesStats = async (req, res) => {
-  try {
-    const today = new Date(); today.setHours(0, 0, 0, 0)
-    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1)
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1)
 
-    const [todaySales, monthSales, totalSales] = await Promise.all([
-      Sale.aggregate([
-        { $match: { saleDate: { $gte: today }, status: 'completed' } },
-        { $group: { _id: null, revenue: { $sum: '$grandTotal' }, count: { $sum: 1 } } },
-      ]),
-      Sale.aggregate([
-        { $match: { saleDate: { $gte: monthStart }, status: 'completed' } },
-        { $group: { _id: null, revenue: { $sum: '$grandTotal' }, count: { $sum: 1 } } },
-      ]),
-      Sale.countDocuments({ status: 'completed' }),
-    ])
+  const [todaySales, monthSales, totalSales] = await Promise.all([
+    Sale.aggregate([
+      { $match: { saleDate: { $gte: today }, status: 'completed' } },
+      { $group: { _id: null, revenue: { $sum: '$grandTotal' }, count: { $sum: 1 } } },
+    ]),
+    Sale.aggregate([
+      { $match: { saleDate: { $gte: monthStart }, status: 'completed' } },
+      { $group: { _id: null, revenue: { $sum: '$grandTotal' }, count: { $sum: 1 } } },
+    ]),
+    Sale.countDocuments({ status: 'completed' }),
+  ])
 
-    return success(res, {
-      today:   { revenue: todaySales[0]?.revenue || 0, count: todaySales[0]?.count || 0 },
-      month:   { revenue: monthSales[0]?.revenue || 0, count: monthSales[0]?.count || 0 },
-      total:   totalSales,
-    })
-  } catch (err) {
-    console.error('[Sales] getSalesStats Error:', err)
-    return res.status(500).json({ success: false, message: 'Failed to fetch sales stats.', timestamp: new Date() })
-  }
+  return success(res, {
+    today:   { revenue: todaySales[0]?.revenue || 0, count: todaySales[0]?.count || 0 },
+    month:   { revenue: monthSales[0]?.revenue || 0, count: monthSales[0]?.count || 0 },
+    total:   totalSales,
+  })
 }
 
 exports.getSalesTrend = async (req, res) => {
-  try {
-    const days = Math.min(parseInt(req.query.days) || 30, 365)
-    const from = new Date(); from.setDate(from.getDate() - days)
+  const days = Math.min(parseInt(req.query.days) || 30, 365)
+  const from = new Date(); from.setDate(from.getDate() - days)
 
-    const trend = await Sale.aggregate([
-      { $match: { saleDate: { $gte: from }, status: 'completed' } },
-      { $group: {
-        _id:     { $dateToString: { format: '%Y-%m-%d', date: '$saleDate' } },
-        revenue: { $sum: '$grandTotal' },
-        count:   { $sum: 1 },
-      }},
-      { $sort: { _id: 1 } },
-      { $project: { _id: 0, date: '$_id', revenue: 1, count: 1 } },
-    ])
+  const trend = await Sale.aggregate([
+    { $match: { saleDate: { $gte: from }, status: 'completed' } },
+    { $group: {
+      _id:     { $dateToString: { format: '%Y-%m-%d', date: '$saleDate' } },
+      revenue: { $sum: '$grandTotal' },
+      count:   { $sum: 1 },
+    }},
+    { $sort: { _id: 1 } },
+    { $project: { _id: 0, date: '$_id', revenue: 1, count: 1 } },
+  ])
 
-    return success(res, { trend })
-  } catch (err) {
-    console.error('[Sales] getSalesTrend Error:', err)
-    return res.status(500).json({ success: false, message: 'Failed to fetch sales trend.', timestamp: new Date() })
-  }
+  return success(res, { trend })
 }
