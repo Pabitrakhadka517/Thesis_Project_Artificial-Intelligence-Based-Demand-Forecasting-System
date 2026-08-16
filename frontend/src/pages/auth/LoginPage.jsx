@@ -51,7 +51,7 @@ export default function LoginPage() {
         style={{ background: 'var(--brand-primary)' }}
       >
         {/* Logo */}
-        <div className="relative flex items-center gap-3">
+        <div className="relative flex items-center gap-2">
           <img src={logoIconWhite} className="h-10 w-10 object-contain" alt="" />
           <div>
             <span className="text-white text-[18px] font-bold tracking-tight">{APP_NAME}</span>
@@ -104,9 +104,9 @@ export default function LoginPage() {
           className="w-full max-w-100"
         >
           {/* Mobile logo */}
-          <div className="lg:hidden flex items-center gap-2 mb-8">
+          <div className="lg:hidden flex items-center gap-1.5 mb-8">
             <img src={isDark ? logoIconWhite : logoIcon} className="h-9 w-9 object-contain" alt="" />
-            <span className="text-[17px] font-bold" style={{ color: 'var(--text-primary)' }}>{APP_NAME}</span>
+            <span className="text-[17px] font-bold" style={{ color: isDark ? '#FFFFFF' : 'var(--brand-primary)' }}>{APP_NAME}</span>
           </div>
 
           <h2 className="text-[28px] font-bold mb-1" style={{ color: 'var(--text-primary)' }}>Welcome back</h2>

@@ -210,7 +210,7 @@ export default function SetupWizardPage() {
         style={{ background: 'var(--brand-primary)' }}
       >
         {/* Logo */}
-        <div className="relative flex items-center gap-3">
+        <div className="relative flex items-center gap-2">
           <img src={logoIconWhite} className="h-10 w-10 object-contain" alt="" />
           <div>
             <p className="text-white font-bold text-[18px] tracking-tight">{APP_NAME}</p>
@@ -256,9 +256,9 @@ export default function SetupWizardPage() {
         <div className="w-full max-w-md space-y-8">
 
           {/* Mobile logo */}
-          <div className="flex lg:hidden items-center gap-3 mb-4">
+          <div className="flex lg:hidden items-center gap-1.5 mb-4">
             <img src={isDark ? logoIconWhite : logoIcon} className="h-9 w-9 object-contain" alt="" />
-            <p className="font-bold text-[17px]" style={{ color: 'var(--text-primary)' }}>{APP_NAME}</p>
+            <p className="font-bold text-[17px]" style={{ color: isDark ? '#FFFFFF' : 'var(--brand-primary)' }}>{APP_NAME}</p>
           </div>
 
           {/* Header */}

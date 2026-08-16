@@ -173,10 +173,10 @@ function AppMockup() {
         <div style={{ display: 'grid', gridTemplateColumns: '144px 1fr' }}>
           <div style={{ background: '#FFFFFF', borderRight: `1px solid #EEF0F3`, padding: '12px 0' }}>
             <div style={{ padding: '0 10px 10px', borderBottom: `1px solid #EEF0F3`, marginBottom: 8 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 <img src={logoIcon} alt="" style={{ width: 22, height: 22, objectFit: 'contain' }} />
                 <div>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: '#111827', display: 'block', lineHeight: 1.1, letterSpacing: '-0.01em' }}>StockWise</span>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: '#03045E', display: 'block', lineHeight: 1.1, letterSpacing: '-0.01em' }}>StockWise</span>
                   <span style={{ fontSize: 7, color: '#9CA3AF' }}>Enterprise</span>
                 </div>
               </div>
@@ -347,9 +347,9 @@ function Navbar() {
         className="fixed top-0 inset-x-0 z-50"
         style={navBase}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-1.5">
             <img src={isDark ? logoIconWhite : logoIcon} className="h-7 w-7 object-contain" alt="" />
-            <span className="font-bold text-[15px] tracking-tight" style={{ color: T.text }}>{APP_NAME}</span>
+            <span className="font-bold text-[15px] tracking-tight" style={{ color: isDark ? '#FFFFFF' : T.navy }}>{APP_NAME}</span>
           </div>
 
           <nav className="hidden lg:flex items-center gap-0.5">
@@ -1013,9 +1013,9 @@ function Footer() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-14 pb-8">
         <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-8 mb-10">
           <div className="lg:col-span-2">
-            <div className="flex items-center gap-2 mb-4">
+            <div className="flex items-center gap-1.5 mb-4">
               <img src={isDark ? logoIconWhite : logoIcon} className="h-7 w-7 object-contain" alt="" />
-              <span className="font-bold text-[15px]" style={{ color: T.text }}>{APP_NAME}</span>
+              <span className="font-bold text-[15px]" style={{ color: isDark ? '#FFFFFF' : T.navy }}>{APP_NAME}</span>
             </div>
             <p className="text-[12.5px] leading-relaxed mb-4 max-w-xs" style={{ color: T.textMuted }}>
               AI-based demand forecasting and inventory optimization for wholesale

@@ -264,7 +264,7 @@ function SidebarContent({ collapsed }) {
       {/* ── Logo ── */}
       <div
         className={cn(
-          'flex items-center gap-3 border-b shrink-0',
+          'flex items-center gap-2 border-b shrink-0',
           collapsed ? 'justify-center px-0 py-4' : 'px-5 py-4.5'
         )}
         style={{ borderColor: 'rgba(255,255,255,.12)' }}
