@@ -216,7 +216,7 @@ export default function AlertsPage() {
               <button onClick={() => generateMutation.mutate()}
                 disabled={generateMutation.isPending}
                 className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-[13px] font-bold text-white"
-                style={{ background: 'var(--brand-primary)' }}>
+                style={{ background: 'var(--brand-blue)' }}>
                 <Zap className="h-4 w-4" />
                 {generateMutation.isPending ? 'Scanning…' : 'Scan Inventory'}
               </button>

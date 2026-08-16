@@ -1013,7 +1013,7 @@ function ListView({ onSelectSupplier, can }) {
         <div className="fixed bottom-8 right-8 z-30">
           <button onClick={() => setCreate(true)}
             className="flex items-center gap-2 px-4 py-3 rounded-2xl text-[13px] font-bold text-white shadow-xl"
-            style={{ background: 'var(--brand-primary)' }}>
+            style={{ background: 'var(--brand-blue)' }}>
             <Plus className="h-4 w-4" /> Add Supplier
           </button>
         </div>
@@ -1078,7 +1078,7 @@ export default function SuppliersPage() {
           <button key={t.id} onClick={() => setTab(t.id)}
             className="flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-semibold transition-all"
             style={{
-              background: tab === t.id ? 'var(--brand-primary)' : 'transparent',
+              background: tab === t.id ? 'var(--brand-blue)' : 'transparent',
               color:      tab === t.id ? '#fff' : 'var(--text-muted)',
               boxShadow:  tab === t.id ? 'var(--shadow-xs)' : 'none',
             }}>

@@ -61,7 +61,7 @@ export class ErrorBoundary extends Component {
           <button
             onClick={this.reset}
             className="mt-4 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm text-white transition-opacity hover:opacity-90"
-            style={{ background: 'var(--brand-primary)' }}
+            style={{ background: 'var(--brand-blue)' }}
           >
             <RefreshCw className="h-4 w-4" />
             Return to Dashboard

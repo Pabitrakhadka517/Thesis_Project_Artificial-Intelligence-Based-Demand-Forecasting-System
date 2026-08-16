@@ -481,7 +481,7 @@ export default function SalesPage() {
         actions={
           <button onClick={() => setCreate(true)}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-[13px] font-bold text-white"
-            style={{ background: 'var(--brand-primary)' }}>
+            style={{ background: 'var(--brand-blue)' }}>
             <Plus className="h-4 w-4" /> New Sale
           </button>
         }

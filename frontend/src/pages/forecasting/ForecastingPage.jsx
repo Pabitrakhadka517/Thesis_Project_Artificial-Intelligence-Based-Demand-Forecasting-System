@@ -457,7 +457,6 @@ export default function ForecastingPage() {
                     loading={trainMut.isPending}
                     disabled={!selectedSku || loading}
                     onClick={() => trainMut.mutate({ sku: selectedSku, horizonArg: horizon, modelArg: model })}
-                    style={{ background: 'var(--brand-primary)' }}
                   >
                     Train + Forecast
                   </Button>
