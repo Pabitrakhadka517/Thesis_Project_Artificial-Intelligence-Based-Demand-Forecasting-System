@@ -146,42 +146,42 @@ function AppMockup() {
 
   return (
     <div className="relative select-none" style={{ maxWidth: 540, margin: '0 auto' }}>
-      <div className="relative rounded-xl overflow-hidden"
-        style={{ background: '#FFFFFF', border: `1px solid rgba(37,99,235,.2)`,
-          boxShadow: `0 24px 64px rgba(0,0,0,.12), 0 4px 12px rgba(0,0,0,.06)` }}>
+      <div className="relative rounded-2xl overflow-hidden"
+        style={{ background: '#FFFFFF', border: `1px solid rgba(37,99,235,.16)`,
+          boxShadow: `0 40px 80px -20px rgba(15,23,42,.22), 0 12px 28px -8px rgba(15,23,42,.1), 0 0 0 1px rgba(255,255,255,.6) inset` }}>
 
-        <div className="flex items-center gap-2 px-4 py-2.5"
-          style={{ background: '#F9FAFB', borderBottom: `1px solid #E5E7EB` }}>
+        <div className="flex items-center gap-2 px-4 py-3"
+          style={{ background: 'linear-gradient(180deg,#FCFCFD,#F8F9FB)', borderBottom: `1px solid #ECEEF1` }}>
           <div className="flex gap-1.5">
             {['#EF4444','#F59E0B','#22C55E'].map(c => (
-              <div key={c} className="h-2.5 w-2.5 rounded-full" style={{ background: c }} />
+              <div key={c} className="h-2.5 w-2.5 rounded-full" style={{ background: c, boxShadow: `0 0 0 1px rgba(0,0,0,.04)` }} />
             ))}
           </div>
-          <div className="flex-1 mx-3 px-3 py-1 rounded flex items-center gap-1.5"
-            style={{ background: '#FFFFFF', border: `1px solid #E5E7EB` }}>
+          <div className="flex-1 mx-3 px-3 py-1.5 rounded-md flex items-center gap-1.5"
+            style={{ background: '#FFFFFF', border: `1px solid #E9EBEF`, boxShadow: '0 1px 2px rgba(15,23,42,.03) inset' }}>
             <div className="h-1.5 w-1.5 rounded-full" style={{ background: '#16A34A' }} />
-            <span className="text-[9px]" style={{ color: '#6B7280' }}>stockwise.app/admin/dashboard</span>
+            <span className="text-[9px] tracking-tight" style={{ color: '#6B7280' }}>stockwise.app/admin/dashboard</span>
           </div>
           <div className="flex items-center gap-1">
             <div className="h-1.5 w-1.5 rounded-full" style={{ background: '#16A34A' }} />
-            <span className="text-[8px] font-bold" style={{ color: '#16A34A' }}>LIVE</span>
+            <span className="text-[8px] font-bold tracking-wide" style={{ color: '#16A34A' }}>LIVE</span>
           </div>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '144px 1fr' }}>
-          <div style={{ background: '#FFFFFF', borderRight: `1px solid #E5E7EB`, padding: '10px 0' }}>
-            <div style={{ padding: '0 10px 8px', borderBottom: `1px solid #E5E7EB`, marginBottom: 6 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                <div style={{ width: 22, height: 22, borderRadius: 6, background: '#03045E', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: '#FFFFFF', borderRight: `1px solid #EEF0F3`, padding: '12px 0' }}>
+            <div style={{ padding: '0 10px 10px', borderBottom: `1px solid #EEF0F3`, marginBottom: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div style={{ width: 22, height: 22, borderRadius: 6.5, background: '#03045E', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 6px rgba(3,4,94,.25)' }}>
                   <Zap style={{ width: 10, height: 10, color: '#fff', strokeWidth: 2.5 }} />
                 </div>
                 <div>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: '#111827', display: 'block', lineHeight: 1.1 }}>StockWise</span>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: '#111827', display: 'block', lineHeight: 1.1, letterSpacing: '-0.01em' }}>StockWise</span>
                   <span style={{ fontSize: 7, color: '#9CA3AF' }}>Enterprise</span>
                 </div>
               </div>
             </div>
-            <div style={{ margin: '0 8px 6px', padding: '4px 7px', borderRadius: 6, background: 'rgba(217,119,6,.1)', border: '1px solid rgba(217,119,6,.2)', display: 'flex', alignItems: 'center', gap: 4 }}>
+            <div style={{ margin: '0 8px 8px', padding: '4px 7px', borderRadius: 6, background: 'rgba(217,119,6,.08)', border: '1px solid rgba(217,119,6,.18)', display: 'flex', alignItems: 'center', gap: 4 }}>
               <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#D97706' }} />
               <span style={{ fontSize: 7.5, fontWeight: 700, color: '#D97706', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Inv. Manager</span>
             </div>
@@ -193,51 +193,52 @@ function AppMockup() {
               { label: 'Alerts',      active: false },
               { label: 'Reports',     active: false },
             ].map(({ label, active }) => (
-              <div key={label} style={{ margin: '0 8px 1px', padding: '5px 7px', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 5,
-                background: active ? 'rgba(37,99,235,.08)' : 'transparent' }}>
+              <div key={label} style={{ margin: '0 8px 2px', padding: '5px 7px 5px 6px', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 5,
+                background: active ? 'rgba(37,99,235,.07)' : 'transparent',
+                borderLeft: active ? '2px solid #2563EB' : '2px solid transparent' }}>
                 <div style={{ width: 8, height: 8, borderRadius: 2, background: active ? '#2563EB' : '#D1D5DB' }} />
-                <span style={{ fontSize: 8.5, color: active ? '#2563EB' : '#6B7280', fontWeight: active ? 600 : 400 }}>{label}</span>
+                <span style={{ fontSize: 8.5, color: active ? '#1E40AF' : '#6B7280', fontWeight: active ? 700 : 400, letterSpacing: '-0.005em' }}>{label}</span>
               </div>
             ))}
-            <div style={{ margin: '8px 8px 0', padding: '5px 7px', borderRadius: 6, background: 'rgba(37,99,235,.06)', border: '1px solid rgba(37,99,235,.15)' }}>
+            <div style={{ margin: '10px 8px 0', padding: '6px 7px', borderRadius: 7, background: 'rgba(37,99,235,.05)', border: '1px solid rgba(37,99,235,.14)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#16A34A' }} />
+                <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#16A34A', boxShadow: '0 0 0 2.5px rgba(22,163,74,.15)' }} />
                 <span style={{ fontSize: 7.5, color: '#374151' }}>AI Engine Online</span>
                 <span style={{ marginLeft: 'auto', fontSize: 6.5, background: 'rgba(22,163,74,.12)', color: '#16A34A', padding: '1px 4px', borderRadius: 10, fontWeight: 700 }}>LIVE</span>
               </div>
             </div>
           </div>
 
-          <div style={{ padding: '10px', background: '#F3F4F6' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <span style={{ fontSize: 10, fontWeight: 700, color: '#111827' }}>Dashboard</span>
+          <div style={{ padding: '12px', background: 'linear-gradient(180deg,#F9FAFC,#F2F4F7)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 9 }}>
+              <span style={{ fontSize: 10.5, fontWeight: 700, color: '#0F172A', letterSpacing: '-0.01em' }}>Dashboard</span>
               <div style={{ display: 'flex', gap: 3 }}>
                 {['Today','7d','30d'].map((t, i) => (
-                  <div key={t} style={{ padding: '2px 5px', borderRadius: 4, fontSize: 7.5, fontWeight: i === 0 ? 600 : 400,
+                  <div key={t} style={{ padding: '2px 5px', borderRadius: 4, fontSize: 7.5, fontWeight: i === 0 ? 700 : 400,
                     background: i === 0 ? 'rgba(37,99,235,.1)' : '#FFFFFF',
                     color: i === 0 ? '#2563EB' : '#6B7280',
-                    border: i === 0 ? 'none' : '1px solid #E5E7EB' }}>{t}</div>
+                    border: i === 0 ? 'none' : '1px solid #E9EBEF' }}>{t}</div>
                 ))}
               </div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 4, marginBottom: 7 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 5, marginBottom: 8 }}>
               {[
                 { l:'Accuracy',  v:'94.2%', d:'↑2.1%',  c:'#16A34A' },
                 { l:'Stock Val', v:'Rs. 2.4M', d:'12 SKU',  c:'#2563EB' },
                 { l:'Low Stock', v:'8 items',d:'3 crit', c:'#D97706' },
                 { l:'Revenue',   v:'Rs. 850K', d:'↑12.5%', c:'#2563EB' },
               ].map(({ l, v, d, c }) => (
-                <div key={l} style={{ padding: '5px 6px', background: '#FFFFFF', border: `1px solid #E5E7EB`, borderRadius: 6 }}>
-                  <div style={{ fontSize: 7, color: '#9CA3AF', marginBottom: 1 }}>{l}</div>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: '#111827' }}>{v}</div>
-                  <div style={{ fontSize: 7, color: c, marginTop: 1 }}>{d}</div>
+                <div key={l} style={{ padding: '6px 7px', background: '#FFFFFF', border: `1px solid #EEF0F3`, borderRadius: 7, boxShadow: '0 1px 2px rgba(15,23,42,.04)' }}>
+                  <div style={{ fontSize: 7, color: '#9CA3AF', marginBottom: 2 }}>{l}</div>
+                  <div style={{ fontSize: 10.5, fontWeight: 700, color: '#0F172A', letterSpacing: '-0.01em' }}>{v}</div>
+                  <div style={{ fontSize: 7, color: c, marginTop: 1, fontWeight: 600 }}>{d}</div>
                 </div>
               ))}
             </div>
-            <div style={{ background: '#FFFFFF', border: `1px solid #E5E7EB`, borderRadius: 6, padding: '6px 8px', marginBottom: 5 }}>
+            <div style={{ background: '#FFFFFF', border: `1px solid #EEF0F3`, borderRadius: 7, padding: '7px 8px', marginBottom: 6, boxShadow: '0 1px 2px rgba(15,23,42,.04)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
                 <span style={{ fontSize: 8, fontWeight: 600, color: '#374151' }}>Demand Forecast vs Actual</span>
-                <span style={{ fontSize: 7, padding: '1px 5px', borderRadius: 3, background: 'rgba(37,99,235,.1)', color: '#2563EB' }}>Prophet</span>
+                <span style={{ fontSize: 7, padding: '1px 5px', borderRadius: 3, background: 'rgba(37,99,235,.1)', color: '#2563EB', fontWeight: 600 }}>Prophet</span>
               </div>
               <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 52 }}>
                 <defs>
@@ -256,16 +257,16 @@ function AppMockup() {
                 <polyline points={linePoints} fill="none" stroke="#2563EB" strokeWidth="1.5" strokeLinejoin="round" />
               </svg>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 5 }}>
               {[
                 { title:'Active Alerts',       items:[['Basmati Rice low','#DC2626'],['Wheat critical','#D97706'],['EOQ triggered','#D97706']] },
                 { title:'AI Recommendations',  items:[['Order 240u Basmati','#16A34A'],['EOQ: 180kg Wheat','#2563EB'],['Reduce Lentil 20%','#D97706']] },
               ].map(({ title, items }) => (
-                <div key={title} style={{ background: '#FFFFFF', border: `1px solid #E5E7EB`, borderRadius: 5, padding: '5px 6px' }}>
-                  <div style={{ fontSize: 7.5, fontWeight: 600, color: '#374151', marginBottom: 3 }}>{title}</div>
+                <div key={title} style={{ background: '#FFFFFF', border: `1px solid #EEF0F3`, borderRadius: 6, padding: '6px 7px', boxShadow: '0 1px 2px rgba(15,23,42,.04)' }}>
+                  <div style={{ fontSize: 7.5, fontWeight: 700, color: '#374151', marginBottom: 4, letterSpacing: '-0.005em' }}>{title}</div>
                   {items.map(([txt, c]) => (
-                    <div key={txt} style={{ display: 'flex', alignItems: 'center', gap: 3.5, marginBottom: 2.5 }}>
-                      <div style={{ width: 4.5, height: 4.5, borderRadius: '50%', background: c, flexShrink: 0 }} />
+                    <div key={txt} style={{ display: 'flex', alignItems: 'center', gap: 3.5, marginBottom: 3 }}>
+                      <div style={{ width: 4.5, height: 4.5, borderRadius: '50%', background: c, flexShrink: 0, boxShadow: `0 0 0 2px color-mix(in srgb, ${c} 15%, transparent)` }} />
                       <span style={{ fontSize: 7.5, color: '#6B7280' }}>{txt}</span>
                     </div>
                   ))}
@@ -279,13 +280,13 @@ function AppMockup() {
       {/* Floating stat chip — small "proof" detail overlapping the mockup,
           a common premium-SaaS device that adds depth without a gradient blob. */}
       <div
-        className="absolute -left-6 -bottom-5 hidden sm:flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl"
-        style={{ background: T.card, border: `1px solid ${T.border}`, boxShadow: 'var(--shadow-lg)' }}>
+        className="absolute -left-6 -bottom-5 hidden sm:flex items-center gap-2.5 px-4 py-3 rounded-2xl"
+        style={{ background: T.card, border: `1px solid ${T.border}`, boxShadow: '0 20px 40px -12px rgba(15,23,42,.18), var(--shadow-lg)' }}>
         <div className="h-8 w-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: 'rgba(22,163,74,.12)' }}>
           <ArrowDownRight className="h-4 w-4" style={{ color: T.green }} />
         </div>
         <div>
-          <p className="text-[13px] font-bold leading-none" style={{ color: T.text }}>Reorder point crossed</p>
+          <p className="text-[13px] font-bold leading-none tracking-tight" style={{ color: T.text }}>Reorder point crossed</p>
           <p className="text-[10.5px] mt-1" style={{ color: T.textMuted }}>Purchase order suggested automatically</p>
         </div>
       </div>
