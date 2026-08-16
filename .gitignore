@@ -21,6 +21,7 @@ trained_models/
 *.joblib
 *.keras
 *.h5
+training_data.csv
 
 # ── OS ────────────────────────────────────────────────────────────────────────
 .DS_Store
