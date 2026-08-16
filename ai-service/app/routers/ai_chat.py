@@ -10,14 +10,21 @@ POST   /api/ai/chat/session            — create a new session ID (client helpe
 """
 from __future__ import annotations
 
-from typing import Optional
+import logging
+from typing import Annotated, Optional
 
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Header, HTTPException, Path
 from pydantic import BaseModel, Field
+
+# Sessions are UUIDs by default (see new_session_id()), but the docstrings below
+# explicitly allow any client-generated string — so this only bounds length
+# against abuse, it doesn't restrict the character set.
+SessionId = Annotated[str, Path(min_length=1, max_length=128)]
 
 from app.database import get_db
 from app.services.ai_chat_service import AIChatService
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/chat", tags=["ai-chat"])
 
 
@@ -28,6 +35,7 @@ class ChatRequest(BaseModel):
     user_role:  str            = Field(default="staff")
     session_id: Optional[str]  = Field(
         default=None,
+        max_length=128,
         description=(
             "Opaque session token for multi-turn conversation memory. "
             "Omit for stateless (cached) responses. "
@@ -71,8 +79,9 @@ async def chat(
             session_id=body.session_id,
         )
         return {"success": True, "data": result}
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Chat failed: {exc}")
+    except Exception:
+        logger.exception("Chat request failed")
+        raise HTTPException(status_code=500, detail="Chat failed. Please try again.")
 
 
 @router.get("/suggestions", summary="Role-based suggested questions")
@@ -100,8 +109,9 @@ async def get_insights():
     try:
         insights = await svc.generate_proactive_insights()
         return {"success": True, "data": insights}
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Insights failed: {exc}")
+    except Exception:
+        logger.exception("Insights generation failed")
+        raise HTTPException(status_code=500, detail="Insights generation failed. Please try again.")
 
 
 @router.post("/session", summary="Create a new conversation session ID", response_model=SessionResponse)
@@ -117,7 +127,7 @@ async def create_session():
 
 
 @router.get("/history/{session_id}", summary="Retrieve conversation history for a session")
-async def get_history(session_id: str):
+async def get_history(session_id: SessionId):
     """
     Returns all stored turns for the given session as a list of
     {role: "user"|"assistant", content: "..."} messages.
@@ -136,7 +146,7 @@ async def get_history(session_id: str):
 
 
 @router.delete("/history/{session_id}", summary="Clear conversation history for a session")
-async def clear_history(session_id: str):
+async def clear_history(session_id: SessionId):
     """
     Deletes all stored turns for the given session.
     The session ID itself becomes reusable (starts a fresh conversation).

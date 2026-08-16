@@ -9,12 +9,15 @@ Routes:
 """
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from app.database import get_db
 from app.services.inventory_analysis import InventoryAnalysisService
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/inventory", tags=["inventory-ai"])
 
 
@@ -33,8 +36,9 @@ async def analyze_product(body: AnalyzeRequest):
         return {"success": True, "data": result}
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Analysis failed: {exc}")
+    except Exception:
+        logger.exception("Product analysis failed")
+        raise HTTPException(status_code=500, detail="Analysis failed. Please try again.")
 
 
 @router.get("/dashboard")

@@ -21,6 +21,7 @@ GET  /api/ai/ml/skus                     — list all SKUs available in the data
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import Literal, Optional
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
@@ -28,6 +29,8 @@ from pydantic import BaseModel, Field, field_validator
 
 from app.database import get_db
 from app.ml.model_trainer import load_metadata
+
+logger = logging.getLogger(__name__)
 from app.services.ml_forecast_service import MLForecastService, TrainingBusyError
 
 router = APIRouter(prefix="/ml", tags=["ML Forecast"])
@@ -310,8 +313,9 @@ async def generate_insights():
     try:
         result = await svc.generate_insights()
         return {"success": True, "data": result}
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Insight generation failed: {exc}")
+    except Exception:
+        logger.exception("Insight generation failed")
+        raise HTTPException(status_code=500, detail="Insight generation failed. Please try again.")
 
 
 @router.get("/dataset/summary", summary="Summary statistics of the training dataset")

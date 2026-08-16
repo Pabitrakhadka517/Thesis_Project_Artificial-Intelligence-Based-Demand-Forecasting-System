@@ -22,5 +22,5 @@ python-dotenv==1.0.1
 httpx==0.27.0
 
 # ── LLM providers (optional — BI engine falls back if unset) ────────────────
-anthropic>=0.40.0
-google-genai>=1.0.0
+anthropic==0.40.0
+google-genai==1.0.0
