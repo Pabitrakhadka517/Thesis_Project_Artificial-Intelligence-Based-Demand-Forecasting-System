@@ -99,7 +99,11 @@
   }
 
   .dark {
-    --brand-primary: #01021f;
+    /* Was #01021f — nearly indistinguishable from --surface-page (#07101F),
+       so brand-primary surfaces (sidebar, auth panels) barely separated from
+       the page. Lifted and given real blue saturation so it reads as a
+       distinct "branded" navy instead of blending into the near-black page. */
+    --brand-primary: #0B1550;
     --surface-page:  #07101F;
     --surface-card:  #0D1A2D;
     --surface-muted: #132035;
