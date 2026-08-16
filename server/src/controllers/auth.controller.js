@@ -106,34 +106,6 @@ exports.setup = async (req, res) => {
   return created(res, { user: userPayload(user), accessToken, refreshToken, companyName }, 'Setup completed successfully')
 }
 
-// ─── Register (internal — not exposed as a public route) ──────────────────────
-
-exports.register = async (req, res) => {
-  const errs = validationResult(req)
-  if (!errs.isEmpty()) return error(res, 'Validation failed', 400, errs.array())
-
-  const { fullName, email, password, phone, role } = req.body
-
-  const existing = await User.findOne({ email })
-  if (existing) return error(res, 'Email already registered', 409)
-
-  const totalUsers   = await User.countDocuments()
-  const assignedRole = totalUsers === 0 ? 'admin' : (role || 'staff')
-
-  const user = await User.create({
-    fullName, email, password, phone, role: assignedRole, mustChangePassword: true,
-  })
-  const { accessToken, refreshToken } = await issueTokens(user)
-
-  audit({
-    user: user._id, userEmail: email,
-    action: 'USER_REGISTER', resource: 'User', resourceId: user._id.toString(),
-    status: 'success', ...getClientInfo(req),
-  })
-
-  return created(res, { user: userPayload(user), accessToken, refreshToken }, 'Registration successful')
-}
-
 // ─── Login ────────────────────────────────────────────────────────────────────
 
 exports.login = async (req, res) => {
