@@ -32,10 +32,17 @@
     --surface-input:  #FFFFFF;
     --surface-hover:  #F3F4F6;
     --surface-navbar: #FFFFFF;
-    /* Sidebar's own surface — a soft blue tint in light mode rather than
-       plain white, kept as its own token (not --surface-card) so it doesn't
-       tint every other card in the app. */
-    --sidebar-surface: #EFF6FF;
+    /* Sidebar deliberately runs the opposite of the page theme — a dark navy
+       panel in light mode — so it needs its own text/border/hover tokens
+       rather than the page's --text-*/--border (which are dark, meant for a
+       light background, and would be unreadable on this dark one). */
+    --sidebar-surface:      #03045E;
+    --sidebar-text:         rgba(255,255,255,.92);
+    --sidebar-text-muted:   rgba(255,255,255,.5);
+    --sidebar-border:       rgba(255,255,255,.12);
+    --sidebar-hover:        rgba(255,255,255,.08);
+    --sidebar-active-bg:    rgba(255,255,255,.12);
+    --sidebar-active-text:  #FFFFFF;
 
     /* Text – Light */
     --text-primary:   #111827;
@@ -119,7 +126,16 @@
     --surface-muted: #132035;
     --surface-input: #0F1E32;
     --surface-hover: #162438;
-    --sidebar-surface: #03045E;
+    /* Swapped with light mode: dark-mode sidebar is the light-blue panel,
+       so its text/border/hover need to be dark-on-light instead of the
+       light-on-dark values above. */
+    --sidebar-surface:      #EFF6FF;
+    --sidebar-text:         rgba(15,23,42,.92);
+    --sidebar-text-muted:   rgba(15,23,42,.5);
+    --sidebar-border:       rgba(15,23,42,.1);
+    --sidebar-hover:        rgba(15,23,42,.05);
+    --sidebar-active-bg:    rgba(37,99,235,.12);
+    --sidebar-active-text:  #2563EB;
 
     --text-primary:   #E2E8F0;
     --text-secondary: #8FA3BE;
@@ -206,7 +222,7 @@
      between a light and a dark sidebar like the rest of the UI. */
   .sidebar-bg {
     background: var(--sidebar-surface);
-    border-right: 1px solid var(--border);
+    border-right: 1px solid var(--sidebar-border);
   }
   .sidebar-item {
     display: flex;
@@ -216,7 +232,7 @@
     border-radius: 8px;
     font-size: 0.8125rem;
     font-weight: 500;
-    color: var(--text-secondary);
+    color: var(--sidebar-text-muted);
     transition: all .15s ease;
     cursor: pointer;
     border: none;
@@ -225,12 +241,12 @@
     white-space: nowrap;
   }
   .sidebar-item:hover {
-    background: var(--surface-hover);
-    color: var(--text-primary);
+    background: var(--sidebar-hover);
+    color: var(--sidebar-text);
   }
   .sidebar-item.active {
-    background: var(--tint-primary);
-    color: var(--brand-blue);
+    background: var(--sidebar-active-bg);
+    color: var(--sidebar-active-text);
     font-weight: 600;
   }
   .sidebar-item.active::before {
@@ -240,7 +256,7 @@
     top: 18%;
     height: 64%;
     width: 3px;
-    background: var(--brand-blue);
+    background: var(--sidebar-active-text);
     border-radius: 0 3px 3px 0;
   }
 

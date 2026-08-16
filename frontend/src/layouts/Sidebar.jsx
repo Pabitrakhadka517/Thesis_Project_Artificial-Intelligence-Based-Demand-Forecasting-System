@@ -271,9 +271,9 @@ function SidebarContent({ collapsed }) {
           'flex items-center gap-2 border-b shrink-0',
           collapsed ? 'justify-center px-0 py-4' : 'px-5 py-4.5'
         )}
-        style={{ borderColor: 'var(--border)' }}
+        style={{ borderColor: 'var(--sidebar-border)' }}
       >
-        <img src={isDark ? logoIconWhite : logoIcon} className="h-8 w-8 object-contain shrink-0" alt="" />
+        <img src={isDark ? logoIcon : logoIconWhite} className="h-8 w-8 object-contain shrink-0" alt="" />
         <AnimatePresence initial={false}>
           {!collapsed && (
             <motion.div
@@ -283,10 +283,10 @@ function SidebarContent({ collapsed }) {
               transition={{ duration: 0.2 }}
               className="overflow-hidden"
             >
-              <span className="block font-bold text-[15px] tracking-tight leading-none" style={{ color: 'var(--text-primary)' }}>
+              <span className="block font-bold text-[15px] tracking-tight leading-none" style={{ color: 'var(--sidebar-text)' }}>
                 {APP_NAME}
               </span>
-              <span className="block text-[10px] mt-0.5 font-medium" style={{ color: 'var(--text-muted)' }}>
+              <span className="block text-[10px] mt-0.5 font-medium" style={{ color: 'var(--sidebar-text-muted)' }}>
                 Enterprise Analytics
               </span>
             </motion.div>
@@ -297,12 +297,12 @@ function SidebarContent({ collapsed }) {
       {/* ── Role badge ── */}
       {!collapsed && (
         <div className="mx-3 mt-3 mb-1 px-3 py-2 rounded-lg flex items-center gap-2"
-          style={{ background: 'var(--surface-muted)', border: '1px solid var(--border)' }}>
-          <BadgeIcon className="h-3.5 w-3.5 shrink-0" style={{ color: 'var(--text-secondary)' }} />
-          <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>
+          style={{ background: 'var(--sidebar-hover)', border: '1px solid var(--sidebar-border)' }}>
+          <BadgeIcon className="h-3.5 w-3.5 shrink-0" style={{ color: 'var(--sidebar-text)' }} />
+          <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--sidebar-text)' }}>
             {badge.label}
           </span>
-          <span className="ml-auto text-[10px]" style={{ color: 'var(--text-muted)' }}>
+          <span className="ml-auto text-[10px]" style={{ color: 'var(--sidebar-text-muted)' }}>
             {badge.sublabel}
           </span>
         </div>
@@ -315,12 +315,12 @@ function SidebarContent({ collapsed }) {
           <div key={section.label}>
             {!collapsed && (
               <p className="px-4 pb-1.5 text-[10px] font-semibold uppercase tracking-widest"
-                style={{ color: 'var(--text-muted)' }}>
+                style={{ color: 'var(--sidebar-text-muted)' }}>
                 {section.label}
               </p>
             )}
             {collapsed && (
-              <div className="mx-3 mb-2 h-px" style={{ background: 'var(--border)' }} />
+              <div className="mx-3 mb-2 h-px" style={{ background: 'var(--sidebar-border)' }} />
             )}
             <div className={cn('space-y-0.5', collapsed ? 'px-2' : 'px-3')}>
               {section.items.map((item) => (
@@ -333,7 +333,7 @@ function SidebarContent({ collapsed }) {
 
       {/* ── Bottom ── */}
       <div className="shrink-0 py-3 space-y-0.5"
-        style={{ borderTop: '1px solid var(--border)' }}>
+        style={{ borderTop: '1px solid var(--sidebar-border)' }}>
         <div className={cn(collapsed ? 'px-2' : 'px-3')}>
           <NavItem {...profileItem} collapsed={collapsed} />
         </div>
@@ -342,17 +342,17 @@ function SidebarContent({ collapsed }) {
           <div
             className="mx-4 mt-3 px-3 py-2.5 rounded-lg"
             style={{
-              background: 'var(--surface-muted)',
-              border: '1px solid var(--border)',
+              background: 'var(--sidebar-hover)',
+              border: '1px solid var(--sidebar-border)',
             }}
           >
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <div
                   className="h-2 w-2 rounded-full shrink-0"
-                  style={{ background: aiOnline === false ? 'var(--brand-red)' : aiOnline === true ? 'var(--brand-green)' : 'var(--text-muted)' }}
+                  style={{ background: aiOnline === false ? 'var(--brand-red)' : aiOnline === true ? 'var(--brand-green)' : 'var(--sidebar-text-muted)' }}
                 />
-                <span className="text-[11px] font-medium" style={{ color: 'var(--text-secondary)' }}>
+                <span className="text-[11px] font-medium" style={{ color: 'var(--sidebar-text)' }}>
                   {aiOnline === false ? 'AI Engine Offline' : aiOnline === true ? 'AI Engine Online' : 'Checking AI Engine…'}
                 </span>
               </div>
@@ -416,7 +416,7 @@ export function Sidebar() {
                 onClick={() => dispatch(closeMobileSidebar())}
                 aria-label="Close menu"
                 className="absolute top-4 right-4 h-7 w-7 rounded-md flex items-center justify-center"
-                style={{ background: 'var(--surface-muted)', color: 'var(--text-secondary)' }}
+                style={{ background: 'var(--sidebar-hover)', color: 'var(--sidebar-text)' }}
               >
                 <X className="h-4 w-4" />
               </button>
