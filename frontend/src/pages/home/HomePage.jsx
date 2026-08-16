@@ -174,7 +174,7 @@ function AppMockup() {
             <div style={{ padding: '0 10px 10px', borderBottom: `1px solid #EEF0F3`, marginBottom: 8 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <div style={{ width: 22, height: 22, borderRadius: 6.5, background: '#03045E', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 6px rgba(3,4,94,.25)' }}>
-                  <img src={logoIcon} alt="" style={{ width: 14, height: 14, objectFit: 'contain' }} />
+                  <img src={logoIcon} alt="" style={{ width: 16, height: 16, objectFit: 'contain' }} />
                 </div>
                 <div>
                   <span style={{ fontSize: 10, fontWeight: 700, color: '#111827', display: 'block', lineHeight: 1.1, letterSpacing: '-0.01em' }}>StockWise</span>
@@ -350,7 +350,7 @@ function Navbar() {
           <div className="flex items-center gap-2.5">
             <div className="h-7 w-7 rounded-lg flex items-center justify-center"
               style={{ background: 'var(--brand-primary)' }}>
-              <img src={logoIcon} className="h-3.5 w-3.5 object-contain" alt="" />
+              <img src={logoIcon} className="h-5 w-5 object-contain" alt="" />
             </div>
             <span className="font-bold text-[15px] tracking-tight" style={{ color: T.text }}>{APP_NAME}</span>
           </div>
@@ -1018,7 +1018,7 @@ function Footer() {
             <div className="flex items-center gap-2 mb-4">
               <div className="h-7 w-7 rounded-lg flex items-center justify-center"
                 style={{ background: 'var(--brand-primary)' }}>
-                <img src={logoIcon} className="h-3.5 w-3.5 object-contain" alt="" />
+                <img src={logoIcon} className="h-5 w-5 object-contain" alt="" />
               </div>
               <span className="font-bold text-[15px]" style={{ color: T.text }}>{APP_NAME}</span>
             </div>

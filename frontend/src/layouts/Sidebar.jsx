@@ -273,7 +273,7 @@ function SidebarContent({ collapsed }) {
           className="h-8 w-8 rounded-lg flex items-center justify-center shrink-0"
           style={{ background: 'rgba(255,255,255,.18)', boxShadow: 'var(--shadow-sm)' }}
         >
-          <img src={logoIcon} className="h-4 w-4 object-contain" alt="" />
+          <img src={logoIcon} className="h-6 w-6 object-contain" alt="" />
         </div>
         <AnimatePresence initial={false}>
           {!collapsed && (
