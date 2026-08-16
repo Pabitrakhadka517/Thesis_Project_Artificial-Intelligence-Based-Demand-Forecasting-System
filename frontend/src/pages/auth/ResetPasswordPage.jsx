@@ -112,10 +112,7 @@ export default function ResetPasswordPage() {
 
         {/* Logo */}
         <div className="flex items-center gap-2.5 mb-8">
-          <div className="h-9 w-9 rounded-xl flex items-center justify-center"
-            style={{ background: 'var(--brand-primary)' }}>
-            <img src={logoIcon} className="h-6 w-6 object-contain" alt="" />
-          </div>
+          <img src={logoIcon} className="h-9 w-9 object-contain" alt="" />
           <span className="text-[17px] font-bold" style={{ color: 'var(--text-primary)' }}>{APP_NAME}</span>
         </div>
 

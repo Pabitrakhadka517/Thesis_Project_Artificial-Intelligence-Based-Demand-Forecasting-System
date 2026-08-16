@@ -208,10 +208,7 @@ export default function SetupWizardPage() {
       >
         {/* Logo */}
         <div className="relative flex items-center gap-3">
-          <div className="h-10 w-10 rounded-xl flex items-center justify-center"
-            style={{ background: 'rgba(255,255,255,.18)', boxShadow: '0 6px 20px rgba(0,0,0,.2)' }}>
-            <img src={logoIcon} className="h-7 w-7 object-contain" alt="" />
-          </div>
+          <img src={logoIcon} className="h-10 w-10 object-contain" alt="" />
           <div>
             <p className="text-white font-bold text-[18px] tracking-tight">{APP_NAME}</p>
             <p className="text-[10px] font-semibold uppercase tracking-widest"
@@ -257,10 +254,7 @@ export default function SetupWizardPage() {
 
           {/* Mobile logo */}
           <div className="flex lg:hidden items-center gap-3 mb-4">
-            <div className="h-9 w-9 rounded-xl flex items-center justify-center"
-              style={{ background: 'var(--brand-primary)' }}>
-              <img src={logoIcon} className="h-6 w-6 object-contain" alt="" />
-            </div>
+            <img src={logoIcon} className="h-9 w-9 object-contain" alt="" />
             <p className="font-bold text-[17px]" style={{ color: 'var(--text-primary)' }}>{APP_NAME}</p>
           </div>
 

@@ -49,10 +49,7 @@ export default function LoginPage() {
       >
         {/* Logo */}
         <div className="relative flex items-center gap-3">
-          <div className="h-10 w-10 rounded-xl flex items-center justify-center"
-            style={{ background: 'rgba(255,255,255,.18)', boxShadow: '0 6px 20px rgba(0,0,0,.2)' }}>
-            <img src={logoIcon} className="h-7 w-7 object-contain" alt="" />
-          </div>
+          <img src={logoIcon} className="h-10 w-10 object-contain" alt="" />
           <div>
             <span className="text-white text-[18px] font-bold tracking-tight">{APP_NAME}</span>
             <p className="text-[11px] font-medium" style={{ color: 'rgba(219,234,254,.7)' }}>Enterprise Analytics Platform</p>
@@ -105,10 +102,7 @@ export default function LoginPage() {
         >
           {/* Mobile logo */}
           <div className="lg:hidden flex items-center gap-2 mb-8">
-            <div className="h-9 w-9 rounded-xl flex items-center justify-center"
-              style={{ background: 'var(--brand-primary)' }}>
-              <img src={logoIcon} className="h-6 w-6 object-contain" alt="" />
-            </div>
+            <img src={logoIcon} className="h-9 w-9 object-contain" alt="" />
             <span className="text-[17px] font-bold" style={{ color: 'var(--text-primary)' }}>{APP_NAME}</span>
           </div>
 

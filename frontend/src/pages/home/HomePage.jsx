@@ -173,9 +173,7 @@ function AppMockup() {
           <div style={{ background: '#FFFFFF', borderRight: `1px solid #EEF0F3`, padding: '12px 0' }}>
             <div style={{ padding: '0 10px 10px', borderBottom: `1px solid #EEF0F3`, marginBottom: 8 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <div style={{ width: 22, height: 22, borderRadius: 6.5, background: '#03045E', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 6px rgba(3,4,94,.25)' }}>
-                  <img src={logoIcon} alt="" style={{ width: 16, height: 16, objectFit: 'contain' }} />
-                </div>
+                <img src={logoIcon} alt="" style={{ width: 22, height: 22, objectFit: 'contain' }} />
                 <div>
                   <span style={{ fontSize: 10, fontWeight: 700, color: '#111827', display: 'block', lineHeight: 1.1, letterSpacing: '-0.01em' }}>StockWise</span>
                   <span style={{ fontSize: 7, color: '#9CA3AF' }}>Enterprise</span>
@@ -348,10 +346,7 @@ function Navbar() {
         style={navBase}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="h-7 w-7 rounded-lg flex items-center justify-center"
-              style={{ background: 'var(--brand-primary)' }}>
-              <img src={logoIcon} className="h-5 w-5 object-contain" alt="" />
-            </div>
+            <img src={logoIcon} className="h-7 w-7 object-contain" alt="" />
             <span className="font-bold text-[15px] tracking-tight" style={{ color: T.text }}>{APP_NAME}</span>
           </div>
 
@@ -1016,10 +1011,7 @@ function Footer() {
         <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-8 mb-10">
           <div className="lg:col-span-2">
             <div className="flex items-center gap-2 mb-4">
-              <div className="h-7 w-7 rounded-lg flex items-center justify-center"
-                style={{ background: 'var(--brand-primary)' }}>
-                <img src={logoIcon} className="h-5 w-5 object-contain" alt="" />
-              </div>
+              <img src={logoIcon} className="h-7 w-7 object-contain" alt="" />
               <span className="font-bold text-[15px]" style={{ color: T.text }}>{APP_NAME}</span>
             </div>
             <p className="text-[12.5px] leading-relaxed mb-4 max-w-xs" style={{ color: T.textMuted }}>
