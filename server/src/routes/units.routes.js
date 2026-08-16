@@ -68,7 +68,7 @@ router.post('/', managerOrAdmin, async (req, res) => {
 })
 
 router.patch('/:id', managerOrAdmin, async (req, res) => {
-  const unit = await Unit.findByIdAndUpdate(req.params.id, req.body, { new: true })
+  const unit = await Unit.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true })
   if (!unit) return error(res, 'Unit not found', 404)
 
   AuditLog.create({
