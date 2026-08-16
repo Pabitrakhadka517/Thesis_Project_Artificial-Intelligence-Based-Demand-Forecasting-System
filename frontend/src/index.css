@@ -32,6 +32,10 @@
     --surface-input:  #FFFFFF;
     --surface-hover:  #F3F4F6;
     --surface-navbar: #FFFFFF;
+    /* Sidebar's own surface — a soft blue tint in light mode rather than
+       plain white, kept as its own token (not --surface-card) so it doesn't
+       tint every other card in the app. */
+    --sidebar-surface: #EFF6FF;
 
     /* Text – Light */
     --text-primary:   #111827;
@@ -115,6 +119,7 @@
     --surface-muted: #132035;
     --surface-input: #0F1E32;
     --surface-hover: #162438;
+    --sidebar-surface: #0D1A2D;
 
     --text-primary:   #E2E8F0;
     --text-secondary: #8FA3BE;
@@ -200,7 +205,7 @@
      text tokens as every other panel in the app, so it actually switches
      between a light and a dark sidebar like the rest of the UI. */
   .sidebar-bg {
-    background: var(--surface-card);
+    background: var(--sidebar-surface);
     border-right: 1px solid var(--border);
   }
   .sidebar-item {
