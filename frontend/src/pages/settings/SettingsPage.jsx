@@ -10,6 +10,7 @@ import { useRole } from '@/hooks/useRole'
 import { ImageUpload } from '@/components/common/ImageUpload'
 import { ChangePasswordForm } from '@/components/common/ChangePasswordForm'
 import { UnsavedBanner } from '@/components/common/UnsavedBanner'
+import { ErrorState } from '@/components/common/ErrorState'
 import { Input } from '@/components/common/Input'
 import { Select } from '@/components/common/Select'
 import { Textarea } from '@/components/common/Textarea'
@@ -87,7 +88,7 @@ function useSettings() {
 function CompanyTab() {
   const { toast } = useToast()
   const qc        = useQueryClient()
-  const { data: settings = {} } = useSettings()
+  const { data: settings = {}, isError, error, refetch } = useSettings()
 
   const [pendingLogo, setPendingLogo] = useState(null)
   const [logoError, setLogoError]     = useState(null)
@@ -155,6 +156,8 @@ function CompanyTab() {
 
   const MONTHS_BS = ['Baisakh','Jestha','Ashadh','Shrawan','Bhadra','Ashwin','Kartik','Mangsir','Poush','Magh','Falgun','Chaitra']
   const currentLogo = settings.company_logo || null
+
+  if (isError) return <ErrorState error={error} onRetry={refetch} />
 
   return (
     <div className="space-y-4">
@@ -233,7 +236,7 @@ function CompanyTab() {
 function NotificationsTab() {
   const { toast } = useToast()
   const qc = useQueryClient()
-  const { data: settings = {} } = useSettings()
+  const { data: settings = {}, isError, error, refetch } = useSettings()
 
   const DEFAULT_PREFS = {
     lowStockAlert:      true,
@@ -274,6 +277,8 @@ function NotificationsTab() {
     { key: 'emailNotifications', label: 'Email Notifications',  description: 'Send alert summaries to company email' },
   ]
 
+  if (isError) return <ErrorState error={error} onRetry={refetch} />
+
   return (
     <SectionCard title="Notification Preferences" description="Control which system alerts are generated">
       <div>
@@ -298,7 +303,7 @@ function NotificationsTab() {
 function AITab() {
   const { toast } = useToast()
   const qc = useQueryClient()
-  const { data: settings = {} } = useSettings()
+  const { data: settings = {}, isError, error, refetch } = useSettings()
 
   const DEFAULT_CFG = {
     defaultModel:       'random_forest',
@@ -337,6 +342,8 @@ function AITab() {
     { value: 'lstm',          label: 'LSTM Neural Network (Deep Learning)' },
     { value: 'prophet',       label: 'Facebook Prophet (Seasonal)' },
   ]
+
+  if (isError) return <ErrorState error={error} onRetry={refetch} />
 
   return (
     <SectionCard title="AI Forecasting Configuration" description="Control how the AI demand prediction service operates">

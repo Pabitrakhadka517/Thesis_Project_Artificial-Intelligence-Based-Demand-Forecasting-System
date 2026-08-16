@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/common/Ca
 import { Button } from '@/components/common/Button'
 import { SkeletonCard, SkeletonTable } from '@/components/common/Skeleton'
 import { EmptyState } from '@/components/common/EmptyState'
+import { ErrorState } from '@/components/common/ErrorState'
 import { TrainingProgress } from '@/components/common/TrainingProgress'
 import { PageHeader } from '@/components/common/PageHeader'
 import { useToast } from '@/hooks/useToast'
@@ -218,7 +219,7 @@ export default function ModelsPage() {
   const [connected,    setConnected]    = useState(false)
 
   // ── Load SKU list ────────────────────────────────────────────────────────
-  const { data: skus = [] } = useQuery({
+  const { data: skus = [], isError: skusIsError, refetch: refetchSkus } = useQuery({
     queryKey: ['ml-skus-models'],
     queryFn:  () => mlForecastService.listSkus().then(r => r.data?.data || []),
     staleTime: 30 * 60_000,
@@ -234,7 +235,7 @@ export default function ModelsPage() {
   })
 
   // ── Load all trained models for the metrics table ────────────────────────
-  const { data: allModels = [], isLoading: modelsLoading } = useQuery({
+  const { data: allModels = [], isLoading: modelsLoading, isError: modelsIsError, error: modelsError, refetch: refetchModels } = useQuery({
     queryKey: ['ml-all-models'],
     queryFn:  () => mlForecastService.listModels().then(r => {
       const docs = r.data?.data || []
@@ -360,6 +361,12 @@ export default function ModelsPage() {
                 Clear
               </button>
             )}
+            {skusIsError && (
+              <p className="text-[11px]" style={{ color: 'var(--color-danger)' }}>
+                Failed to load SKUs.{' '}
+                <button type="button" onClick={() => refetchSkus()} className="font-semibold underline">Retry</button>
+              </p>
+            )}
           </div>
 
           {/* Show trained metadata for selected SKU */}
@@ -452,6 +459,8 @@ export default function ModelsPage() {
           <CardContent className="p-0">
             {modelsLoading
               ? <div className="p-5"><SkeletonTable rows={8} cols={7} /></div>
+              : modelsIsError
+              ? <ErrorState error={modelsError} onRetry={refetchModels} />
               : <MetricsTable rows={allModels} />}
           </CardContent>
         </Card>

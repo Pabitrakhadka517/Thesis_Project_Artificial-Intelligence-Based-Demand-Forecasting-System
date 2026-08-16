@@ -14,6 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/common/Ca
 import { Button } from '@/components/common/Button'
 import { SkeletonCard, SkeletonTable } from '@/components/common/Skeleton'
 import { EmptyState } from '@/components/common/EmptyState'
+import { ErrorState } from '@/components/common/ErrorState'
 import { TrainingProgress } from '@/components/common/TrainingProgress'
 import { PageHeader } from '@/components/common/PageHeader'
 import { useToast } from '@/hooks/useToast'
@@ -152,13 +153,14 @@ function CompareTable({ data }) {
 
 // ── Dataset summary tab ────────────────────────────────────────────────────────
 function DatasetTab() {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['ml-dataset-summary'],
     queryFn:  () => mlForecastService.datasetSummary().then(r => r.data?.data),
     staleTime: 60 * 60_000,
   })
 
   if (isLoading) return <div className="grid grid-cols-2 md:grid-cols-4 gap-4"><SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard /></div>
+  if (isError) return <ErrorState error={error} onRetry={refetch} />
   if (!data) return null
 
   const stats = [
@@ -233,7 +235,7 @@ export default function ForecastingPage() {
   const [autoTraining, setAutoTraining] = useState(false)
 
   // ── Load SKU list ────────────────────────────────────────────────────────
-  const { data: skuData, isLoading: skuLoading } = useQuery({
+  const { data: skuData, isLoading: skuLoading, isError: skuIsError, refetch: refetchSkus } = useQuery({
     queryKey: ['ml-skus'],
     queryFn:  () => mlForecastService.listSkus().then(r => r.data?.data || []),
     staleTime: 30 * 60_000,
@@ -389,6 +391,8 @@ export default function ForecastingPage() {
                     <option value="">— Select a product —</option>
                     {skuLoading ? (
                       <option disabled>Loading…</option>
+                    ) : skuIsError ? (
+                      <option disabled>Failed to load products</option>
                     ) : (
                       <>
                         {(liveEligible.length > 0 || liveIneligible.length > 0) && (
@@ -411,6 +415,14 @@ export default function ForecastingPage() {
                       </>
                     )}
                   </select>
+                  {skuIsError && (
+                    <p className="text-[11px]" style={{ color: 'var(--color-danger)' }}>
+                      Failed to load products.{' '}
+                      <button type="button" onClick={() => refetchSkus()} className="font-semibold underline">
+                        Retry
+                      </button>
+                    </p>
+                  )}
                 </div>
 
                 {/* Horizon */}

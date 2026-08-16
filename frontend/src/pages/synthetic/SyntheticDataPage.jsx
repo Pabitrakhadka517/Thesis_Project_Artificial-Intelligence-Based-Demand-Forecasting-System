@@ -76,7 +76,7 @@ export default function SyntheticDataPage() {
   const [connected,      setConnected]       = useState(false)
 
   // Status query
-  const { data: statusData, isLoading: statusLoading, refetch: refetchStatus } = useQuery({
+  const { data: statusData, isLoading: statusLoading, isError: statusIsError, refetch: refetchStatus } = useQuery({
     queryKey: ['synthetic-status'],
     queryFn:  () => syntheticApi.status().then(r => r.data),
     staleTime: 10_000,
@@ -165,11 +165,14 @@ export default function SyntheticDataPage() {
             border: `1px solid ${status?.has_synthetic_data ? 'rgba(34,197,94,.3)' : 'var(--border)'}`,
           }}>
           <div className="flex items-center gap-3 mb-4">
-            {status?.has_synthetic_data
+            {statusIsError
+              ? <AlertTriangle className="h-5 w-5" style={{ color: '#EF4444' }} />
+              : status?.has_synthetic_data
               ? <CheckCircle className="h-5 w-5" style={{ color: '#22C55E' }} />
               : <AlertTriangle className="h-5 w-5" style={{ color: '#F59E0B' }} />}
             <h2 className="text-[14px] font-bold" style={{ color: 'var(--text-primary)' }}>
-              {statusLoading ? 'Checking status…' : status?.has_synthetic_data
+              {statusLoading ? 'Checking status…' : statusIsError ? 'Failed to check status'
+                : status?.has_synthetic_data
                 ? 'Synthetic data is present in database'
                 : 'No synthetic data — database is empty'}
             </h2>
@@ -178,6 +181,12 @@ export default function SyntheticDataPage() {
                 style={{ background: 'rgba(34,197,94,.12)', color: '#22C55E' }}>
                 {formatNumber(status.total_records)} records
               </span>
+            )}
+            {statusIsError && (
+              <button onClick={() => refetchStatus()}
+                className="ml-auto text-[12px] font-semibold underline" style={{ color: '#EF4444' }}>
+                Retry
+              </button>
             )}
           </div>
 
