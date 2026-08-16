@@ -192,13 +192,16 @@
   .accent-indigo { border-left: 3px solid var(--brand-indigo); }
   .accent-teal   { border-left: 3px solid var(--brand-teal);   }
 
-  /* ── Sidebar ── */
+  /* ── Sidebar ──
+     Was a fixed var(--brand-primary) background with white-based rgba() text/
+     overlays in both themes — meaning it looked nearly identical whether you
+     were in light or dark mode, since "dark navy" barely changed and the
+     white-on-white-ish overlay math never adapted. Now uses the same surface/
+     text tokens as every other panel in the app, so it actually switches
+     between a light and a dark sidebar like the rest of the UI. */
   .sidebar-bg {
-    background: var(--brand-primary);
-    border-right: 1px solid rgba(255,255,255,.1);
-  }
-  .dark .sidebar-bg {
-    border-right: 1px solid rgba(255,255,255,.08);
+    background: var(--surface-card);
+    border-right: 1px solid var(--border);
   }
   .sidebar-item {
     display: flex;
@@ -208,7 +211,7 @@
     border-radius: 8px;
     font-size: 0.8125rem;
     font-weight: 500;
-    color: rgba(255,255,255,.6);
+    color: var(--text-secondary);
     transition: all .15s ease;
     cursor: pointer;
     border: none;
@@ -216,23 +219,14 @@
     position: relative;
     white-space: nowrap;
   }
-  .dark .sidebar-item { color: rgba(255,255,255,.5); }
   .sidebar-item:hover {
-    background: rgba(255,255,255,.09);
-    color: #ffffff;
-  }
-  .dark .sidebar-item:hover {
-    background: rgba(255,255,255,.1);
-    color: #ffffff;
+    background: var(--surface-hover);
+    color: var(--text-primary);
   }
   .sidebar-item.active {
-    background: rgba(255,255,255,.15);
-    color: #ffffff;
+    background: var(--tint-primary);
+    color: var(--brand-blue);
     font-weight: 600;
-  }
-  .dark .sidebar-item.active {
-    background: rgba(255,255,255,.18);
-    color: #ffffff;
   }
   .sidebar-item.active::before {
     content: '';
@@ -241,7 +235,7 @@
     top: 18%;
     height: 64%;
     width: 3px;
-    background: #ffffff;
+    background: var(--brand-blue);
     border-radius: 0 3px 3px 0;
   }
 
