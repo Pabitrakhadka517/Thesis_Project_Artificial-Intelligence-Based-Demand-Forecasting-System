@@ -32,8 +32,14 @@ class InventoryAnalysisService:
     async def analyze(self, product_id: str, horizon_days: int = 30) -> dict:
         """Run full analysis for one product and persist to MongoDB."""
         from bson import ObjectId
+        from bson.errors import InvalidId
 
-        product = await self.db["products"].find_one({"_id": ObjectId(product_id)})
+        try:
+            oid = ObjectId(product_id)
+        except InvalidId:
+            raise ValueError(f"Invalid product id: {product_id}")
+
+        product = await self.db["products"].find_one({"_id": oid})
         if not product:
             raise ValueError(f"Product {product_id} not found")
 

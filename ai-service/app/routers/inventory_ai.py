@@ -10,7 +10,7 @@ Routes:
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.database import get_db
 from app.services.inventory_analysis import InventoryAnalysisService
@@ -20,7 +20,7 @@ router = APIRouter(prefix="/inventory", tags=["inventory-ai"])
 
 class AnalyzeRequest(BaseModel):
     product_id:   str
-    horizon_days: int = 30
+    horizon_days: int = Field(default=30, ge=1, le=365, description="Forecast horizon (1–365 days)")
 
 
 @router.post("/analyze")
