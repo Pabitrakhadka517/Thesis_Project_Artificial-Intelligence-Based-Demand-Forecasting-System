@@ -3,11 +3,13 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Eye, EyeOff, Lock, Mail, BarChart3, Package, TrendingUp, Shield, AlertOctagon } from 'lucide-react'
 import logoIcon from '@/assets/logo-icon.png'
+import logoIconWhite from '@/assets/logo-icon-white.png'
 import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import { useSelector } from 'react-redux'
 import { useAuth } from '@/hooks/useAuth'
+import { useTheme } from '@/hooks/useTheme'
 import { selectErrorStatus } from '@/store/slices/authSlice'
 import { APP_NAME } from '@/constants'
 import { Input } from '@/components/common/Input'
@@ -27,6 +29,7 @@ const FEATURES = [
 
 export default function LoginPage() {
   const { login, loading, error, clearError } = useAuth()
+  const { isDark } = useTheme()
   const errorStatus = useSelector(selectErrorStatus)
   const [showPw, setShowPw] = useState(false)
   const isLocked = errorStatus === 429
@@ -49,7 +52,7 @@ export default function LoginPage() {
       >
         {/* Logo */}
         <div className="relative flex items-center gap-3">
-          <img src={logoIcon} className="h-10 w-10 object-contain" alt="" />
+          <img src={logoIconWhite} className="h-10 w-10 object-contain" alt="" />
           <div>
             <span className="text-white text-[18px] font-bold tracking-tight">{APP_NAME}</span>
             <p className="text-[11px] font-medium" style={{ color: 'rgba(219,234,254,.7)' }}>Enterprise Analytics Platform</p>
@@ -102,7 +105,7 @@ export default function LoginPage() {
         >
           {/* Mobile logo */}
           <div className="lg:hidden flex items-center gap-2 mb-8">
-            <img src={logoIcon} className="h-9 w-9 object-contain" alt="" />
+            <img src={isDark ? logoIconWhite : logoIcon} className="h-9 w-9 object-contain" alt="" />
             <span className="text-[17px] font-bold" style={{ color: 'var(--text-primary)' }}>{APP_NAME}</span>
           </div>
 

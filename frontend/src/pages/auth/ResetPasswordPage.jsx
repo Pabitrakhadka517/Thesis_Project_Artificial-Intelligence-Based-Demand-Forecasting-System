@@ -4,9 +4,11 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Lock, Eye, EyeOff, CheckCircle, AlertOctagon, Clock } from 'lucide-react'
 import logoIcon from '@/assets/logo-icon.png'
+import logoIconWhite from '@/assets/logo-icon-white.png'
 import { motion } from 'framer-motion'
 import { Link, useParams, useNavigate } from 'react-router-dom'
 import { authService } from '@/services/authService'
+import { useTheme } from '@/hooks/useTheme'
 import { APP_NAME } from '@/constants'
 import { passwordSchema } from '@/schemas/password'
 import { Input } from '@/components/common/Input'
@@ -32,6 +34,7 @@ const cardStyle = {
 }
 
 export default function ResetPasswordPage() {
+  const { isDark }                    = useTheme()
   const { token }                     = useParams()
   const navigate                      = useNavigate()
   const [showPw, setShowPw]           = useState(false)
@@ -112,7 +115,7 @@ export default function ResetPasswordPage() {
 
         {/* Logo */}
         <div className="flex items-center gap-2.5 mb-8">
-          <img src={logoIcon} className="h-9 w-9 object-contain" alt="" />
+          <img src={isDark ? logoIconWhite : logoIcon} className="h-9 w-9 object-contain" alt="" />
           <span className="text-[17px] font-bold" style={{ color: 'var(--text-primary)' }}>{APP_NAME}</span>
         </div>
 

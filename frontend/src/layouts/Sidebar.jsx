@@ -18,7 +18,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/utils'
 import { APP_NAME } from '@/constants'
-import logoIcon from '@/assets/logo-icon.png'
+import logoIconWhite from '@/assets/logo-icon-white.png'
 import { selectUnreadCount } from '@/store/slices/alertSlice'
 import { useRole } from '@/hooks/useRole'
 import { aiService } from '@/services/aiService'
@@ -269,7 +269,7 @@ function SidebarContent({ collapsed }) {
         )}
         style={{ borderColor: 'rgba(255,255,255,.12)' }}
       >
-        <img src={logoIcon} className="h-8 w-8 object-contain shrink-0" alt="" />
+        <img src={logoIconWhite} className="h-8 w-8 object-contain shrink-0" alt="" />
         <AnimatePresence initial={false}>
           {!collapsed && (
             <motion.div

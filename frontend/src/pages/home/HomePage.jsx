@@ -17,6 +17,7 @@ import {
 import { APP_NAME, MOTION } from '@/constants'
 import { useTheme } from '@/hooks/useTheme'
 import logoIcon from '@/assets/logo-icon.png'
+import logoIconWhite from '@/assets/logo-icon-white.png'
 
 // ─── Design tokens — mapped onto the app's CSS variables so the landing
 // page follows the same light/dark toggle as the dashboard instead of
@@ -314,6 +315,7 @@ function ThemeToggle({ className = '' }) {
 }
 
 function Navbar() {
+  const { isDark } = useTheme()
   const [scrolled, setScrolled]     = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   useEffect(() => {
@@ -346,7 +348,7 @@ function Navbar() {
         style={navBase}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <img src={logoIcon} className="h-7 w-7 object-contain" alt="" />
+            <img src={isDark ? logoIconWhite : logoIcon} className="h-7 w-7 object-contain" alt="" />
             <span className="font-bold text-[15px] tracking-tight" style={{ color: T.text }}>{APP_NAME}</span>
           </div>
 
@@ -1004,6 +1006,7 @@ function CTASection() {
 
 // ─── Footer ───────────────────────────────────────────────────────────────────
 function Footer() {
+  const { isDark } = useTheme()
   const year = new Date().getFullYear()
   return (
     <footer style={{ background: T.page, borderTop: `1px solid ${T.border}` }}>
@@ -1011,7 +1014,7 @@ function Footer() {
         <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-8 mb-10">
           <div className="lg:col-span-2">
             <div className="flex items-center gap-2 mb-4">
-              <img src={logoIcon} className="h-7 w-7 object-contain" alt="" />
+              <img src={isDark ? logoIconWhite : logoIcon} className="h-7 w-7 object-contain" alt="" />
               <span className="font-bold text-[15px]" style={{ color: T.text }}>{APP_NAME}</span>
             </div>
             <p className="text-[12.5px] leading-relaxed mb-4 max-w-xs" style={{ color: T.textMuted }}>

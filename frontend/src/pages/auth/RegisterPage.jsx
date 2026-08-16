@@ -3,10 +3,12 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Eye, EyeOff, Lock, Mail, User as UserIcon, BarChart3, Package, TrendingUp, Shield } from 'lucide-react'
 import logoIcon from '@/assets/logo-icon.png'
+import logoIconWhite from '@/assets/logo-icon-white.png'
 import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
+import { useTheme } from '@/hooks/useTheme'
 import { APP_NAME } from '@/constants'
 import { passwordSchema } from '@/schemas/password'
 import { Input } from '@/components/common/Input'
@@ -32,6 +34,7 @@ const FEATURES = [
 
 export default function RegisterPage() {
   const { register: doRegister, loading, error, clearError } = useAuth()
+  const { isDark } = useTheme()
   const [showPw, setShowPw]   = useState(false)
   const [showCpw, setShowCpw] = useState(false)
 
@@ -54,7 +57,7 @@ export default function RegisterPage() {
       >
         {/* Logo */}
         <div className="relative flex items-center gap-3">
-          <img src={logoIcon} className="h-10 w-10 object-contain" alt="" />
+          <img src={logoIconWhite} className="h-10 w-10 object-contain" alt="" />
           <div>
             <span className="text-white text-[18px] font-bold tracking-tight">{APP_NAME}</span>
             <p className="text-[11px] font-medium" style={{ color: 'rgba(219,234,254,.7)' }}>Enterprise Analytics Platform</p>
@@ -107,7 +110,7 @@ export default function RegisterPage() {
         >
           {/* Mobile logo */}
           <div className="lg:hidden flex items-center gap-2 mb-8">
-            <img src={logoIcon} className="h-9 w-9 object-contain" alt="" />
+            <img src={isDark ? logoIconWhite : logoIcon} className="h-9 w-9 object-contain" alt="" />
             <span className="text-[17px] font-bold" style={{ color: 'var(--text-primary)' }}>{APP_NAME}</span>
           </div>
 

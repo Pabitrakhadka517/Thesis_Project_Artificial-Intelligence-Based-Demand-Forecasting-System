@@ -19,6 +19,8 @@ import { Select } from '@/components/common/Select'
 import { Button } from '@/components/common/Button'
 import { PasswordStrengthMeter } from '@/components/common/PasswordStrengthMeter'
 import logoIcon from '@/assets/logo-icon.png'
+import logoIconWhite from '@/assets/logo-icon-white.png'
+import { useTheme } from '@/hooks/useTheme'
 
 // ── Schemas ───────────────────────────────────────────────────────────────────
 
@@ -190,6 +192,7 @@ function AdminStep({ companyData, onBack }) {
 // ── Main wizard ───────────────────────────────────────────────────────────────
 
 export default function SetupWizardPage() {
+  const { isDark } = useTheme()
   const [step, setStep]               = useState(0)
   const [companyData, setCompanyData] = useState(null)
 
@@ -208,7 +211,7 @@ export default function SetupWizardPage() {
       >
         {/* Logo */}
         <div className="relative flex items-center gap-3">
-          <img src={logoIcon} className="h-10 w-10 object-contain" alt="" />
+          <img src={logoIconWhite} className="h-10 w-10 object-contain" alt="" />
           <div>
             <p className="text-white font-bold text-[18px] tracking-tight">{APP_NAME}</p>
             <p className="text-[10px] font-semibold uppercase tracking-widest"
@@ -254,7 +257,7 @@ export default function SetupWizardPage() {
 
           {/* Mobile logo */}
           <div className="flex lg:hidden items-center gap-3 mb-4">
-            <img src={logoIcon} className="h-9 w-9 object-contain" alt="" />
+            <img src={isDark ? logoIconWhite : logoIcon} className="h-9 w-9 object-contain" alt="" />
             <p className="font-bold text-[17px]" style={{ color: 'var(--text-primary)' }}>{APP_NAME}</p>
           </div>
 

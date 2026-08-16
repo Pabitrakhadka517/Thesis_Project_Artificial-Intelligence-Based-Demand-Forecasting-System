@@ -4,9 +4,11 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Mail, ArrowLeft, CheckCircle, AlertOctagon } from 'lucide-react'
 import logoIcon from '@/assets/logo-icon.png'
+import logoIconWhite from '@/assets/logo-icon-white.png'
 import { motion } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import { authService } from '@/services/authService'
+import { useTheme } from '@/hooks/useTheme'
 import { APP_NAME } from '@/constants'
 import { Input } from '@/components/common/Input'
 import { Button } from '@/components/common/Button'
@@ -16,6 +18,7 @@ const schema = z.object({
 })
 
 export default function ForgotPasswordPage() {
+  const { isDark } = useTheme()
   const [submitted, setSubmitted]     = useState(false)
   const [loading, setLoading]         = useState(false)
   const [serverError, setServerError] = useState(null)
@@ -55,7 +58,7 @@ export default function ForgotPasswordPage() {
       >
         {/* Logo */}
         <div className="flex items-center gap-2.5 mb-8">
-          <img src={logoIcon} className="h-9 w-9 object-contain" alt="" />
+          <img src={isDark ? logoIconWhite : logoIcon} className="h-9 w-9 object-contain" alt="" />
           <span className="text-[17px] font-bold" style={{ color: 'var(--text-primary)' }}>{APP_NAME}</span>
         </div>
 
