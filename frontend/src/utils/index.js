@@ -1,11 +1,15 @@
 import { clsx } from 'clsx'
+import { API_BASE_URL } from '@/constants'
 
 // ── Product image helpers ─────────────────────────────────────────────────────
 
-/** Base URL of the Express backend (where static images are served from). */
-export const BACKEND_URL = import.meta.env.VITE_API_URL
-  ? import.meta.env.VITE_API_URL.replace('/api/v1', '').replace(/\/$/, '')
-  : 'http://localhost:5000'
+/**
+ * Base URL of the Express backend (where static images are served from).
+ * Shares API_BASE_URL's fallback ('' → same-origin via the dev proxy / prod
+ * host) so a missing VITE_API_URL doesn't break only images while API calls
+ * stay working.
+ */
+export const BACKEND_URL = API_BASE_URL
 
 const DEFAULT_IMG = `${BACKEND_URL}/product-images/default-product.png`
 
