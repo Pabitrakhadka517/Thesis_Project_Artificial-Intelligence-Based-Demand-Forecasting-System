@@ -28,11 +28,14 @@ router.get('/', async (req, res) => {
 
 router.patch('/', adminOnly, async (req, res) => {
   const updates = req.body
+  if (!updates || typeof updates !== 'object' || Array.isArray(updates)) {
+    return error(res, 'Request body must be an object of setting key/value pairs', 400)
+  }
   // Fix #18: sequential await-in-loop sent one round trip per setting key.
   // Run all upserts concurrently — settings are independent of each other.
   await Promise.all(
     Object.entries(updates).map(([key, value]) =>
-      Setting.findOneAndUpdate({ key }, { key, value }, { upsert: true })
+      Setting.findOneAndUpdate({ key }, { key, value }, { upsert: true, runValidators: true })
     )
   )
   return success(res, {}, 'Settings updated')
