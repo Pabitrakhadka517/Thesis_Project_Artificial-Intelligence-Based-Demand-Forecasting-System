@@ -783,6 +783,17 @@ async function seedHistory(prodMap, supMap, userIds) {
   await bulkInsert(Alert, alertDocs, 'alerts')
   await bulkInsert(AuditLog, auditDocs, 'audit logs')
 
+  // Sync the shared Counter collection to these manually-numbered docs.
+  // Sale/Purchase.pre('save') calls Counter.next('invoice'/'purchase') to
+  // number any doc created through the real API — without this sync that
+  // counter stays at 0 while invoiceNumber/purchaseNumber here already run
+  // up into the thousands, so the very next real sale/purchase collides with
+  // a seeded number and fails with a duplicate-key error. $max (not $set) so
+  // this is safe to run against a counter a live server has already advanced.
+  const Counter = require('../models/Counter')
+  await Counter.updateOne({ _id: 'invoice' },  { $max: { seq: saleSeq } },  { upsert: true })
+  await Counter.updateOne({ _id: 'purchase' }, { $max: { seq: purchSeq } }, { upsert: true })
+
   // Reconcile Product.currentStock with the simulated ledger.
   console.log('  Updating product stock levels...')
   const productBulkOps = Object.entries(stock).map(([sku, qty]) => {
