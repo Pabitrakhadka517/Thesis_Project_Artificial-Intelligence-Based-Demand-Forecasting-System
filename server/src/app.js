@@ -48,7 +48,9 @@ app.use(cors({
   origin: (origin, cb) => {
     // Allow non-browser requests (Postman, server-to-server) and listed origins
     if (!origin || allowedOrigins.includes(origin)) return cb(null, true)
-    cb(new Error(`CORS: origin ${origin} not allowed`))
+    const err = new Error('This origin is not permitted to access the API.')
+    err.statusCode = 403
+    cb(err)
   },
   credentials: true,
 }))
