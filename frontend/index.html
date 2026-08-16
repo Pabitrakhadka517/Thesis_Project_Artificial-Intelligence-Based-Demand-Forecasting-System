@@ -7,20 +7,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="AI-Based Demand Forecasting System for Wholesale Grocery Stores" />
     <title>StockWise — Demand Forecasting Platform</title>
-    <script>
-      // Apply the persisted theme class before React/Redux ever mount, so the
-      // navbar/sidebar/buttons render in the right theme on the very first
-      // paint instead of waiting on redux-persist rehydration + a useEffect.
-      // Reads localStorage directly in the same shape redux-persist writes it
-      // (store/index.js: persistConfig.key = 'stockwise', whitelist includes 'ui').
-      (function () {
-        try {
-          var root = JSON.parse(localStorage.getItem('persist:stockwise') || 'null')
-          var ui   = root && JSON.parse(root.ui || 'null')
-          if (ui && ui.theme === 'dark') document.documentElement.classList.add('dark')
-        } catch (e) {}
-      })()
-    </script>
   </head>
   <body>
     <div id="root"></div>
