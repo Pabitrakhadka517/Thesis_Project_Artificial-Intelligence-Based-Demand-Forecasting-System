@@ -145,7 +145,7 @@ function ExportBtn({ rows, filename }) {
   )
 }
 
-function ChartCard({ title, subtitle, action, loading, height = 260, children }) {
+function ChartCard({ title, subtitle, action, loading, error, onRetry, height = 260, children }) {
   return (
     <Card>
       <CardHeader>
@@ -156,7 +156,7 @@ function ChartCard({ title, subtitle, action, loading, height = 260, children })
         {action}
       </CardHeader>
       <CardContent>
-        {loading ? <SkeletonChart height={height} /> : children}
+        {loading ? <SkeletonChart height={height} /> : error ? <ErrorState error={error} onRetry={onRetry} /> : children}
       </CardContent>
     </Card>
   )
@@ -184,32 +184,32 @@ function DashboardTab() {
   const [days, setDays] = useState(30)
   const [topBy, setTopBy] = useState('revenue')
 
-  const { data: summary, isLoading: sumLoading } = useQuery({
+  const { data: summary, isLoading: sumLoading, isError: sumError, error: sumErr, refetch: sumRefetch } = useQuery({
     queryKey: ['analytics', 'dashboard', 'summary'],
     queryFn: () => analyticsService.getDashboardSummary().then(r => r.data?.data),
   })
 
-  const { data: trend, isLoading: trendLoading } = useQuery({
+  const { data: trend, isLoading: trendLoading, isError: trendError, error: trendErr, refetch: trendRefetch } = useQuery({
     queryKey: ['analytics', 'dashboard', 'trend', days],
     queryFn: () => analyticsService.getRevenueTrend(days).then(r => r.data?.data),
   })
 
-  const { data: breakdown, isLoading: bdLoading } = useQuery({
+  const { data: breakdown, isLoading: bdLoading, isError: bdError, error: bdErr, refetch: bdRefetch } = useQuery({
     queryKey: ['analytics', 'dashboard', 'breakdown', days],
     queryFn: () => analyticsService.getRevenueBreakdown(days).then(r => r.data?.data),
   })
 
-  const { data: topProducts, isLoading: topLoading } = useQuery({
+  const { data: topProducts, isLoading: topLoading, isError: topError, error: topErr, refetch: topRefetch } = useQuery({
     queryKey: ['analytics', 'dashboard', 'top-products', topBy, days],
     queryFn: () => analyticsService.getDashboardTopProducts(10, topBy, days).then(r => r.data?.data),
   })
 
-  const { data: monthly, isLoading: monthlyLoading } = useQuery({
+  const { data: monthly, isLoading: monthlyLoading, isError: monthlyError, error: monthlyErr, refetch: monthlyRefetch } = useQuery({
     queryKey: ['analytics', 'dashboard', 'monthly'],
     queryFn: () => analyticsService.getMonthlyTrend(12).then(r => r.data?.data),
   })
 
-  const { data: heatmap, isLoading: hmLoading } = useQuery({
+  const { data: heatmap, isLoading: hmLoading, isError: hmError, error: hmErr, refetch: hmRefetch } = useQuery({
     queryKey: ['analytics', 'dashboard', 'heatmap'],
     queryFn: () => analyticsService.getSalesHeatmap(90).then(r => r.data?.data),
   })
@@ -231,20 +231,26 @@ function DashboardTab() {
   return (
     <div className="space-y-5">
       {/* KPI strip */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <KPI label="Revenue (30d)"    value={formatRs(summary?.revenue_30d)}        color="var(--brand-blue)" loading={sumLoading} />
-        <KPI label="Revenue (7d)"     value={formatRs(summary?.revenue_7d)}          color="var(--color-success)" loading={sumLoading} />
-        <KPI label="Growth vs Prev"   value={pct(summary?.revenue_growth_pct)}       color={summary?.revenue_growth_pct >= 0 ? 'var(--color-success)' : 'var(--color-danger)'} loading={sumLoading} />
-        <KPI label="Transactions"     value={formatNumber(summary?.total_transactions_30d)} color="var(--brand-purple)" loading={sumLoading} />
-        <KPI label="Avg Order Value"  value={formatRs(summary?.avg_order_value_30d)} color="var(--brand-amber)" loading={sumLoading} />
-        <KPI label="Unread Alerts"    value={formatNumber(summary?.unread_alerts)}    color="var(--color-danger)" loading={sumLoading} />
-      </div>
+      {sumError ? (
+        <ErrorState error={sumErr} onRetry={sumRefetch} />
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          <KPI label="Revenue (30d)"    value={formatRs(summary?.revenue_30d)}        color="var(--brand-blue)" loading={sumLoading} />
+          <KPI label="Revenue (7d)"     value={formatRs(summary?.revenue_7d)}          color="var(--color-success)" loading={sumLoading} />
+          <KPI label="Growth vs Prev"   value={pct(summary?.revenue_growth_pct)}       color={summary?.revenue_growth_pct >= 0 ? 'var(--color-success)' : 'var(--color-danger)'} loading={sumLoading} />
+          <KPI label="Transactions"     value={formatNumber(summary?.total_transactions_30d)} color="var(--brand-purple)" loading={sumLoading} />
+          <KPI label="Avg Order Value"  value={formatRs(summary?.avg_order_value_30d)} color="var(--brand-amber)" loading={sumLoading} />
+          <KPI label="Unread Alerts"    value={formatNumber(summary?.unread_alerts)}    color="var(--color-danger)" loading={sumLoading} />
+        </div>
+      )}
 
       {/* Revenue trend */}
       <ChartCard
         title="Revenue Trend"
         subtitle={`Daily revenue and order volume`}
         loading={trendLoading}
+        error={trendError && trendErr}
+        onRetry={trendRefetch}
         height={240}
         action={<SelectDays value={days} onChange={setDays} />}
       >
@@ -259,14 +265,14 @@ function DashboardTab() {
 
       {/* Revenue breakdown + stock health */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <ChartCard title="Revenue by Category" subtitle={`Last ${days} days`} loading={bdLoading} height={280}>
+        <ChartCard title="Revenue by Category" subtitle={`Last ${days} days`} loading={bdLoading} error={bdError && bdErr} onRetry={bdRefetch} height={280}>
           <PieChart
             data={(breakdown || []).map(d => ({ ...d, name: d.name || 'Unknown' }))}
             nameKey="name" valueKey="value" height={280} donut colors={PIE_COLORS}
           />
         </ChartCard>
 
-        <ChartCard title="Stock Health Distribution" subtitle={`${totalTracked} total SKUs tracked`} loading={sumLoading} height={280}>
+        <ChartCard title="Stock Health Distribution" subtitle={`${totalTracked} total SKUs tracked`} loading={sumLoading} error={sumError && sumErr} onRetry={sumRefetch} height={280}>
           <PieChart
             data={statusPieData} nameKey="name" valueKey="value"
             height={280} donut colors={STATUS_PIE_COLORS}
@@ -279,6 +285,8 @@ function DashboardTab() {
         title="Top Products"
         subtitle="Sorted by selected metric"
         loading={topLoading}
+        error={topError && topErr}
+        onRetry={topRefetch}
         height={260}
         action={
           <div className="flex items-center gap-2">
@@ -314,7 +322,7 @@ function DashboardTab() {
       </ChartCard>
 
       {/* Monthly trend */}
-      <ChartCard title="Monthly Revenue Trend" subtitle="Last 12 months" loading={monthlyLoading} height={240}>
+      <ChartCard title="Monthly Revenue Trend" subtitle="Last 12 months" loading={monthlyLoading} error={monthlyError && monthlyErr} onRetry={monthlyRefetch} height={240}>
         <BarChart
           data={(monthly || []).map(d => ({ ...d, label: d.label }))}
           bars={MONTHLY_TREND_BARS}
@@ -334,6 +342,8 @@ function DashboardTab() {
         <CardContent>
           {hmLoading
             ? <SkeletonChart height={160} />
+            : hmError
+            ? <ErrorState error={hmErr} onRetry={hmRefetch} />
             : (
               <div className="overflow-x-auto">
                 <div className="min-w-160">
@@ -393,32 +403,32 @@ function DashboardTab() {
 function InventoryTab() {
   const [turnoverDays, setTurnoverDays] = useState(90)
 
-  const { data: summary, isLoading: sumLoading } = useQuery({
+  const { data: summary, isLoading: sumLoading, isError: sumError, error: sumErr, refetch: sumRefetch } = useQuery({
     queryKey: ['analytics', 'inventory', 'summary'],
     queryFn: () => analyticsService.getInventorySummary().then(r => r.data?.data),
   })
 
-  const { data: statusBreakdown, isLoading: sbLoading } = useQuery({
+  const { data: statusBreakdown, isLoading: sbLoading, isError: sbError, error: sbErr, refetch: sbRefetch } = useQuery({
     queryKey: ['analytics', 'inventory', 'status'],
     queryFn: () => analyticsService.getInventoryStatusBreakdown().then(r => r.data?.data),
   })
 
-  const { data: catStock, isLoading: catLoading } = useQuery({
+  const { data: catStock, isLoading: catLoading, isError: catError, error: catErr, refetch: catRefetch } = useQuery({
     queryKey: ['analytics', 'inventory', 'category-stock'],
     queryFn: () => analyticsService.getCategoryStock().then(r => r.data?.data),
   })
 
-  const { data: scatter, isLoading: scatterLoading } = useQuery({
+  const { data: scatter, isLoading: scatterLoading, isError: scatterError, error: scatterErr, refetch: scatterRefetch } = useQuery({
     queryKey: ['analytics', 'inventory', 'risk-scatter'],
     queryFn: () => analyticsService.getRiskScatter(300).then(r => r.data?.data),
   })
 
-  const { data: turnover, isLoading: toLoading } = useQuery({
+  const { data: turnover, isLoading: toLoading, isError: toError, error: toErr, refetch: toRefetch } = useQuery({
     queryKey: ['analytics', 'inventory', 'turnover', turnoverDays],
     queryFn: () => analyticsService.getInventoryTurnover(turnoverDays).then(r => r.data?.data),
   })
 
-  const { data: lowStock, isLoading: lsLoading } = useQuery({
+  const { data: lowStock, isLoading: lsLoading, isError: lsError, error: lsErr, refetch: lsRefetch } = useQuery({
     queryKey: ['analytics', 'inventory', 'low-stock'],
     queryFn: () => analyticsService.getLowStockItems(20).then(r => r.data?.data),
   })
@@ -435,17 +445,21 @@ function InventoryTab() {
   return (
     <div className="space-y-5">
       {/* KPI strip */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        <KPI label="Total Units"      value={formatNumber(summary?.total_inventory_units, 0)}  color="var(--brand-blue)"  loading={sumLoading} />
-        <KPI label="Inventory Value"  value={formatRs(summary?.total_inventory_value)}          color="var(--color-success)"  loading={sumLoading} />
-        <KPI label="Avg Days Supply"  value={summary?.avg_days_of_supply != null ? `${formatNumber(summary.avg_days_of_supply, 0)} d` : '—'} color="var(--brand-purple)" loading={sumLoading} />
-        <KPI label="High Stockout Risk" value={formatNumber(summary?.high_stockout_risk_items)} color="var(--color-danger)"  loading={sumLoading} sub="≥50% risk" />
-        <KPI label="Zero Stock Items" value={formatNumber(summary?.zero_stock_items)}            color="#991B1B"  loading={sumLoading} />
-      </div>
+      {sumError ? (
+        <ErrorState error={sumErr} onRetry={sumRefetch} />
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          <KPI label="Total Units"      value={formatNumber(summary?.total_inventory_units, 0)}  color="var(--brand-blue)"  loading={sumLoading} />
+          <KPI label="Inventory Value"  value={formatRs(summary?.total_inventory_value)}          color="var(--color-success)"  loading={sumLoading} />
+          <KPI label="Avg Days Supply"  value={summary?.avg_days_of_supply != null ? `${formatNumber(summary.avg_days_of_supply, 0)} d` : '—'} color="var(--brand-purple)" loading={sumLoading} />
+          <KPI label="High Stockout Risk" value={formatNumber(summary?.high_stockout_risk_items)} color="var(--color-danger)"  loading={sumLoading} sub="≥50% risk" />
+          <KPI label="Zero Stock Items" value={formatNumber(summary?.zero_stock_items)}            color="#991B1B"  loading={sumLoading} />
+        </div>
+      )}
 
       {/* Status breakdown + category stock */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <ChartCard title="Stock Status Distribution" subtitle="Current inventory health overview" loading={sbLoading} height={280}>
+        <ChartCard title="Stock Status Distribution" subtitle="Current inventory health overview" loading={sbLoading} error={sbError && sbErr} onRetry={sbRefetch} height={280}>
           <PieChart
             data={statusDisplayData}
             nameKey="name" valueKey="value" height={280} donut
@@ -453,7 +467,7 @@ function InventoryTab() {
           />
         </ChartCard>
 
-        <ChartCard title="Stock by Category" subtitle="Total units held per category" loading={catLoading} height={280}>
+        <ChartCard title="Stock by Category" subtitle="Total units held per category" loading={catLoading} error={catError && catErr} onRetry={catRefetch} height={280}>
           <BarChart
             data={(catStock || []).map(d => ({ ...d, name: d.name?.length > 16 ? d.name.slice(0, 16) + '…' : d.name }))}
             bars={STOCK_BY_CATEGORY_BARS}
@@ -486,6 +500,8 @@ function InventoryTab() {
         <CardContent>
           {scatterLoading
             ? <SkeletonChart height={320} />
+            : scatterError
+            ? <ErrorState error={scatterErr} onRetry={scatterRefetch} />
             : !scatter?.length
             ? <ChartEmptyState height={320} message="No risk data for this period" />
             : (
@@ -523,6 +539,8 @@ function InventoryTab() {
         title="Inventory Turnover by Category"
         subtitle="Annualized turnover rate — higher = faster moving"
         loading={toLoading}
+        error={toError && toErr}
+        onRetry={toRefetch}
         height={240}
         action={<SelectDays value={turnoverDays} onChange={setTurnoverDays} />}
       >
@@ -555,6 +573,8 @@ function InventoryTab() {
         <CardContent style={{ padding: 0 }}>
           {lsLoading
             ? <div className="p-4"><SkeletonChart height={200} /></div>
+            : lsError
+            ? <ErrorState error={lsErr} onRetry={lsRefetch} />
             : !(lowStock?.length)
             ? <EmptyState icon={Package} title="No low-stock items" description="All inventory levels are healthy." />
             : (
@@ -627,17 +647,17 @@ function ForecastTab() {
   const [forecastDays, setForecastDays] = useState(30)
   const [catDays, setCatDays]           = useState(30)
 
-  const { data: accuracy, isLoading: accLoading } = useQuery({
+  const { data: accuracy, isLoading: accLoading, isError: accError, error: accErr, refetch: accRefetch } = useQuery({
     queryKey: ['analytics', 'forecast', 'accuracy'],
     queryFn: () => analyticsService.getForecastAccuracy().then(r => r.data?.data),
   })
 
-  const { data: coverage, isLoading: covLoading } = useQuery({
+  const { data: coverage, isLoading: covLoading, isError: covError, error: covErr, refetch: covRefetch } = useQuery({
     queryKey: ['analytics', 'forecast', 'coverage'],
     queryFn: () => analyticsService.getModelCoverage().then(r => r.data?.data),
   })
 
-  const { data: demandCat, isLoading: dcLoading } = useQuery({
+  const { data: demandCat, isLoading: dcLoading, isError: dcError, error: dcErr, refetch: dcRefetch } = useQuery({
     queryKey: ['analytics', 'forecast', 'by-category', catDays],
     queryFn: () => analyticsService.getDemandByCategory(catDays).then(r => r.data?.data),
   })
@@ -649,7 +669,7 @@ function ForecastTab() {
     staleTime: 10 * 60_000,
   })
 
-  const { data: dvActual, isLoading: dvaLoading } = useQuery({
+  const { data: dvActual, isLoading: dvaLoading, isError: dvaError, error: dvaErr, refetch: dvaRefetch } = useQuery({
     queryKey: ['analytics', 'forecast', 'demand-vs-actual', selectedSku, forecastDays],
     queryFn: () => analyticsService.getDemandVsActual(selectedSku, forecastDays).then(r => r.data?.data),
     enabled: !!selectedSku,
@@ -661,7 +681,7 @@ function ForecastTab() {
     <div className="space-y-5">
       {/* Accuracy comparison */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <ChartCard title="Model Accuracy Comparison" subtitle="Average MAPE (%) per model — lower is better" loading={accLoading} height={260}>
+        <ChartCard title="Model Accuracy Comparison" subtitle="Average MAPE (%) per model — lower is better" loading={accLoading} error={accError && accErr} onRetry={accRefetch} height={260}>
           {!(accuracy?.length)
             ? <EmptyState icon={Cpu} title="No models trained" description="Train at least one model to see accuracy metrics." />
             : (
@@ -687,7 +707,7 @@ function ForecastTab() {
           }
         </ChartCard>
 
-        <ChartCard title="Model Coverage" subtitle="SKUs with a trained model" loading={covLoading} height={260}>
+        <ChartCard title="Model Coverage" subtitle="SKUs with a trained model" loading={covLoading} error={covError && covErr} onRetry={covRefetch} height={260}>
           <PieChart
             data={(coverage?.chart_data || []).filter(d => d.value > 0)}
             nameKey="name" valueKey="value" height={260} donut
@@ -701,6 +721,8 @@ function ForecastTab() {
         title="Forecast Demand by Category"
         subtitle="Aggregated predicted demand per model type"
         loading={dcLoading}
+        error={dcError && dcErr}
+        onRetry={dcRefetch}
         height={260}
         action={<SelectDays value={catDays} onChange={setCatDays} />}
       >
@@ -752,6 +774,8 @@ function ForecastTab() {
             ? <EmptyState icon={TrendingUp} title="Select a product" description="Choose a product above to compare actual vs forecasted demand." />
             : dvaLoading
             ? <SkeletonChart height={280} />
+            : dvaError
+            ? <ErrorState error={dvaErr} onRetry={dvaRefetch} />
             : !(dvActual?.series?.length)
             ? <EmptyState icon={TrendingUp} title="No data available" description="No sales or forecast records found for this SKU in the selected period." />
             : (
@@ -787,27 +811,27 @@ function ProductTab() {
   const [selectedSkuTrend, setSelectedSkuTrend] = useState(null)
   const [trendDays, setTrendDays] = useState(90)
 
-  const { data: catPerf, isLoading: cpLoading } = useQuery({
+  const { data: catPerf, isLoading: cpLoading, isError: cpError, error: cpErr, refetch: cpRefetch } = useQuery({
     queryKey: ['analytics', 'product', 'category-performance', catDays],
     queryFn: () => analyticsService.getCategoryPerformance(catDays).then(r => r.data?.data),
   })
 
-  const { data: velocity, isLoading: velLoading } = useQuery({
+  const { data: velocity, isLoading: velLoading, isError: velError, error: velErr, refetch: velRefetch } = useQuery({
     queryKey: ['analytics', 'product', 'velocity', velDays],
     queryFn: () => analyticsService.getVelocityRanking(20, velDays).then(r => r.data?.data),
   })
 
-  const { data: comparison, isLoading: compLoading } = useQuery({
+  const { data: comparison, isLoading: compLoading, isError: compError, error: compErr, refetch: compRefetch } = useQuery({
     queryKey: ['analytics', 'product', 'period-comparison', compDays],
     queryFn: () => analyticsService.getPeriodComparison(compDays).then(r => r.data?.data),
   })
 
-  const { data: prices, isLoading: pricesLoading } = useQuery({
+  const { data: prices, isLoading: pricesLoading, isError: pricesError, error: pricesErr, refetch: pricesRefetch } = useQuery({
     queryKey: ['analytics', 'product', 'price-trends', priceDays],
     queryFn: () => analyticsService.getPriceTrends(priceDays).then(r => r.data?.data),
   })
 
-  const { data: skuTrend, isLoading: skuTrendLoading } = useQuery({
+  const { data: skuTrend, isLoading: skuTrendLoading, isError: skuTrendError, error: skuTrendErr, refetch: skuTrendRefetch } = useQuery({
     queryKey: ['analytics', 'product', 'sku-trend', selectedSkuTrend, trendDays],
     queryFn: () => analyticsService.getSkuTrend(selectedSkuTrend, trendDays).then(r => r.data?.data),
     enabled: !!selectedSkuTrend,
@@ -834,6 +858,8 @@ function ProductTab() {
           title="Category Revenue Performance"
           subtitle="Revenue, transactions, and growth breakdown"
           loading={cpLoading}
+          error={cpError && cpErr}
+          onRetry={cpRefetch}
           height={300}
           action={<SelectDays value={catDays} onChange={setCatDays} />}
         >
@@ -863,6 +889,8 @@ function ProductTab() {
           <CardContent style={{ padding: 0 }}>
             {cpLoading
               ? <div className="p-4"><SkeletonChart height={260} /></div>
+              : cpError
+              ? <ErrorState error={cpErr} onRetry={cpRefetch} />
               : (
                 <div className="overflow-x-auto">
                   <table className="table-enterprise">
@@ -909,6 +937,8 @@ function ProductTab() {
         title="Sales Velocity Ranking"
         subtitle="Average units sold per day"
         loading={velLoading}
+        error={velError && velErr}
+        onRetry={velRefetch}
         height={280}
         action={<SelectDays value={velDays} onChange={setVelDays} />}
       >
@@ -927,6 +957,8 @@ function ProductTab() {
         title="Period-over-Period Revenue"
         subtitle={`This ${compDays}d vs previous ${compDays}d by category`}
         loading={compLoading}
+        error={compError && compErr}
+        onRetry={compRefetch}
         height={280}
         action={<SelectDays value={compDays} onChange={setCompDays} />}
       >
@@ -946,6 +978,8 @@ function ProductTab() {
         title="Unit Price Trends by Category"
         subtitle="Monthly average selling price across categories"
         loading={pricesLoading}
+        error={pricesError && pricesErr}
+        onRetry={pricesRefetch}
         height={280}
         action={<SelectDays value={priceDays} onChange={setPriceDays} />}
       >
@@ -997,6 +1031,8 @@ function ProductTab() {
             ? <EmptyState icon={ShoppingBag} title="Select a product" description="Choose a product above to view its sales trend." />
             : skuTrendLoading
             ? <SkeletonChart height={260} />
+            : skuTrendError
+            ? <ErrorState error={skuTrendErr} onRetry={skuTrendRefetch} />
             : !(skuTrend?.series?.length)
             ? <EmptyState icon={ShoppingBag} title="No sales data" description="No transactions found for this product in the selected period." />
             : (
