@@ -10,6 +10,7 @@ const Product     = require('../models/Product')
 const Sale        = require('../models/Sale')
 const Purchase    = require('../models/Purchase')
 const StockMovement = require('../models/StockMovement')
+const { SYNTHETIC_PRODUCT_IMAGES } = require('../utils/syntheticProductImages')
 
 const SYN = '__synthetic__'
 
@@ -288,6 +289,7 @@ async function ensureProducts(catMap, supplierArr) {
         isActive:     true,
         leadTimeDays: def.lt,
         description:  SYN,
+        image:        SYNTHETIC_PRODUCT_IMAGES[def.sku] || '',
       }},
       { upsert: true, new: true, lean: true },
     )
