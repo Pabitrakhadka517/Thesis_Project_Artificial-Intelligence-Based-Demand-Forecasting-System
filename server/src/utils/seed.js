@@ -108,9 +108,9 @@ async function bulkInsert(Model, docs, label) {
 // ─── 1. USERS ─────────────────────────────────────────────────────────────────
 async function seedUsers() {
   const specs = [
-    { fullName: 'Bikram Sharma',  email: 'admin@himalayan.np',   password: 'Admin1234',   role: 'admin',             phone: '9841234567' },
-    { fullName: 'Ram Prasad KC',  email: 'ram@himalayan.np',     password: 'Manager1234', role: 'inventory_manager', phone: '9852345678' },
-    { fullName: 'Sita Maharjan',  email: 'sita@himalayan.np',    password: 'Staff1234',   role: 'staff',             phone: '9863456789' },
+    { fullName: 'Bikram Sharma',  email: 'admin@himalayan.np',   password: 'Admin@1234',   role: 'admin',             phone: '9841234567' },
+    { fullName: 'Ram Prasad KC',  email: 'ram@himalayan.np',     password: 'Manager@1234', role: 'inventory_manager', phone: '9852345678' },
+    { fullName: 'Sita Maharjan',  email: 'sita@himalayan.np',    password: 'Staff1234',    role: 'staff',             phone: '9863456789' },
   ]
   const ids = {}
   for (const s of specs) {
@@ -1026,8 +1026,8 @@ async function seed() {
   console.log('┌─────────────────────────────────────────────┐')
   console.log('│  Himalayan Wholesale Suppliers — Login Creds │')
   console.log('├──────────────────────┬──────────────────────┤')
-  console.log('│  admin@himalayan.np  │  Admin1234           │')
-  console.log('│  ram@himalayan.np    │  Manager1234         │')
+  console.log('│  admin@himalayan.np  │  Admin@1234          │')
+  console.log('│  ram@himalayan.np    │  Manager@1234        │')
   console.log('│  sita@himalayan.np   │  Staff1234           │')
   console.log('└──────────────────────┴──────────────────────┘')
 
