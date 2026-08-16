@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Mail, ArrowLeft, Zap, CheckCircle, AlertOctagon } from 'lucide-react'
+import { Mail, ArrowLeft, CheckCircle, AlertOctagon } from 'lucide-react'
+import logoIcon from '@/assets/logo-icon.png'
 import { motion } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import { authService } from '@/services/authService'
@@ -56,7 +57,7 @@ export default function ForgotPasswordPage() {
         <div className="flex items-center gap-2.5 mb-8">
           <div className="h-9 w-9 rounded-xl flex items-center justify-center"
             style={{ background: 'var(--brand-primary)' }}>
-            <Zap className="h-4 w-4 text-white" strokeWidth={2.5} />
+            <img src={logoIcon} className="h-4 w-4 object-contain" alt="" />
           </div>
           <span className="text-[17px] font-bold" style={{ color: 'var(--text-primary)' }}>{APP_NAME}</span>
         </div>

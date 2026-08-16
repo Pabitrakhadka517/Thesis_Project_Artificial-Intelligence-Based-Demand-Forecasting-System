@@ -10,7 +10,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   LayoutDashboard, Package, TrendingUp, Bell,
-  Lightbulb, FileText, Settings, User, Zap, X,
+  Lightbulb, FileText, Settings, User, X,
   Truck, ShoppingCart, Users, ClipboardList,
   ShieldCheck, Tag, Scale, History,
   UserCog, Briefcase, ShoppingBag, Receipt, Bot,
@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/utils'
 import { APP_NAME } from '@/constants'
+import logoIcon from '@/assets/logo-icon.png'
 import { selectUnreadCount } from '@/store/slices/alertSlice'
 import { useRole } from '@/hooks/useRole'
 import { aiService } from '@/services/aiService'
@@ -272,7 +273,7 @@ function SidebarContent({ collapsed }) {
           className="h-8 w-8 rounded-lg flex items-center justify-center shrink-0"
           style={{ background: 'rgba(255,255,255,.18)', boxShadow: 'var(--shadow-sm)' }}
         >
-          <Zap className="h-4 w-4 text-white" strokeWidth={2.5} />
+          <img src={logoIcon} className="h-4 w-4 object-contain" alt="" />
         </div>
         <AnimatePresence initial={false}>
           {!collapsed && (
