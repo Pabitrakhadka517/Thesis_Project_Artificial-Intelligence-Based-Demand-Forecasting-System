@@ -104,6 +104,12 @@
        the page. Lifted and given real blue saturation so it reads as a
        distinct "branded" navy instead of blending into the near-black page. */
     --brand-primary: #0B1550;
+    /* Buttons/links/icons/chart accents all read var(--brand-blue) directly,
+       so bumping this one token to the already-defined --brand-blue-l shade
+       covers every one of them at once — a flat #2563EB reads slightly dull
+       against these near-black surfaces; matches the #3B82F6 already used
+       for --focus-ring below. */
+    --brand-blue:    var(--brand-blue-l);
     --surface-page:  #07101F;
     --surface-card:  #0D1A2D;
     --surface-muted: #132035;
